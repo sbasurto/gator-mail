@@ -11,6 +11,8 @@ public final class AccessCodeSelfCheck {
         assert AccessCode.matches("a1b2c3d4", hash);
         assert !AccessCode.matches("A1B2C3D5", hash);
         assert !AccessCode.matches("123", hash);
+        assert AccessCode.matches("AB12CD34EF56", AccessCode.hash("AB12CD34EF56"));
+        assert !AccessCode.matches("AB12CD34EF567", AccessCode.hash("AB12CD34EF567"));
         assert "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM".equals(
                 OAuthServlet.challenge("dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"));
         assert OAuthServlet.isLocal("localhost:8080");
@@ -27,6 +29,8 @@ public final class AccessCodeSelfCheck {
         for (String key : new String[]{"challenge", "mailboxView", "messageView", "mailContent", "empty",
                 "hasMessages", "pending", "error", "loggedOut", "noticeVisible"}) model.put(key, true);
         model.put("contextPath", "/gator-mail");
+        model.put("layoutClass", "mail-layout");
+        model.put("sessionActive", true);
         model.put("mailbox", "<user@example.com>");
         model.put("folders", List.of(Map.of("className", "active", "href", "mail?folder=INBOX", "label", "Entrada", "count", "1")));
         model.put("messages", List.of(Map.of("href", "mail?uid=1", "from", "Equipo", "subject", "Hola", "sent", "Hoy")));
@@ -35,7 +39,8 @@ public final class AccessCodeSelfCheck {
             assert html.contains("Sesión cerrada");
             assert html.contains("/gator-mail/css/gator-mail.css");
             assert html.contains("&lt;user@example.com&gt;");
-            assert html.contains("inputmode=\"numeric\"");
+            assert html.contains("pattern=\"[A-Za-z0-9]{8,12}\"");
+            assert html.contains("maxlength=\"12\"");
         } catch (Exception error) {
             throw new AssertionError(error);
         }

@@ -91,6 +91,8 @@ public final class MailServlet extends HttpServlet {
         model.put("error", false);
         model.put("loggedOut", false);
         model.put("noticeVisible", false);
+        model.put("layoutClass", "mail-layout mail-layout-single");
+        model.put("sessionActive", true);
         return model;
     }
 
@@ -164,6 +166,7 @@ public final class MailServlet extends HttpServlet {
         }
         model.put("folders", folderModels);
         model.put("mailContent", true);
+        model.put("layoutClass", "mail-layout");
 
         String uid = request.getParameter("uid");
         if (uid != null && uid.matches("[0-9]+")) {

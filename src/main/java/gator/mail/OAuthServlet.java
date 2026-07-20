@@ -35,6 +35,7 @@ public final class OAuthServlet extends HttpServlet {
         MailServlet.prepare(res);
         Map<String, Object> model = MailServlet.baseModel(req, "");
         model.put("loggedOut", true);
+        model.put("sessionActive", false);
         res.getWriter().print(new GatorJsonView().renderResource("gator-mail/screens/mail.json", model));
     }
     private void login(HttpServletRequest req, HttpServletResponse res) throws IOException {

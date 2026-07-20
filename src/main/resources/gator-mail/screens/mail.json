@@ -16,11 +16,11 @@
       },
       {
         "tag": "body",
-        "attrs": { "class": "bg-light" },
+        "attrs": { "class": "mail-app" },
         "children": [
           {
             "tag": "header",
-            "attrs": { "class": "navbar navbar-dark bg-blue-softg mail-topbar" },
+            "attrs": { "class": "navbar navbar-light mail-topbar" },
             "children": [
               {
                 "tag": "div",
@@ -32,10 +32,11 @@
                   ] },
                   {
                     "tag": "div",
+                    "if": "sessionActive",
                     "attrs": { "class": "mail-account" },
                     "children": [
-                      { "tag": "span", "attrs": { "class": "small" }, "text": "${mailbox}" },
-                      { "tag": "a", "attrs": { "class": "btn btn-sm btn-outline-light", "href": "${contextPath}/oauth/logout" }, "text": "Salir" }
+                      { "tag": "span", "attrs": { "class": "mail-account-address" }, "text": "${mailbox}" },
+                      { "tag": "a", "attrs": { "class": "btn btn-sm mail-signout", "href": "${contextPath}/oauth/logout" }, "text": "Cerrar sesión" }
                     ]
                   }
                 ]
@@ -44,14 +45,15 @@
           },
           {
             "tag": "div",
-            "attrs": { "class": "mail-layout" },
+            "attrs": { "class": "${layoutClass}" },
             "children": [
               {
                 "tag": "nav",
                 "if": "mailContent",
                 "attrs": { "class": "mail-sidebar", "aria-label": "Carpetas de correo" },
                 "children": [
-                  { "tag": "p", "attrs": { "class": "mail-sidebar-title" }, "text": "Carpetas" },
+                  { "tag": "p", "attrs": { "class": "mail-sidebar-kicker" }, "text": "Tu correo" },
+                  { "tag": "h2", "attrs": { "class": "mail-sidebar-title" }, "text": "Carpetas" },
                   {
                     "tag": "a",
                     "each": "folders",
@@ -71,15 +73,16 @@
                   {
                     "tag": "section",
                     "if": "challenge",
-                    "attrs": { "class": "card mail-state-card" },
+                    "attrs": { "class": "card mail-state-card mail-auth-card" },
                     "children": [
                       {
                         "tag": "div",
                         "attrs": { "class": "card-body p-4" },
                         "children": [
-                          { "tag": "span", "attrs": { "class": "mail-state-icon" }, "text": "✓" },
-                          { "tag": "h1", "attrs": { "class": "h4 mt-3" }, "text": "Verifica tu acceso" },
-                          { "tag": "p", "attrs": { "class": "text-muted" }, "text": "Escribe la clave temporal que enviamos por SMS." },
+                          { "tag": "span", "attrs": { "class": "mail-state-icon" }, "text": "✦" },
+                          { "tag": "p", "attrs": { "class": "mail-eyebrow" }, "text": "Segundo paso" },
+                          { "tag": "h1", "attrs": { "class": "mail-state-title" }, "text": "Confirma que eres tú" },
+                          { "tag": "p", "attrs": { "class": "mail-state-copy" }, "text": "Enviamos una clave temporal por SMS al teléfono asociado con tu cuenta." },
                           { "tag": "p", "if": "noticeVisible", "attrs": { "class": "alert alert-info", "role": "status" }, "text": "${notice}" },
                           {
                             "tag": "form",
@@ -87,18 +90,19 @@
                             "children": [
                               { "tag": "input", "attrs": { "type": "hidden", "name": "action", "value": "verify" } },
                               { "tag": "input", "attrs": { "type": "hidden", "name": "token", "value": "${token}" } },
-                              { "tag": "label", "attrs": { "class": "form-label", "for": "code" }, "text": "Clave temporal" },
-                              { "tag": "input", "attrs": { "class": "form-control form-control-lg mail-code", "id": "code", "name": "code", "type": "text", "inputmode": "numeric", "autocomplete": "one-time-code", "pattern": "[A-Za-z0-9]{8}", "minlength": "8", "maxlength": "8", "required": "true", "autofocus": "true" } },
-                              { "tag": "button", "attrs": { "class": "btn btn-primary btn-lg w-100", "type": "submit" }, "text": "Verificar y continuar" }
+                              { "tag": "label", "attrs": { "class": "form-label mail-code-label", "for": "code" }, "text": "Clave de verificación" },
+                              { "tag": "input", "attrs": { "class": "form-control form-control-lg mail-code", "id": "code", "name": "code", "type": "text", "inputmode": "text", "autocomplete": "one-time-code", "placeholder": "8 a 12 caracteres", "pattern": "[A-Za-z0-9]{8,12}", "minlength": "8", "maxlength": "12", "required": "true", "autofocus": "true", "aria-label": "Clave alfanumérica de 8 a 12 caracteres" } },
+                              { "tag": "small", "attrs": { "class": "mail-code-help" }, "text": "Puede contener letras y números." },
+                              { "tag": "button", "attrs": { "class": "btn btn-primary btn-lg w-100 mail-primary-action", "type": "submit" }, "text": "Continuar" }
                             ]
                           },
                           {
                             "tag": "form",
-                            "attrs": { "method": "post", "class": "mt-3 text-center" },
+                            "attrs": { "method": "post", "class": "mail-resend" },
                             "children": [
                               { "tag": "input", "attrs": { "type": "hidden", "name": "action", "value": "resend" } },
                               { "tag": "input", "attrs": { "type": "hidden", "name": "token", "value": "${token}" } },
-                              { "tag": "button", "attrs": { "class": "btn btn-link", "type": "submit", "disabled": "${resendDisabled}" }, "text": "Reenviar clave" },
+                              { "tag": "button", "attrs": { "class": "btn btn-link", "type": "submit", "disabled": "${resendDisabled}" }, "text": "No recibí la clave" },
                               { "tag": "small", "attrs": { "class": "d-block text-muted" }, "text": "${resendWait}" }
                             ]
                           }
@@ -116,8 +120,8 @@
                         "attrs": { "class": "card-header mail-panel-header" },
                         "children": [
                           { "tag": "div", "children": [
-                            { "tag": "small", "attrs": { "class": "text-muted" }, "text": "Correo" },
-                            { "tag": "h1", "attrs": { "class": "h4 mb-0" }, "text": "${folderLabel}" }
+                            { "tag": "small", "attrs": { "class": "mail-eyebrow" }, "text": "Buzón" },
+                            { "tag": "h1", "attrs": { "class": "mail-panel-title" }, "text": "${folderLabel}" }
                           ] },
                           { "tag": "a", "attrs": { "class": "btn btn-outline-primary btn-sm", "href": "${refreshHref}" }, "text": "Actualizar" }
                         ]
@@ -162,7 +166,7 @@
                         "tag": "div",
                         "attrs": { "class": "card-body mail-message" },
                         "children": [
-                          { "tag": "h1", "attrs": { "class": "h4" }, "text": "${subject}" },
+                          { "tag": "h1", "attrs": { "class": "mail-message-title" }, "text": "${subject}" },
                           { "tag": "dl", "attrs": { "class": "mail-headers" }, "children": [
                             { "tag": "dt", "text": "De" }, { "tag": "dd", "text": "${from}" },
                             { "tag": "dt", "text": "Para" }, { "tag": "dd", "text": "${to}" }
