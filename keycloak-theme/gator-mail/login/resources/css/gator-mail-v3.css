@@ -1,3 +1,4 @@
+/* Versioned filename intentionally invalidates Keycloak's long-lived browser cache. */
 :root,
 :root.pf-v5-theme-dark {
     color-scheme: light;
@@ -44,11 +45,21 @@
 }
 
 #kc-header-wrapper {
-    width: 150px;
-    height: 65px;
-    padding: 0;
-    background: url("/eimg/softGatorNewAlone.png") center / contain no-repeat;
+    width: 180px;
+    min-height: 94px;
+    padding: 70px 0 0;
+    background: url("/eimg/softGatorNewAlone.png") top center / 150px auto no-repeat;
     font-size: 0;
+}
+
+#kc-header-wrapper::after {
+    display: block;
+    color: var(--gator-ink);
+    content: "Gator Mail";
+    font-size: 1.2rem;
+    font-weight: 750;
+    letter-spacing: -.025em;
+    line-height: 1.2;
 }
 
 .pf-v5-c-login__main {
@@ -155,9 +166,23 @@ a { color: var(--gator-blue-dark); }
 #kc-logout-confirm .form-actions,
 #kc-form-buttons { width: 100%; }
 
+#kc-info-message { margin-top: 1rem; }
+
+#kc-info-message a {
+    display: inline-block;
+    font-size: .92rem;
+    font-weight: 700;
+}
+
 @media (max-width: 600px) {
     .pf-v5-c-login__container { gap: .75rem; padding: 1rem 0; }
-    #kc-header-wrapper { width: 120px; height: 52px; }
+    #kc-header-wrapper {
+        width: 160px;
+        min-height: 82px;
+        padding-top: 58px;
+        background-size: 125px auto;
+    }
+    #kc-header-wrapper::after { font-size: 1.05rem; }
     .pf-v5-c-login__main { border-radius: 15px; }
     .pf-v5-c-login__main-header { padding: 1.5rem 1.35rem .65rem; }
     .pf-v5-c-login__main-body { padding: .35rem 1.35rem 1.5rem; }
