@@ -57,7 +57,9 @@ public final class OAuthServlet extends HttpServlet {
             if (info.statusCode() != 200) throw new IllegalStateException();
             JsonObject user = JsonParser.parseString(info.body()).getAsJsonObject();
             req.changeSessionId();
-            s.setAttribute("oidc.user", user.get("preferred_username").getAsString());
+            s.setAttribute("oidc.user", user.has("email") && !user.get("email").isJsonNull()
+                    ? user.get("email").getAsString()
+                    : user.get("preferred_username").getAsString());
             s.removeAttribute("oidc.state"); s.removeAttribute("oidc.verifier");
             res.sendRedirect(req.getContextPath() + "/mail");
         } catch (Exception e) { res.sendError(503, "No fue posible completar el acceso OAuth"); }
