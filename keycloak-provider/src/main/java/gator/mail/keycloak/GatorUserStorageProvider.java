@@ -19,7 +19,6 @@ import org.keycloak.models.SubjectCredentialManager;
 import org.keycloak.models.UserCredentialModel;
 import org.keycloak.models.UserModel;
 import org.keycloak.models.credential.PasswordCredentialModel;
-import org.keycloak.storage.ReadOnlyException;
 import org.keycloak.storage.StorageId;
 import org.keycloak.storage.UserStorageProvider;
 import org.keycloak.storage.adapter.AbstractUserAdapter;
@@ -29,7 +28,7 @@ final class GatorUserStorageProvider implements UserStorageProvider, UserLookupP
         CredentialInputValidator, CredentialInputUpdater {
     private static final String SELECT = """
             select u.usuario_id, u.usuario_password, u.usuario_recover_hash, u.usuario_hash_loops,
-                   u.usuario_estado, e.usuario_email_email
+                   u.usuario_estado, e.usuario_email_email, u.usuario_hash_auth
               from app_usuarios u
               left join lateral (
                     select usuario_email_email from app_usuario_email
@@ -77,6 +76,13 @@ final class GatorUserStorageProvider implements UserStorageProvider, UserLookupP
             @Override public SubjectCredentialManager credentialManager() {
                 return new UserCredentialManager(session, realm, this);
             }
+            @Override public Stream<String> getRequiredActionsStream() {
+                return account.passwordChangeRequired()
+                        ? Stream.of(UserModel.RequiredAction.UPDATE_PASSWORD.name()) : Stream.empty();
+            }
+            @Override public void removeRequiredAction(String action) {
+                if (UserModel.RequiredAction.UPDATE_PASSWORD.name().equals(action)) clearPasswordChange(account.username());
+            }
         };
     }
 
@@ -88,7 +94,7 @@ final class GatorUserStorageProvider implements UserStorageProvider, UserLookupP
             statement.setString(1, value);
             try (ResultSet rs = statement.executeQuery()) {
                 return rs.next() ? new Account(rs.getString(1), rs.getString(2), rs.getString(3), rs.getInt(4),
-                        "1".equals(rs.getString(5)), rs.getString(6)) : null;
+                        "1".equals(rs.getString(5)), rs.getString(6), "UPDATE_PASSWORD".equals(rs.getString(7))) : null;
             }
         } catch (SQLException e) {
             throw new IllegalStateException("No fue posible consultar usuarios Gator", e);
@@ -106,8 +112,12 @@ final class GatorUserStorageProvider implements UserStorageProvider, UserLookupP
                 && GatorPassword.matches(credential.getValue(), account.salt(), account.iterations(), account.hash());
     }
     @Override public boolean updateCredential(RealmModel realm, UserModel user, CredentialInput input) {
-        if (supportsCredentialType(input.getType())) throw new ReadOnlyException("La contraseña se administra en Gator");
-        return false;
+        if (!supportsCredentialType(input.getType()) || input.getChallengeResponse() == null
+                || input.getChallengeResponse().isBlank()) return false;
+        execute("update app_usuarios set usuario_password = ?, usuario_hash_auth = null where usuario_id = ?",
+                input.getChallengeResponse(), user.getUsername());
+        loaded.remove(user.getUsername());
+        return true;
     }
     @Override public void disableCredentialType(RealmModel realm, UserModel user, String type) { }
     @Override public Stream<String> getDisableableCredentialTypesStream(RealmModel realm, UserModel user) {
@@ -115,11 +125,27 @@ final class GatorUserStorageProvider implements UserStorageProvider, UserLookupP
     }
     @Override public void close() { loaded.clear(); }
 
+    private void clearPasswordChange(String username) {
+        execute("update app_usuarios set usuario_hash_auth = null where usuario_id = ?", username);
+    }
+
+    private void execute(String sql, String... values) {
+        try (Connection connection = DriverManager.getConnection(required("GATOR_IDP_JDBC_URL"),
+                required("GATOR_IDP_JDBC_USER"), required("GATOR_IDP_JDBC_PASSWORD"));
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+            for (int i = 0; i < values.length; i++) statement.setString(i + 1, values[i]);
+            if (statement.executeUpdate() != 1) throw new IllegalStateException("Usuario Gator no encontrado");
+        } catch (SQLException e) {
+            throw new IllegalStateException("No fue posible actualizar el usuario Gator", e);
+        }
+    }
+
     private static String required(String name) {
         String value = System.getenv(name);
         if (value == null || value.isBlank()) throw new IllegalStateException("Falta configurar " + name);
         return value;
     }
 
-    private record Account(String username, String hash, String salt, int iterations, boolean enabled, String email) { }
+    private record Account(String username, String hash, String salt, int iterations, boolean enabled, String email,
+                           boolean passwordChangeRequired) { }
 }
