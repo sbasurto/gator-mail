@@ -12,6 +12,7 @@ public final class AccessCodeSelfCheck {
         assert !AccessCode.matches("A1B2C3D5", hash);
         assert !AccessCode.matches("123", hash);
         assert AccessCode.matches("AB12CD34EF56", AccessCode.hash("AB12CD34EF56"));
+        assert AccessCode.matches("  AB12CD34  ", AccessCode.hash("AB12CD34"));
         assert !AccessCode.matches("AB12CD34EF567", AccessCode.hash("AB12CD34EF567"));
         assert "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM".equals(
                 OAuthServlet.challenge("dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"));
@@ -24,12 +25,17 @@ public final class AccessCodeSelfCheck {
         assert logout.contains("id_token_hint=id+token");
         assert !logout.contains("post_logout_redirect_uri");
         assert !OAuthServlet.endSession("").contains("id_token_hint");
+        assert "sb***to".equals(MailServlet.userHint("sbasurto"));
+        assert "sb***to".equals(MailServlet.userHint("sbasurto@soft-gator.com"));
+        assert "s***g".equals(MailServlet.userHint("sg" + "g"));
+        assert "**".equals(MailServlet.userHint("sg"));
 
         Map<String, Object> model = new HashMap<>();
         for (String key : new String[]{"challenge", "mailboxView", "messageView", "mailContent", "empty",
                 "hasMessages", "pending", "error", "loggedOut", "noticeVisible"}) model.put(key, true);
         model.put("contextPath", "/gator-mail");
-        model.put("layoutClass", "mail-layout");
+        model.put("layoutClass", "mail-workspace");
+        model.put("contentClass", "mail-content");
         model.put("sessionActive", true);
         model.put("mailbox", "<user@example.com>");
         model.put("folders", List.of(Map.of("className", "active", "href", "mail?folder=INBOX", "label", "Entrada", "count", "1")));
@@ -41,6 +47,8 @@ public final class AccessCodeSelfCheck {
             assert html.contains("&lt;user@example.com&gt;");
             assert html.contains("pattern=\"[A-Za-z0-9]{8,12}\"");
             assert html.contains("maxlength=\"12\"");
+            assert !html.contains("mail-layout");
+            assert !html.contains("mail-main");
         } catch (Exception error) {
             throw new AssertionError(error);
         }

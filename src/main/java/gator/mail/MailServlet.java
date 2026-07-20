@@ -91,7 +91,8 @@ public final class MailServlet extends HttpServlet {
         model.put("error", false);
         model.put("loggedOut", false);
         model.put("noticeVisible", false);
-        model.put("layoutClass", "mail-layout mail-layout-single");
+        model.put("layoutClass", "container-fluid");
+        model.put("contentClass", "container py-4");
         model.put("sessionActive", true);
         return model;
     }
@@ -125,6 +126,8 @@ public final class MailServlet extends HttpServlet {
         if (session.getAttribute("mail.challenge.hash") == null || resend) {
             JsonObject requestJson = json("usuario", user);
             requestJson.addProperty("smsOnly", true);
+            requestJson.addProperty("application", "Gator Mail");
+            requestJson.addProperty("userHint", userHint(user));
             JsonObject result = call("app_fn_send_login_challenge", requestJson);
             if (!"0".equals(result.get("codigo").getAsString()) || !result.get("phoneSent").getAsBoolean())
                 return result.has("mensaje") ? result.get("mensaje").getAsString() : "No fue posible enviar la clave por SMS";
@@ -166,7 +169,8 @@ public final class MailServlet extends HttpServlet {
         }
         model.put("folders", folderModels);
         model.put("mailContent", true);
-        model.put("layoutClass", "mail-layout");
+        model.put("layoutClass", "mail-workspace");
+        model.put("contentClass", "mail-content");
 
         String uid = request.getParameter("uid");
         if (uid != null && uid.matches("[0-9]+")) {
@@ -221,6 +225,15 @@ public final class MailServlet extends HttpServlet {
 
     private static long number(Object value) {
         return value instanceof Number number ? number.longValue() : 0L;
+    }
+
+    static String userHint(String user) {
+        String value = user == null ? "" : user.strip();
+        int at = value.indexOf('@');
+        String identity = at > 0 ? value.substring(0, at) : value;
+        if (identity.length() <= 2) return "*".repeat(identity.length());
+        if (identity.length() <= 4) return identity.charAt(0) + "***" + identity.substring(identity.length() - 1);
+        return identity.substring(0, 2) + "***" + identity.substring(identity.length() - 2);
     }
 
     private static boolean causedBy(Throwable error, Class<? extends Throwable> type) {

@@ -10,10 +10,11 @@ final class AccessCode {
     }
 
     static boolean matches(String value, String expectedHash) {
-        if (value == null || expectedHash == null || !value.matches("[A-Za-z0-9]{8,12}")) {
+        String code = value == null ? "" : value.strip();
+        if (expectedHash == null || !code.matches("[A-Za-z0-9]{8,12}")) {
             return false;
         }
-        return MessageDigest.isEqual(hash(value.toUpperCase()).getBytes(StandardCharsets.US_ASCII),
+        return MessageDigest.isEqual(hash(code.toUpperCase()).getBytes(StandardCharsets.US_ASCII),
                 expectedHash.getBytes(StandardCharsets.US_ASCII));
     }
 

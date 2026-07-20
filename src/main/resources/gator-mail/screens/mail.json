@@ -68,7 +68,7 @@
               },
               {
                 "tag": "main",
-                "attrs": { "class": "mail-main" },
+                "attrs": { "class": "${contentClass}" },
                 "children": [
                   {
                     "tag": "section",

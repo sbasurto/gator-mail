@@ -50,7 +50,10 @@ El contexto esperado es `/gator-mail`. La aplicación requiere acceso a la
 configuración de base `indexMasterErm`, una entrada `broker_db` con
 `db_use = 'mail'` y la asignación de esa aplicación a los grupos autorizados.
 La función de desafío debe aceptar `smsOnly = true` y devolver únicamente el
-hash de la clave temporal. No requiere Shiro ni contraseñas de correo.
+hash de la clave temporal. También acepta `application` y `userHint` opcionales
+para identificar el origen y la cuenta en el SMS; la definición compatible se
+encuentra en `db/app_fn_send_login_challenge.sql`. No requiere Shiro ni
+contraseñas de correo.
 
 ## Aprovisionamiento de buzones
 

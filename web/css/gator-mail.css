@@ -20,9 +20,8 @@ body { min-height: 100vh; margin: 0; color: var(--gator-ink); background: var(--
 .mail-signout { border: 1px solid var(--gator-line); border-radius: 999px; background: #fff; color: var(--gator-ink); padding-inline: .9rem; }
 .mail-signout:hover { border-color: #a8c3d2; background: #f5fafc; color: var(--gator-blue-dark); }
 
-.mail-layout { display: grid; grid-template-columns: 258px minmax(0, 1fr); min-height: calc(100vh - 68px); }
-.mail-layout-single { grid-template-columns: minmax(0, 1fr); }
-.mail-sidebar { padding: 2rem 1rem; background: linear-gradient(165deg, #087bab 0%, #075475 100%); color: #fff; }
+.mail-workspace { display: flex; min-height: calc(100vh - 68px); }
+.mail-sidebar { flex: 0 0 258px; padding: 2rem 1rem; background: linear-gradient(165deg, #087bab 0%, #075475 100%); color: #fff; }
 .mail-sidebar-kicker { margin: 0 .75rem .2rem; color: #c8eaf5; font-size: .72rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
 .mail-sidebar-title { margin: 0 .75rem 1.35rem; font-size: 1.35rem; font-weight: 700; }
 .mail-folder { display: flex; justify-content: space-between; align-items: center; gap: .75rem; margin-bottom: .35rem; padding: .8rem .85rem; border: 1px solid transparent; border-radius: 12px; color: #e9f7fb; text-decoration: none; transition: background .15s ease, transform .15s ease; }
@@ -31,7 +30,7 @@ body { min-height: 100vh; margin: 0; color: var(--gator-ink); background: var(--
 .mail-folder strong { font-size: .9rem; font-weight: 650; }
 .mail-folder small { opacity: .72; font-size: .7rem; white-space: nowrap; }
 
-.mail-main { min-width: 0; padding: clamp(1rem, 3vw, 2.5rem); }
+.mail-content { flex: 1 1 auto; min-width: 0; padding: clamp(1rem, 3vw, 2.5rem); }
 .mail-panel { overflow: hidden; width: 100%; max-width: 1120px; margin: 0 auto; border: 0; border-radius: 18px; background: var(--gator-surface); box-shadow: 0 14px 40px #173c5412; }
 .mail-panel-header { display: flex; justify-content: space-between; align-items: center; min-height: 86px; padding: 1.1rem 1.5rem; border-bottom: 1px solid #edf2f5; background: #fff; }
 .mail-eyebrow { margin: 0 0 .2rem; color: var(--gator-blue); font-size: .68rem; font-weight: 800; letter-spacing: .11em; text-transform: uppercase; }
@@ -62,7 +61,7 @@ body { min-height: 100vh; margin: 0; color: var(--gator-ink); background: var(--
 .mail-auth-card .alert { border: 0; border-radius: 12px; background: #eef8fb; color: #28647c; font-size: .85rem; }
 .mail-challenge-form { display: grid; gap: .55rem; margin-top: 1.35rem; text-align: left; }
 .mail-code-label { margin: 0; color: #344b5d; font-size: .82rem; font-weight: 700; }
-.mail-code { min-height: 58px; border: 1px solid #b9cbd6; border-radius: 12px; background: #fbfdfe; color: var(--gator-ink); font-weight: 720; letter-spacing: .18em; text-align: center; text-transform: uppercase; }
+.mail-code { min-height: 58px; border: 1px solid #b9cbd6; border-radius: 12px; background: #fbfdfe; color: var(--gator-ink); font-weight: 720; text-align: center; text-transform: uppercase; }
 .mail-code::placeholder { color: #9aaab5; font-size: .85rem; font-weight: 450; letter-spacing: 0; text-transform: none; }
 .mail-code:focus { border-color: var(--gator-blue); box-shadow: 0 0 0 .25rem #087bab1c; }
 .mail-code-help { color: var(--gator-muted); font-size: .75rem; }
@@ -80,13 +79,13 @@ body { min-height: 100vh; margin: 0; color: var(--gator-ink); background: var(--
     .mail-logo { width: 36px; height: 36px; }
     .mail-account-address { display: none; }
     .mail-signout { padding: .4rem .65rem; font-size: .72rem; }
-    .mail-layout { grid-template-columns: 1fr; min-height: calc(100vh - 60px); }
-    .mail-sidebar { display: flex; gap: .4rem; overflow-x: auto; padding: .65rem; background: var(--gator-blue-dark); }
+    .mail-workspace { flex-direction: column; min-height: calc(100vh - 60px); }
+    .mail-sidebar { display: flex; flex: 0 0 auto; gap: .4rem; overflow-x: auto; padding: .65rem; background: var(--gator-blue-dark); }
     .mail-sidebar-kicker, .mail-sidebar-title { display: none; }
     .mail-folder { flex: 0 0 auto; margin: 0; padding: .65rem .85rem; border-radius: 10px; }
     .mail-folder small { display: none; }
     .mail-folder:hover { transform: none; }
-    .mail-main { padding: .75rem; }
+    .mail-content { padding: .75rem; }
     .mail-panel, .mail-state-card { border-radius: 15px; }
     .mail-state-card { margin-top: 1rem; }
     .mail-panel-header { min-height: 74px; padding: .9rem 1rem; }
