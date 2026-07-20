@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<web-app version="6.1" xmlns="https://jakarta.ee/xml/ns/jakartaee">
+    <servlet>
+        <servlet-name>Mail</servlet-name>
+        <servlet-class>gator.mail.MailServlet</servlet-class>
+    </servlet>
+    <servlet>
+        <servlet-name>Entry</servlet-name>
+        <servlet-class>gator.mail.EntryServlet</servlet-class>
+    </servlet>
+    <servlet>
+        <servlet-name>OAuth</servlet-name>
+        <servlet-class>gator.mail.OAuthServlet</servlet-class>
+    </servlet>
+    <servlet-mapping>
+        <servlet-name>Mail</servlet-name>
+        <url-pattern>/mail</url-pattern>
+    </servlet-mapping>
+    <servlet-mapping>
+        <servlet-name>Entry</servlet-name>
+        <url-pattern>/Login2</url-pattern>
+    </servlet-mapping>
+    <servlet-mapping>
+        <servlet-name>OAuth</servlet-name>
+        <url-pattern>/oauth/*</url-pattern>
+    </servlet-mapping>
+    <welcome-file-list><welcome-file>index.jsp</welcome-file></welcome-file-list>
+    <context-param>
+        <param-name>gappConfigFile</param-name>
+        <param-value>indexMasterErm</param-value>
+    </context-param>
+</web-app>

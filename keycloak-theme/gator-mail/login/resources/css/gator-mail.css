@@ -1,0 +1,65 @@
+:root,
+:root.pf-v5-theme-dark {
+    color-scheme: light;
+    --pf-v5-global--primary-color--100: #0d6efd;
+    --pf-v5-global--primary-color--200: #084298;
+    --pf-v5-global--BackgroundColor--dark-100: #f3f7fd;
+    --pf-v5-global--Color--100: #183153;
+}
+
+#keycloak-bg {
+    min-height: 100vh;
+    background: radial-gradient(circle at 85% 5%, #dcecff 0, transparent 30rem),
+                linear-gradient(145deg, #f8fbff, #eef4fc);
+    color: #183153;
+}
+
+.pf-v5-c-login__container {
+    width: min(460px, calc(100% - 2rem));
+    margin: auto;
+    padding-top: max(6vh, 2rem);
+    grid-template-columns: 1fr;
+    grid-template-areas: "header" "main";
+}
+
+.pf-v5-c-login__header { grid-area: header; text-align: center; }
+#kc-header-wrapper { color: #084298; font-size: 1.35rem; font-weight: 800; }
+#kc-header-wrapper::before {
+    content: "✉";
+    display: grid;
+    place-items: center;
+    width: 3.5rem;
+    height: 3.5rem;
+    margin: 0 auto .75rem;
+    border-radius: 16px;
+    background: linear-gradient(135deg, #0d6efd, #45a3ff);
+    color: #fff;
+    font-size: 1.55rem;
+    box-shadow: 0 10px 24px #0d6efd33;
+}
+
+.pf-v5-c-login__main {
+    grid-area: main;
+    overflow: hidden;
+    border: 1px solid #dce8f8;
+    border-radius: 20px;
+    background: #fff;
+    color: #183153;
+    box-shadow: 0 16px 44px #24558f17;
+}
+
+.pf-v5-c-login__main-header,
+.pf-v5-c-login__main-body { background: #fff; }
+.pf-v5-c-title { color: #12345b; }
+.pf-v5-c-form__label-text { color: #344e6b; font-weight: 650; }
+.pf-v5-c-form-control { background: #fbfdff; color: #183153; border-color: #b9cce3; }
+.pf-v5-c-form-control:focus-within { border-color: #6ea8fe; box-shadow: 0 0 0 .22rem #0d6efd1f; }
+.pf-v5-c-button.pf-m-primary { background: linear-gradient(135deg, #0d6efd, #2788f5); border-radius: 10px; }
+.pf-v5-c-button.pf-m-primary:hover { background: #084298; }
+.pf-v5-c-button.pf-m-control { background: #f1f7ff; color: #0757b7; }
+a { color: #0d6efd; }
+
+@media (max-width: 600px) {
+    .pf-v5-c-login__container { padding-top: 1.25rem; }
+    .pf-v5-c-login__main { border-radius: 16px; }
+}

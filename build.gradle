@@ -1,0 +1,40 @@
+plugins {
+    id 'war'
+}
+
+group = 'gator.apps'
+version = '0.1.0'
+
+java {
+    toolchain { languageVersion = JavaLanguageVersion.of(21) }
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'gator.lib:gator-lib:1.0.0-SNAPSHOT'
+    implementation 'gator.lib:gator-lib-web-gui:1.0.0-SNAPSHOT'
+    implementation 'org.eclipse.angus:angus-mail:2.0.4'
+    providedCompile 'jakarta.servlet:jakarta.servlet-api:6.1.0'
+}
+
+tasks.withType(JavaCompile).configureEach { options.encoding = 'UTF-8' }
+
+tasks.named('war') {
+    webAppDirectory = file('web')
+    archiveFileName = 'gator-mail.war'
+    destinationDirectory = file('dist')
+}
+
+tasks.register('selfTest', JavaExec) {
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'gator.mail.AccessCodeSelfCheck'
+    enableAssertions = true
+}
+
+tasks.named('test') { failOnNoDiscoveredTests = false }
+tasks.named('check') { dependsOn selfTest }
+tasks.named('clean') { delete 'dist' }

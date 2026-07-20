@@ -1,0 +1,29 @@
+plugins { id 'java-library' }
+
+java { toolchain { languageVersion = JavaLanguageVersion.of(17) } }
+
+repositories { mavenCentral() }
+
+dependencies {
+    compileOnly 'org.keycloak:keycloak-core:26.7.0'
+    compileOnly 'org.keycloak:keycloak-server-spi:26.7.0'
+    compileOnly 'org.keycloak:keycloak-server-spi-private:26.7.0'
+    compileOnly 'org.keycloak:keycloak-services:26.7.0'
+}
+
+tasks.withType(JavaCompile).configureEach { options.encoding = 'UTF-8' }
+
+tasks.named('jar') {
+    archiveFileName = 'gator-keycloak-provider.jar'
+    destinationDirectory = rootProject.file('dist')
+}
+
+tasks.register('selfTest', JavaExec) {
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'gator.mail.keycloak.GatorPasswordSelfCheck'
+    enableAssertions = true
+}
+
+tasks.named('check') { dependsOn selfTest }
+tasks.named('test') { failOnNoDiscoveredTests = false }

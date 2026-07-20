@@ -1,0 +1,8 @@
+rootProject.name = 'gator-mail'
+include 'keycloak-provider'
+
+def gatorLibDir = file('../gator-lib')
+if (gatorLibDir.isDirectory()) { includeBuild(gatorLibDir) }
+
+def gatorWebGuiDir = file('../gator-lib-web-gui')
+if (gatorWebGuiDir.isDirectory()) { includeBuild(gatorWebGuiDir) }

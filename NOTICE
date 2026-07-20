@@ -1,0 +1,11 @@
+Gator Mail
+Copyright (C) 2026 Sergio Basurto Juárez
+
+This project depends on gator-lib-shiro and gator-lib. Those projects preserve
+their own third-party attribution and license notices.
+
+The IMAP client uses Eclipse Angus Mail under the Eclipse Distribution License
+1.0 and Eclipse Public License 2.0.
+
+Apache Shiro, Apache Commons BeanUtils and Apache Commons Logging are provided
+under the Apache License 2.0. Gson is also provided under Apache License 2.0.

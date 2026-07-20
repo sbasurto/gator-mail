@@ -1,0 +1,222 @@
+{
+  "root": {
+    "tag": "html",
+    "attrs": { "lang": "es" },
+    "children": [
+      {
+        "tag": "head",
+        "children": [
+          { "tag": "meta", "attrs": { "charset": "UTF-8" } },
+          { "tag": "meta", "attrs": { "name": "viewport", "content": "width=device-width, initial-scale=1" } },
+          { "tag": "title", "text": "Gator Mail" },
+          { "tag": "link", "attrs": { "rel": "stylesheet", "href": "/elib/css2/bootstrap-5.3.0/bootstrap.min.css" } },
+          { "tag": "link", "attrs": { "rel": "stylesheet", "href": "/elib/css/colors.css" } },
+          { "tag": "link", "attrs": { "rel": "stylesheet", "href": "${contextPath}/css/gator-mail.css" } }
+        ]
+      },
+      {
+        "tag": "body",
+        "attrs": { "class": "bg-light" },
+        "children": [
+          {
+            "tag": "header",
+            "attrs": { "class": "navbar navbar-dark bg-blue-softg mail-topbar" },
+            "children": [
+              {
+                "tag": "div",
+                "attrs": { "class": "container-fluid" },
+                "children": [
+                  { "tag": "a", "attrs": { "class": "navbar-brand mail-brand", "href": "${contextPath}/mail" }, "children": [
+                    { "tag": "img", "attrs": { "class": "mail-logo", "src": "/eimg/softGatorNewAlone.png", "alt": "SoftGator" } },
+                    { "tag": "span", "text": "Gator Mail" }
+                  ] },
+                  {
+                    "tag": "div",
+                    "attrs": { "class": "mail-account" },
+                    "children": [
+                      { "tag": "span", "attrs": { "class": "small" }, "text": "${mailbox}" },
+                      { "tag": "a", "attrs": { "class": "btn btn-sm btn-outline-light", "href": "${contextPath}/oauth/logout" }, "text": "Salir" }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "tag": "div",
+            "attrs": { "class": "mail-layout" },
+            "children": [
+              {
+                "tag": "nav",
+                "if": "mailContent",
+                "attrs": { "class": "mail-sidebar", "aria-label": "Carpetas de correo" },
+                "children": [
+                  { "tag": "p", "attrs": { "class": "mail-sidebar-title" }, "text": "Carpetas" },
+                  {
+                    "tag": "a",
+                    "each": "folders",
+                    "as": "folder",
+                    "attrs": { "class": "mail-folder ${folder.className}", "href": "${folder.href}" },
+                    "children": [
+                      { "tag": "strong", "text": "${folder.label}" },
+                      { "tag": "small", "text": "${folder.count}" }
+                    ]
+                  }
+                ]
+              },
+              {
+                "tag": "main",
+                "attrs": { "class": "mail-main" },
+                "children": [
+                  {
+                    "tag": "section",
+                    "if": "challenge",
+                    "attrs": { "class": "card mail-state-card" },
+                    "children": [
+                      {
+                        "tag": "div",
+                        "attrs": { "class": "card-body p-4" },
+                        "children": [
+                          { "tag": "span", "attrs": { "class": "mail-state-icon" }, "text": "✓" },
+                          { "tag": "h1", "attrs": { "class": "h4 mt-3" }, "text": "Verifica tu acceso" },
+                          { "tag": "p", "attrs": { "class": "text-muted" }, "text": "Escribe la clave temporal que enviamos por SMS." },
+                          { "tag": "p", "if": "noticeVisible", "attrs": { "class": "alert alert-info", "role": "status" }, "text": "${notice}" },
+                          {
+                            "tag": "form",
+                            "attrs": { "method": "post", "class": "mail-challenge-form" },
+                            "children": [
+                              { "tag": "input", "attrs": { "type": "hidden", "name": "action", "value": "verify" } },
+                              { "tag": "input", "attrs": { "type": "hidden", "name": "token", "value": "${token}" } },
+                              { "tag": "label", "attrs": { "class": "form-label", "for": "code" }, "text": "Clave temporal" },
+                              { "tag": "input", "attrs": { "class": "form-control form-control-lg mail-code", "id": "code", "name": "code", "type": "text", "inputmode": "numeric", "autocomplete": "one-time-code", "pattern": "[A-Za-z0-9]{8}", "minlength": "8", "maxlength": "8", "required": "true", "autofocus": "true" } },
+                              { "tag": "button", "attrs": { "class": "btn btn-primary btn-lg w-100", "type": "submit" }, "text": "Verificar y continuar" }
+                            ]
+                          },
+                          {
+                            "tag": "form",
+                            "attrs": { "method": "post", "class": "mt-3 text-center" },
+                            "children": [
+                              { "tag": "input", "attrs": { "type": "hidden", "name": "action", "value": "resend" } },
+                              { "tag": "input", "attrs": { "type": "hidden", "name": "token", "value": "${token}" } },
+                              { "tag": "button", "attrs": { "class": "btn btn-link", "type": "submit", "disabled": "${resendDisabled}" }, "text": "Reenviar clave" },
+                              { "tag": "small", "attrs": { "class": "d-block text-muted" }, "text": "${resendWait}" }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "tag": "section",
+                    "if": "mailboxView",
+                    "attrs": { "class": "card mail-panel" },
+                    "children": [
+                      {
+                        "tag": "header",
+                        "attrs": { "class": "card-header mail-panel-header" },
+                        "children": [
+                          { "tag": "div", "children": [
+                            { "tag": "small", "attrs": { "class": "text-muted" }, "text": "Correo" },
+                            { "tag": "h1", "attrs": { "class": "h4 mb-0" }, "text": "${folderLabel}" }
+                          ] },
+                          { "tag": "a", "attrs": { "class": "btn btn-outline-primary btn-sm", "href": "${refreshHref}" }, "text": "Actualizar" }
+                        ]
+                      },
+                      { "tag": "p", "if": "empty", "attrs": { "class": "mail-empty text-muted" }, "text": "No hay mensajes en esta carpeta." },
+                      {
+                        "tag": "div",
+                        "if": "hasMessages",
+                        "attrs": { "class": "list-group list-group-flush" },
+                        "children": [
+                          {
+                            "tag": "a",
+                            "each": "messages",
+                            "as": "message",
+                            "attrs": { "class": "list-group-item list-group-item-action mail-message-row", "href": "${message.href}" },
+                            "children": [
+                              { "tag": "div", "attrs": { "class": "mail-message-meta" }, "children": [
+                                { "tag": "strong", "text": "${message.from}" },
+                                { "tag": "time", "attrs": { "class": "text-muted" }, "text": "${message.sent}" }
+                              ] },
+                              { "tag": "span", "attrs": { "class": "mail-subject" }, "text": "${message.subject}" }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "tag": "section",
+                    "if": "messageView",
+                    "attrs": { "class": "card mail-panel" },
+                    "children": [
+                      {
+                        "tag": "header",
+                        "attrs": { "class": "card-header mail-panel-header" },
+                        "children": [
+                          { "tag": "a", "attrs": { "class": "btn btn-outline-primary btn-sm", "href": "${folderHref}" }, "text": "← ${folderLabel}" },
+                          { "tag": "small", "attrs": { "class": "text-muted" }, "text": "${sent}" }
+                        ]
+                      },
+                      {
+                        "tag": "div",
+                        "attrs": { "class": "card-body mail-message" },
+                        "children": [
+                          { "tag": "h1", "attrs": { "class": "h4" }, "text": "${subject}" },
+                          { "tag": "dl", "attrs": { "class": "mail-headers" }, "children": [
+                            { "tag": "dt", "text": "De" }, { "tag": "dd", "text": "${from}" },
+                            { "tag": "dt", "text": "Para" }, { "tag": "dd", "text": "${to}" }
+                          ] },
+                          { "tag": "pre", "attrs": { "class": "mail-body" }, "text": "${body}" }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "tag": "section",
+                    "if": "pending",
+                    "attrs": { "class": "card mail-state-card" },
+                    "children": [
+                      { "tag": "div", "attrs": { "class": "card-body p-4" }, "children": [
+                        { "tag": "span", "attrs": { "class": "mail-state-icon" }, "text": "…" },
+                        { "tag": "h1", "attrs": { "class": "h4 mt-3" }, "text": "Tu buzón está pendiente" },
+                        { "tag": "p", "attrs": { "class": "text-muted" }, "text": "La cuenta ya tiene acceso, pero el buzón aún no está disponible." },
+                        { "tag": "a", "attrs": { "class": "btn btn-primary", "href": "${contextPath}/mail" }, "text": "Comprobar nuevamente" }
+                      ] }
+                    ]
+                  },
+                  {
+                    "tag": "section",
+                    "if": "error",
+                    "attrs": { "class": "card mail-state-card" },
+                    "children": [
+                      { "tag": "div", "attrs": { "class": "card-body p-4" }, "children": [
+                        { "tag": "span", "attrs": { "class": "mail-state-icon mail-state-error" }, "text": "!" },
+                        { "tag": "h1", "attrs": { "class": "h4 mt-3" }, "text": "No pudimos abrir tu correo" },
+                        { "tag": "p", "attrs": { "class": "text-muted" }, "text": "Intenta nuevamente. Si el problema continúa, comunícate con soporte." },
+                        { "tag": "a", "attrs": { "class": "btn btn-primary", "href": "${contextPath}/mail" }, "text": "Reintentar" }
+                      ] }
+                    ]
+                  },
+                  {
+                    "tag": "section",
+                    "if": "loggedOut",
+                    "attrs": { "class": "card mail-state-card" },
+                    "children": [
+                      { "tag": "div", "attrs": { "class": "card-body p-4" }, "children": [
+                        { "tag": "span", "attrs": { "class": "mail-state-icon" }, "text": "✓" },
+                        { "tag": "h1", "attrs": { "class": "h4 mt-3" }, "text": "Sesión cerrada" },
+                        { "tag": "p", "attrs": { "class": "text-muted" }, "text": "Cerraste tu sesión de Gator Mail de forma segura." },
+                        { "tag": "a", "attrs": { "class": "btn btn-primary", "href": "${contextPath}/oauth/login" }, "text": "Volver a entrar" }
+                      ] }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
