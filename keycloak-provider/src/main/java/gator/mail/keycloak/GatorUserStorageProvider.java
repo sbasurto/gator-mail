@@ -114,8 +114,7 @@ final class GatorUserStorageProvider implements UserStorageProvider, UserLookupP
     @Override public boolean updateCredential(RealmModel realm, UserModel user, CredentialInput input) {
         if (!supportsCredentialType(input.getType()) || input.getChallengeResponse() == null
                 || input.getChallengeResponse().isBlank()) return false;
-        execute("update app_usuarios set usuario_password = ?, usuario_hash_auth = null where usuario_id = ?",
-                input.getChallengeResponse(), user.getUsername());
+        updatePassword(user.getUsername(), input.getChallengeResponse());
         loaded.remove(user.getUsername());
         return true;
     }
@@ -127,6 +126,30 @@ final class GatorUserStorageProvider implements UserStorageProvider, UserLookupP
 
     private void clearPasswordChange(String username) {
         execute("update app_usuarios set usuario_hash_auth = null where usuario_id = ?", username);
+    }
+
+    private void updatePassword(String username, String password) {
+        try (Connection connection = DriverManager.getConnection(required("GATOR_IDP_JDBC_URL"),
+                required("GATOR_IDP_JDBC_USER"), required("GATOR_IDP_JDBC_PASSWORD"))) {
+            connection.setAutoCommit(false);
+            try (PreparedStatement sync = connection.prepareStatement(
+                        "select app_fn_admon_tablas_all(json_build_object('usuario', ?, 'password', ?)::text)");
+                 PreparedStatement update = connection.prepareStatement(
+                        "update app_usuarios set usuario_password = ?, usuario_hash_auth = null where usuario_id = ?")) {
+                sync.setString(1, username);
+                sync.setString(2, password);
+                sync.executeQuery();
+                update.setString(1, password);
+                update.setString(2, username);
+                if (update.executeUpdate() != 1) throw new IllegalStateException("Usuario Gator no encontrado");
+                connection.commit();
+            } catch (SQLException | RuntimeException e) {
+                connection.rollback();
+                throw e;
+            }
+        } catch (SQLException e) {
+            throw new IllegalStateException("No fue posible sincronizar la contraseña Gator", e);
+        }
     }
 
     private void execute(String sql, String... values) {
