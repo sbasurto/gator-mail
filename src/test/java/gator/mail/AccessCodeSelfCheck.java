@@ -103,6 +103,7 @@ public final class AccessCodeSelfCheck {
         model.put("contactsAvailable", true);
         model.put("contacts", List.of(Map.of("name", "Contacto Uno", "email", "uno@example.com")));
         model.put("configurationOpen", true);
+        model.put("mailOpen", true);
         model.put("configurationUsersClass", "active");
         model.put("configurationContactsClass", "");
         model.put("configurationUsers", List.of(Map.of("id", "usuario", "name", "Usuario Uno",
@@ -146,6 +147,7 @@ public final class AccessCodeSelfCheck {
             assert html.contains("data-contact-email=\"uno@example.com\"");
             assert html.contains(">Contactos</span>");
             assert html.contains(">Configuración</span>");
+            assert html.contains(">Correo</span>");
             assert html.contains("value=\"userSave\"");
             assert html.contains("value=\"contactSave\"");
             assert html.contains("data-message-uid=\"1\"");

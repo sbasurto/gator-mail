@@ -135,6 +135,7 @@ public final class MailServlet extends HttpServlet {
         model.put("configurationOpen", false);
         model.put("configurationUsersClass", "");
         model.put("configurationContactsClass", "");
+        model.put("mailOpen", true);
         model.put("query", "");
         model.put("emptyText", "No hay mensajes en esta carpeta.");
         model.put("empty", false);
@@ -529,6 +530,7 @@ public final class MailServlet extends HttpServlet {
         model.put("layoutClass", "mail-workspace");
         model.put("contentClass", "mail-content");
         model.put("folderGroups", List.of());
+        model.put("mailOpen", false);
         model.put("csrf", csrf(session));
         model.put("configurationOpen", true);
         model.put("configurationUsersView", "users".equals(section));
