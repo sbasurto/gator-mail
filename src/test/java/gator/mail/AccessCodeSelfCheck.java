@@ -57,11 +57,21 @@ public final class AccessCodeSelfCheck {
         assert MailServlet.page("3") == 3;
         assert MailServlet.pageSize(null) == 20;
         assert MailServlet.pageSize("100") == 100;
+        assert "Junk".equals(ImapMailbox.promotedName("INBOX.Junk", '.'));
+        assert "Spam".equals(ImapMailbox.promotedName("INBOX.Spam", '.'));
+        assert ImapMailbox.promotedName("INBOX.Archivo", '.').isEmpty();
         List<Map<String, Object>> pagedFolders = MailServlet.folderGroups(List.of(
                 new ImapMailbox.FolderInfo("INBOX", "Entrada", "", "INBOX", 0, 0, 1),
+                new ImapMailbox.FolderInfo("Sent", "Enviados", "", "Sent", 0, 0, 4),
+                new ImapMailbox.FolderInfo("INBOX.Spam", "Spam", "INBOX", "INBOX", 1, 0, 3),
                 new ImapMailbox.FolderInfo("Archive", "Archivo", "", "Archive", 0, 0, 50)), "Archive", 60);
         assert "mail?folder=INBOX&page=1&size=60".equals(pagedFolders.get(0).get("href"));
-        assert "mail?folder=Archive&page=1&size=60".equals(pagedFolders.get(1).get("href"));
+        assert "Entrada".equals(pagedFolders.get(0).get("label"));
+        assert Boolean.TRUE.equals(pagedFolders.get(0).get("leaf"));
+        assert "Enviados".equals(pagedFolders.get(1).get("label"));
+        assert "Spam".equals(pagedFolders.get(2).get("label"));
+        assert Boolean.TRUE.equals(pagedFolders.get(2).get("leaf"));
+        assert "mail?folder=Archive&page=1&size=60".equals(pagedFolders.get(3).get("href"));
         boolean rejectedUid = false;
         try { MailServlet.uids(new String[]{"0"}); }
         catch (IllegalArgumentException expected) { rejectedUid = true; }

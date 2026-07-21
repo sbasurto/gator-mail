@@ -82,6 +82,7 @@ final class ImapMailbox {
 
     List<FolderInfo> folders(String mailbox, String accessToken) throws Exception {
         try (Store store = connect(mailbox, accessToken)) {
+            promoteSpam(store);
             List<FolderInfo> result = new ArrayList<>();
             for (Folder folder : store.getDefaultFolder().list("*")) {
                 if ((folder.getType() & Folder.HOLDS_MESSAGES) == 0) continue;
@@ -96,6 +97,27 @@ final class ImapMailbox {
                     .thenComparing(FolderInfo::label, String.CASE_INSENSITIVE_ORDER));
             return result;
         }
+    }
+
+    private static void promoteSpam(Store store) {
+        try {
+            for (Folder source : store.getDefaultFolder().list("*")) {
+                String targetName = promotedName(source.getFullName(), source.getSeparator());
+                if (targetName.isEmpty()) continue;
+                Folder target = store.getFolder(targetName);
+                if (!target.exists()) rename(source, target);
+                return;
+            }
+        } catch (Exception error) {
+            LOG.log(Level.WARNING, "No fue posible mover Spam al nivel principal", error);
+        }
+    }
+
+    static String promotedName(String name, char separator) {
+        if (!parent(name, separator).equalsIgnoreCase("INBOX")) return "";
+        String child = part(name, separator);
+        if (child.equalsIgnoreCase("Junk")) return "Junk";
+        return child.equalsIgnoreCase("Spam") ? "Spam" : "";
     }
 
     MessagePage messages(String mailbox, String folderName, String query, int requestedPage, int size,

@@ -483,9 +483,11 @@ public final class MailServlet extends HttpServlet {
 
         List<Map<String, Object>> groups = new ArrayList<>();
         for (ImapMailbox.FolderInfo folder : folders) {
-            if (folder.depth() > 0) continue;
+            boolean inbox = folder.name().equalsIgnoreCase("INBOX")
+                    || folder.depth() > 0 && folder.root().equalsIgnoreCase("INBOX");
+            if (folder.depth() > 0 && !inbox) continue;
             List<ImapMailbox.FolderInfo> nested = children.remove(folder.name());
-            if (nested == null) {
+            if (nested == null || inbox) {
                 Map<String, Object> leaf = folderModel(folder, selected, false, size);
                 leaf.put("leaf", true);
                 leaf.put("hasChildren", false);
