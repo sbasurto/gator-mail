@@ -83,6 +83,7 @@ public final class OAuthServlet extends HttpServlet {
         String hint = idToken.isBlank() || "null".equals(idToken) ? "" : "&id_token_hint=" + enc(idToken);
         return ISSUER + "/protocol/openid-connect/logout?client_id=gator-mail" + hint;
     }
+    static String accountUrl() { return ISSUER + "/account/#/security/signingin"; }
     private static String redirect(HttpServletRequest request) {
         String configured = System.getenv("GATOR_MAIL_OAUTH_REDIRECT_URI");
         if (configured != null && !configured.isBlank()) return configured;

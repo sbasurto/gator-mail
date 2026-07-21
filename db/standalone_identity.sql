@@ -72,6 +72,8 @@ create table if not exists app_usuario_mail (
     primary key (usuario_id, mail_domain)
 );
 
+\ir mail_carpetas.sql
+
 create or replace function app_fn_hash_password(v_password text, v_salt text, v_loops integer)
 returns text
 language plpgsql

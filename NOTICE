@@ -7,5 +7,14 @@ their own third-party attribution and license notices.
 The IMAP client uses Eclipse Angus Mail under the Eclipse Distribution License
 1.0 and Eclipse Public License 2.0.
 
+Untrusted email HTML is filtered with OWASP Java HTML Sanitizer, dual licensed
+under the Apache License 2.0 and the New BSD License.
+
+Markdown is rendered with commonmark-java, provided under the BSD 2-Clause
+License.
+
 Apache Shiro, Apache Commons BeanUtils and Apache Commons Logging are provided
 under the Apache License 2.0. Gson is also provided under Apache License 2.0.
+
+Bootstrap is provided under the MIT License. Font Awesome Free uses CC BY 4.0
+for icons, SIL OFL 1.1 for fonts and MIT for its code.

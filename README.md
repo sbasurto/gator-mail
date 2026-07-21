@@ -3,12 +3,21 @@
 Cliente web IMAP ligero integrado con las cuentas, grupos y aplicaciones de
 Gator. El primer alcance permite iniciar sesión, verificar el acceso mediante
 una clave enviada exclusivamente por SMS, consultar las carpetas IMAP y leer
-mensajes de texto.
+mensajes de texto o HTML aislado. También permite mover, renombrar y eliminar
+carpetas directamente en el servidor IMAP, redactar en Markdown y guardar el
+resultado como texto y HTML sanitizado en Borradores. Los mensajes se pueden
+buscar, seleccionar y eliminar por bloque, o mover arrastrándolos a otra carpeta.
+Las carpetas se renombrarán o eliminarán desde su menú de clic derecho.
+El buzón pagina 20 mensajes de forma predeterminada y permite mostrar 20, 40,
+60, 80 o 100 mensajes por página.
+La redacción admite Para, CC y CCO, con selección múltiple desde el directorio
+de contactos asociado a los grupos del usuario.
 
 No utiliza Roundcube, no guarda contraseñas IMAP por usuario y no interpreta
 HTML recibido. Keycloak autentica al usuario y el mismo token OAuth2 abre su
-buzón en Dovecot mediante XOAUTH2. El envío de correo se agregará cuando exista
-un modelo explícito de identidad y autenticación SMTP por buzón.
+buzón en Dovecot mediante XOAUTH2. Exim recibe el envío por SMTPS desde la IP
+autorizada de la aplicación, con el remitente fijado al buzón autenticado y sin
+almacenar contraseñas por usuario.
 
 ## Requisitos
 
@@ -25,6 +34,8 @@ El proceso de Tomcat puede recibir estas variables de entorno:
 
 - `GATOR_MAIL_IMAP_HOST` (predeterminado: `mail.soft-gator.com`)
 - `GATOR_MAIL_IMAP_PORT` (predeterminado: `993`)
+- `GATOR_MAIL_SMTP_HOST` (predeterminado: `mail.soft-gator.com`)
+- `GATOR_MAIL_SMTP_PORT` (predeterminado: `465`)
 - `GATOR_MAIL_OAUTH_ISSUER` (predeterminado:
   `https://mail.soft-gator.com/auth/realms/gator`)
 - `GATOR_MAIL_OAUTH_REDIRECT_URI` (opcional; se calcula desde la petición si
@@ -33,6 +44,14 @@ El proceso de Tomcat puede recibir estas variables de entorno:
 El cliente público `gator-mail` debe habilitar Authorization Code con PKCE S256
 y registrar exactamente los URI de retorno usados por cada entorno.
 El tema claro de entrada y salida se encuentra en `keycloak-theme/gator-mail`.
+
+Las carpetas IMAP se guardan en la tabla jerárquica `mail_carpetas`; el script
+idempotente para crearla está en `db/mail_carpetas.sql`.
+El directorio autónomo y compatible con Gator E se instala con
+`db/mail_contacts.sql`; no requiere tablas externas ni copia hashes de usuario.
+En instalaciones Gator, `db/sync_contacts_from_gator.sql` registra la base en
+`broker_db` y replica altas, cambios y bajas hacia Gator Mail. Un fallo del
+destino no bloquea Gator E: queda registrado en `mail_contact_sync_queue`.
 
 ## Compilar y probar
 
@@ -55,6 +74,14 @@ para identificar el origen y la cuenta en el SMS; la definición compatible se
 encuentra en `db/app_fn_send_login_challenge.sql`. No requiere Shiro ni
 contraseñas de correo.
 
+La sesión HTTP se conserva durante reinicios controlados de Gator Mail para no
+repetir el segundo factor mientras la misma sesión continúe activa. Cerrar
+sesión o dejarla expirar elimina esa verificación.
+
+El vínculo **Contraseña** abre la consola de cuenta de Keycloak. Los cambios
+usan el proveedor Gator existente, que sincroniza `app_usuarios` mediante
+`app_fn_admon_tablas_all`.
+
 ## Aprovisionamiento de buzones
 
 - Si el correo ya existe en `softmail_users`, se reutilizan su identidad,
@@ -74,7 +101,10 @@ contraseñas de correo.
 - Los tokens, sesiones y contraseñas no se escriben en el log.
 - Authorization Code usa PKCE S256 y rota el identificador de sesión al entrar.
 - Los mensajes se abren en modo de solo lectura y el cuerpo se limita a 200 KB.
-- Todo contenido del mensaje se escapa antes de presentarlo como HTML.
+- El HTML del mensaje se sanitiza y se presenta dentro de un `iframe sandbox`.
+- El borrado mueve los mensajes a Papelera; desde Papelera es definitivo.
+- Las operaciones sobre carpetas requieren sesión verificada y token CSRF;
+  `INBOX` no se puede mover, renombrar ni eliminar.
 
 ## Licencia
 

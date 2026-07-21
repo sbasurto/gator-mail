@@ -17,6 +17,8 @@ dependencies {
     implementation 'gator.lib:gator-lib:1.0.0-SNAPSHOT'
     implementation 'gator.lib:gator-lib-web-gui:1.0.0-SNAPSHOT'
     implementation 'org.eclipse.angus:angus-mail:2.0.4'
+    implementation 'com.googlecode.owasp-java-html-sanitizer:owasp-java-html-sanitizer:20260313.1'
+    implementation 'org.commonmark:commonmark:0.28.0'
     providedCompile 'jakarta.servlet:jakarta.servlet-api:6.1.0'
 }
 

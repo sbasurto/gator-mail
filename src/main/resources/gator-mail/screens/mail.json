@@ -10,8 +10,10 @@
           { "tag": "meta", "attrs": { "name": "viewport", "content": "width=device-width, initial-scale=1" } },
           { "tag": "title", "text": "Gator Mail" },
           { "tag": "link", "attrs": { "rel": "stylesheet", "href": "/elib/css2/bootstrap-5.3.0/bootstrap.min.css" } },
+          { "tag": "link", "attrs": { "rel": "stylesheet", "href": "/elib/css2/fontawesome-free-5.13.0-web/css/all.min.css" } },
           { "tag": "link", "attrs": { "rel": "stylesheet", "href": "/elib/css/colors.css" } },
-          { "tag": "link", "attrs": { "rel": "stylesheet", "href": "${contextPath}/css/gator-mail.css" } }
+          { "tag": "link", "attrs": { "rel": "stylesheet", "href": "${contextPath}/css/gator-mail.css?v=18" } },
+          { "tag": "script", "attrs": { "src": "${contextPath}/js/gator-mail.js?v=6", "defer": "true" } }
         ]
       },
       {
@@ -36,7 +38,14 @@
                     "attrs": { "class": "mail-account" },
                     "children": [
                       { "tag": "span", "attrs": { "class": "mail-account-address" }, "text": "${mailbox}" },
-                      { "tag": "a", "attrs": { "class": "btn btn-sm mail-signout", "href": "${contextPath}/oauth/logout" }, "text": "Cerrar sesión" }
+                      { "tag": "a", "attrs": { "class": "btn btn-sm mail-signout", "href": "${accountHref}", "title": "Administrar contraseña" }, "children": [
+                        { "tag": "span", "attrs": { "class": "fas fa-key", "aria-hidden": "true" } },
+                        { "tag": "span", "attrs": { "class": "mail-password-label" }, "text": "Contraseña" }
+                      ] },
+                      { "tag": "a", "attrs": { "class": "btn btn-sm mail-signout", "href": "${contextPath}/oauth/logout" }, "children": [
+                        { "tag": "span", "attrs": { "class": "fas fa-sign-out-alt", "aria-hidden": "true" } },
+                        { "tag": "span", "text": "Cerrar sesión" }
+                      ] }
                     ]
                   }
                 ]
@@ -53,17 +62,40 @@
                 "attrs": { "class": "mail-sidebar", "aria-label": "Carpetas de correo" },
                 "children": [
                   { "tag": "p", "attrs": { "class": "mail-sidebar-kicker" }, "text": "Tu correo" },
-                  { "tag": "h2", "attrs": { "class": "mail-sidebar-title" }, "text": "Carpetas" },
-                  {
-                    "tag": "a",
-                    "each": "folders",
-                    "as": "folder",
-                    "attrs": { "class": "mail-folder ${folder.className}", "href": "${folder.href}" },
-                    "children": [
-                      { "tag": "strong", "text": "${folder.label}" },
-                      { "tag": "small", "text": "${folder.count}" }
-                    ]
-                  }
+                  { "tag": "h2", "attrs": { "class": "mail-sidebar-title", "data-drop-root": "true" }, "text": "Carpetas" },
+                  { "tag": "div", "each": "folderGroups", "as": "group", "children": [
+                    { "tag": "details", "if": "group.hasChildren", "attrs": { "class": "mail-folder-group", "open": "${group.open}" }, "children": [
+                      { "tag": "summary", "attrs": { "class": "mail-folder mail-folder-parent", "draggable": "${group.draggable}", "data-folder": "${group.folder}", "data-csrf": "${csrf}" }, "children": [
+                        { "tag": "strong", "children": [
+                          { "tag": "span", "attrs": { "class": "mail-folder-icon ${group.icon}", "aria-hidden": "true" } },
+                          { "tag": "span", "text": "${group.label}" }
+                        ] },
+                        { "tag": "small", "text": "${group.count}" }
+                      ] },
+                      { "tag": "a", "each": "group.children", "as": "folder", "attrs": { "class": "mail-folder ${folder.className}", "href": "${folder.href}", "draggable": "${folder.draggable}", "data-folder": "${folder.folder}", "data-csrf": "${csrf}" }, "children": [
+                        { "tag": "strong", "children": [
+                          { "tag": "span", "attrs": { "class": "mail-folder-icon ${folder.icon}", "aria-hidden": "true" } },
+                          { "tag": "span", "text": "${folder.label}" }
+                        ] },
+                        { "tag": "small", "text": "${folder.count}" }
+                      ] }
+                    ] },
+                    { "tag": "a", "if": "group.leaf", "attrs": { "class": "mail-folder ${group.className}", "href": "${group.href}", "draggable": "${group.draggable}", "data-folder": "${group.folder}", "data-csrf": "${csrf}" }, "children": [
+                      { "tag": "strong", "children": [
+                        { "tag": "span", "attrs": { "class": "mail-folder-icon ${group.icon}", "aria-hidden": "true" } },
+                        { "tag": "span", "text": "${group.label}" }
+                      ] },
+                      { "tag": "small", "text": "${group.count}" }
+                    ] }
+                  ] },
+                  { "tag": "div", "attrs": { "class": "mail-folder-menu", "id": "mail-folder-menu", "data-csrf": "${csrf}", "role": "menu" }, "children": [
+                    { "tag": "button", "attrs": { "class": "mail-folder-menu-item", "id": "mail-folder-rename", "type": "button", "role": "menuitem" }, "children": [
+                      { "tag": "span", "attrs": { "class": "fas fa-pen", "aria-hidden": "true" } }, { "tag": "span", "text": "Renombrar" }
+                    ] },
+                    { "tag": "button", "attrs": { "class": "mail-folder-menu-item mail-folder-menu-danger", "id": "mail-folder-delete", "type": "button", "role": "menuitem" }, "children": [
+                      { "tag": "span", "attrs": { "class": "fas fa-trash-alt", "aria-hidden": "true" } }, { "tag": "span", "text": "Eliminar" }
+                    ] }
+                  ] }
                 ]
               },
               {
@@ -91,7 +123,7 @@
                               { "tag": "input", "attrs": { "type": "hidden", "name": "action", "value": "verify" } },
                               { "tag": "input", "attrs": { "type": "hidden", "name": "token", "value": "${token}" } },
                               { "tag": "label", "attrs": { "class": "form-label mail-code-label", "for": "code" }, "text": "Clave de verificación" },
-                              { "tag": "input", "attrs": { "class": "form-control form-control-lg mail-code", "id": "code", "name": "code", "type": "text", "inputmode": "text", "autocomplete": "one-time-code", "placeholder": "8 a 12 caracteres", "pattern": "[A-Za-z0-9]{8,12}", "minlength": "8", "maxlength": "12", "required": "true", "autofocus": "true", "aria-label": "Clave alfanumérica de 8 a 12 caracteres" } },
+                              { "tag": "input", "attrs": { "class": "form-control form-control-lg mail-code", "id": "code", "name": "code", "type": "text", "inputmode": "text", "autocomplete": "one-time-code", "placeholder": "Escribe la clave recibida", "pattern": "[A-Za-z0-9]{8,12}", "minlength": "8", "maxlength": "12", "required": "true", "autofocus": "true", "aria-label": "Clave alfanumérica de 8 a 12 caracteres" } },
                               { "tag": "small", "attrs": { "class": "mail-code-help" }, "text": "Puede contener letras y números." },
                               { "tag": "button", "attrs": { "class": "btn btn-primary btn-lg w-100 mail-primary-action", "type": "submit" }, "text": "Continuar" }
                             ]
@@ -112,6 +144,82 @@
                   },
                   {
                     "tag": "section",
+                    "if": "composeView",
+                    "attrs": { "class": "card mail-panel" },
+                    "children": [
+                      { "tag": "header", "attrs": { "class": "card-header mail-panel-header" }, "children": [
+                        { "tag": "div", "children": [
+                          { "tag": "small", "attrs": { "class": "mail-eyebrow" }, "text": "Markdown" },
+                          { "tag": "h1", "attrs": { "class": "mail-panel-title" }, "text": "Nuevo mensaje" }
+                        ] },
+                        { "tag": "a", "attrs": { "class": "btn btn-outline-secondary btn-sm", "href": "${contextPath}/mail" }, "text": "Cancelar" }
+                      ] },
+                      { "tag": "form", "attrs": { "class": "mail-compose-form", "method": "post" }, "children": [
+                        { "tag": "input", "attrs": { "type": "hidden", "name": "csrf", "value": "${csrf}" } },
+                        { "tag": "div", "attrs": { "class": "mail-recipient-field" }, "children": [
+                          { "tag": "label", "attrs": { "class": "form-label", "for": "mail-compose-to" }, "text": "Para" },
+                          { "tag": "div", "attrs": { "class": "mail-recipient-control" }, "children": [
+                            { "tag": "input", "attrs": { "class": "form-control", "id": "mail-compose-to", "name": "to", "type": "text", "value": "${composeTo}", "placeholder": "destinatario@dominio.com", "required": "true", "autocomplete": "off" } },
+                            { "tag": "button", "if": "contactsAvailable", "attrs": { "class": "btn btn-outline-secondary mail-contact-open", "type": "button", "data-contact-target": "mail-compose-to", "aria-controls": "mail-contact-picker", "aria-expanded": "false", "title": "Seleccionar contactos para Para" }, "children": [{ "tag": "span", "attrs": { "class": "fas fa-address-book", "aria-hidden": "true" } }] }
+                          ] }
+                        ] },
+                        { "tag": "div", "attrs": { "class": "mail-recipient-field" }, "children": [
+                          { "tag": "label", "attrs": { "class": "form-label", "for": "mail-compose-cc" }, "text": "CC" },
+                          { "tag": "div", "attrs": { "class": "mail-recipient-control" }, "children": [
+                            { "tag": "input", "attrs": { "class": "form-control", "id": "mail-compose-cc", "name": "cc", "type": "text", "value": "${composeCc}", "placeholder": "Con copia", "autocomplete": "off" } },
+                            { "tag": "button", "if": "contactsAvailable", "attrs": { "class": "btn btn-outline-secondary mail-contact-open", "type": "button", "data-contact-target": "mail-compose-cc", "aria-controls": "mail-contact-picker", "aria-expanded": "false", "title": "Seleccionar contactos para CC" }, "children": [{ "tag": "span", "attrs": { "class": "fas fa-address-book", "aria-hidden": "true" } }] }
+                          ] }
+                        ] },
+                        { "tag": "div", "attrs": { "class": "mail-recipient-field" }, "children": [
+                          { "tag": "label", "attrs": { "class": "form-label", "for": "mail-compose-bcc" }, "text": "CCO" },
+                          { "tag": "div", "attrs": { "class": "mail-recipient-control" }, "children": [
+                            { "tag": "input", "attrs": { "class": "form-control", "id": "mail-compose-bcc", "name": "bcc", "type": "text", "value": "${composeBcc}", "placeholder": "Con copia oculta", "autocomplete": "off" } },
+                            { "tag": "button", "if": "contactsAvailable", "attrs": { "class": "btn btn-outline-secondary mail-contact-open", "type": "button", "data-contact-target": "mail-compose-bcc", "aria-controls": "mail-contact-picker", "aria-expanded": "false", "title": "Seleccionar contactos para CCO" }, "children": [{ "tag": "span", "attrs": { "class": "fas fa-address-book", "aria-hidden": "true" } }] }
+                          ] }
+                        ] },
+                        { "tag": "section", "if": "contactsAvailable", "attrs": { "class": "mail-contact-picker", "id": "mail-contact-picker", "aria-label": "Directorio de contactos" }, "children": [
+                          { "tag": "header", "attrs": { "class": "mail-contact-picker-header" }, "children": [
+                            { "tag": "strong", "text": "Contactos" },
+                            { "tag": "input", "attrs": { "class": "form-control form-control-sm", "id": "mail-contact-search", "type": "search", "placeholder": "Buscar contacto", "aria-label": "Buscar contacto" } },
+                            { "tag": "button", "attrs": { "class": "btn btn-sm btn-light", "id": "mail-contact-close", "type": "button", "title": "Cerrar contactos" }, "children": [{ "tag": "span", "attrs": { "class": "fas fa-times", "aria-hidden": "true" } }] }
+                          ] },
+                          { "tag": "div", "attrs": { "class": "mail-contact-list" }, "children": [
+                            { "tag": "button", "each": "contacts", "as": "contact", "attrs": { "class": "mail-contact-item", "type": "button", "data-contact-email": "${contact.email}" }, "children": [
+                              { "tag": "strong", "text": "${contact.name}" },
+                              { "tag": "small", "text": "${contact.email}" }
+                            ] }
+                          ] }
+                        ] },
+                        { "tag": "label", "attrs": { "class": "form-label", "for": "mail-compose-subject" }, "text": "Asunto" },
+                        { "tag": "input", "attrs": { "class": "form-control", "id": "mail-compose-subject", "name": "subject", "type": "text", "value": "${composeSubject}", "maxlength": "200" } },
+                        { "tag": "div", "attrs": { "class": "mail-md-toolbar", "role": "toolbar", "aria-label": "Formato Markdown" }, "children": [
+                          { "tag": "button", "attrs": { "class": "btn btn-sm btn-light", "type": "button", "data-md": "bold", "title": "Negritas" }, "children": [{ "tag": "span", "attrs": { "class": "fas fa-bold", "aria-hidden": "true" } }] },
+                          { "tag": "button", "attrs": { "class": "btn btn-sm btn-light", "type": "button", "data-md": "italic", "title": "Cursivas" }, "children": [{ "tag": "span", "attrs": { "class": "fas fa-italic", "aria-hidden": "true" } }] },
+                          { "tag": "button", "attrs": { "class": "btn btn-sm btn-light", "type": "button", "data-md": "heading", "title": "Encabezado" }, "text": "H" },
+                          { "tag": "button", "attrs": { "class": "btn btn-sm btn-light", "type": "button", "data-md": "list", "title": "Lista" }, "children": [{ "tag": "span", "attrs": { "class": "fas fa-list", "aria-hidden": "true" } }] },
+                          { "tag": "button", "attrs": { "class": "btn btn-sm btn-light", "type": "button", "data-md": "link", "title": "Enlace" }, "children": [{ "tag": "span", "attrs": { "class": "fas fa-link", "aria-hidden": "true" } }] },
+                          { "tag": "span", "attrs": { "class": "mail-md-label" }, "children": [
+                            { "tag": "span", "attrs": { "class": "fab fa-markdown", "aria-hidden": "true" } }, { "tag": "span", "text": "Markdown" }
+                          ] }
+                        ] },
+                        { "tag": "label", "attrs": { "class": "visually-hidden", "for": "mail-compose-body" }, "text": "Contenido" },
+                        { "tag": "textarea", "attrs": { "class": "form-control mail-md-editor", "id": "mail-compose-body", "name": "body", "rows": "18", "spellcheck": "true", "required": "true", "placeholder": "Escribe tu mensaje con Markdown…" }, "text": "${composeBody}" },
+                        { "tag": "div", "attrs": { "class": "mail-compose-footer" }, "children": [
+                          { "tag": "small", "attrs": { "class": "text-muted" }, "text": "Se guardará como texto y HTML sanitizado en Borradores." },
+                          { "tag": "div", "attrs": { "class": "mail-compose-actions" }, "children": [
+                            { "tag": "button", "attrs": { "class": "btn btn-outline-primary", "type": "submit", "name": "action", "value": "saveDraft" }, "children": [
+                              { "tag": "span", "attrs": { "class": "fas fa-save", "aria-hidden": "true" } }, { "tag": "span", "text": "Guardar borrador" }
+                            ] },
+                            { "tag": "button", "attrs": { "class": "btn btn-primary", "type": "submit", "name": "action", "value": "sendMessage" }, "children": [
+                              { "tag": "span", "attrs": { "class": "fas fa-paper-plane", "aria-hidden": "true" } }, { "tag": "span", "text": "Enviar" }
+                            ] }
+                          ] }
+                        ] }
+                      ] }
+                    ]
+                  },
+                  {
+                    "tag": "section",
                     "if": "mailboxView",
                     "attrs": { "class": "card mail-panel" },
                     "children": [
@@ -123,28 +231,60 @@
                             { "tag": "small", "attrs": { "class": "mail-eyebrow" }, "text": "Buzón" },
                             { "tag": "h1", "attrs": { "class": "mail-panel-title" }, "text": "${folderLabel}" }
                           ] },
-                          { "tag": "a", "attrs": { "class": "btn btn-outline-primary btn-sm", "href": "${refreshHref}" }, "text": "Actualizar" }
+                          { "tag": "div", "attrs": { "class": "mail-header-actions" }, "children": [
+                            { "tag": "form", "attrs": { "class": "mail-search-form", "method": "get", "role": "search" }, "children": [
+                              { "tag": "input", "attrs": { "type": "hidden", "name": "folder", "value": "${selectedFolder}" } },
+                              { "tag": "input", "attrs": { "type": "hidden", "name": "size", "value": "${pageSize}" } },
+                              { "tag": "input", "attrs": { "class": "form-control form-control-sm", "name": "q", "type": "search", "value": "${query}", "maxlength": "100", "placeholder": "Buscar correos", "aria-label": "Buscar correos" } },
+                              { "tag": "button", "attrs": { "class": "btn btn-primary btn-sm", "type": "submit", "title": "Buscar" }, "children": [
+                                { "tag": "span", "attrs": { "class": "fas fa-search", "aria-hidden": "true" } }
+                              ] }
+                            ] },
+                            { "tag": "a", "attrs": { "class": "btn btn-outline-primary btn-sm mail-toolbar-action", "href": "${refreshHref}" }, "children": [
+                              { "tag": "span", "attrs": { "class": "fas fa-sync-alt", "aria-hidden": "true" } },
+                              { "tag": "span", "text": "Actualizar" }
+                            ] }
+                          ] }
                         ]
                       },
-                      { "tag": "p", "if": "empty", "attrs": { "class": "mail-empty text-muted" }, "text": "No hay mensajes en esta carpeta." },
+                      { "tag": "p", "if": "sendNotice", "attrs": { "class": "alert alert-success mail-send-notice", "role": "status" }, "text": "Mensaje enviado correctamente." },
+                      { "tag": "p", "if": "empty", "attrs": { "class": "mail-empty text-muted" }, "text": "${emptyText}" },
                       {
-                        "tag": "div",
+                        "tag": "form",
                         "if": "hasMessages",
-                        "attrs": { "class": "list-group list-group-flush" },
+                        "attrs": { "class": "mail-bulk-form", "id": "mail-bulk-form", "method": "post" },
                         "children": [
+                          { "tag": "input", "attrs": { "type": "hidden", "name": "action", "value": "messageDelete" } },
+                          { "tag": "input", "attrs": { "type": "hidden", "name": "csrf", "value": "${csrf}" } },
+                          { "tag": "input", "attrs": { "type": "hidden", "name": "folder", "value": "${selectedFolder}" } },
+                          { "tag": "input", "attrs": { "type": "hidden", "name": "q", "value": "${query}" } },
+                          { "tag": "input", "attrs": { "type": "hidden", "name": "page", "value": "${page}" } },
+                          { "tag": "input", "attrs": { "type": "hidden", "name": "size", "value": "${pageSize}" } },
+                          { "tag": "div", "attrs": { "class": "mail-bulk-toolbar" }, "children": [
+                            { "tag": "input", "attrs": { "class": "form-check-input", "id": "mail-select-all", "type": "checkbox" } },
+                            { "tag": "label", "attrs": { "for": "mail-select-all" }, "text": "Seleccionar todos" }
+                          ] },
+                          { "tag": "div", "attrs": { "class": "list-group list-group-flush" }, "children": [
                           {
-                            "tag": "a",
+                            "tag": "div",
                             "each": "messages",
                             "as": "message",
-                            "attrs": { "class": "list-group-item list-group-item-action mail-message-row", "href": "${message.href}" },
+                            "attrs": { "class": "list-group-item mail-message-row", "draggable": "true", "data-folder": "${message.folder}", "data-message-uid": "${message.uid}" },
                             "children": [
-                              { "tag": "div", "attrs": { "class": "mail-message-meta" }, "children": [
-                                { "tag": "strong", "text": "${message.from}" },
-                                { "tag": "time", "attrs": { "class": "text-muted" }, "text": "${message.sent}" }
-                              ] },
-                              { "tag": "span", "attrs": { "class": "mail-subject" }, "text": "${message.subject}" }
+                              { "tag": "input", "attrs": { "class": "form-check-input mail-message-select", "type": "checkbox", "name": "uid", "value": "${message.uid}", "aria-label": "Seleccionar mensaje" } },
+                              { "tag": "a", "attrs": { "class": "mail-message-link", "href": "${message.href}" }, "children": [
+                                { "tag": "span", "attrs": { "class": "mail-message-icon fas fa-envelope", "aria-hidden": "true" } },
+                                { "tag": "div", "attrs": { "class": "mail-message-copy" }, "children": [
+                                  { "tag": "div", "attrs": { "class": "mail-message-meta" }, "children": [
+                                    { "tag": "strong", "text": "${message.from}" },
+                                    { "tag": "time", "attrs": { "class": "text-muted" }, "text": "${message.sent}" }
+                                  ] },
+                                  { "tag": "span", "attrs": { "class": "mail-subject" }, "text": "${message.subject}" }
+                                ] }
+                              ] }
                             ]
                           }
+                          ] }
                         ]
                       }
                     ]
@@ -158,7 +298,10 @@
                         "tag": "header",
                         "attrs": { "class": "card-header mail-panel-header" },
                         "children": [
-                          { "tag": "a", "attrs": { "class": "btn btn-outline-primary btn-sm", "href": "${folderHref}" }, "text": "← ${folderLabel}" },
+                          { "tag": "a", "attrs": { "class": "btn btn-outline-primary btn-sm mail-toolbar-action", "href": "${folderHref}" }, "children": [
+                            { "tag": "span", "attrs": { "class": "fas fa-chevron-left", "aria-hidden": "true" } },
+                            { "tag": "span", "text": "${folderLabel}" }
+                          ] },
                           { "tag": "small", "attrs": { "class": "text-muted" }, "text": "${sent}" }
                         ]
                       },
@@ -171,7 +314,8 @@
                             { "tag": "dt", "text": "De" }, { "tag": "dd", "text": "${from}" },
                             { "tag": "dt", "text": "Para" }, { "tag": "dd", "text": "${to}" }
                           ] },
-                          { "tag": "pre", "attrs": { "class": "mail-body" }, "text": "${body}" }
+                          { "tag": "pre", "if": "mailText", "attrs": { "class": "mail-body" }, "text": "${body}" },
+                          { "tag": "iframe", "if": "mailHtml", "attrs": { "class": "mail-html-body", "sandbox": "", "referrerpolicy": "no-referrer", "title": "Contenido HTML del correo", "srcdoc": "${body}" } }
                         ]
                       }
                     ]
@@ -216,7 +360,34 @@
                     ]
                   }
                 ]
-              }
+              },
+              { "tag": "nav", "if": "composeAction", "attrs": { "class": "mail-action-bar", "aria-label": "Acciones de correo" }, "children": [
+                { "tag": "div", "if": "mailboxView", "attrs": { "class": "mail-action-pager", "aria-label": "Paginación del buzón" }, "children": [
+                  { "tag": "span", "attrs": { "class": "mail-page-summary" }, "text": "${pageSummary}" },
+                  { "tag": "div", "attrs": { "class": "mail-page-sizes", "aria-label": "Mensajes por página" }, "children": [
+                    { "tag": "span", "text": "Por página:" },
+                    { "tag": "a", "each": "pageSizes", "as": "size", "attrs": { "class": "mail-page-size ${size.className}", "href": "${size.href}" }, "text": "${size.label}" }
+                  ] },
+                  { "tag": "div", "attrs": { "class": "mail-page-nav" }, "children": [
+                    { "tag": "a", "if": "hasPrevious", "attrs": { "class": "btn btn-sm btn-outline-secondary", "href": "${previousHref}", "title": "Página anterior" }, "children": [
+                      { "tag": "span", "attrs": { "class": "fas fa-chevron-left", "aria-hidden": "true" } }
+                    ] },
+                    { "tag": "a", "if": "hasNext", "attrs": { "class": "btn btn-sm btn-outline-secondary", "href": "${nextHref}", "title": "Página siguiente" }, "children": [
+                      { "tag": "span", "attrs": { "class": "fas fa-chevron-right", "aria-hidden": "true" } }
+                    ] }
+                  ] }
+                ] },
+                { "tag": "div", "attrs": { "class": "mail-action-buttons" }, "children": [
+                  { "tag": "a", "attrs": { "class": "btn btn-primary", "href": "${contextPath}/mail?action=compose" }, "children": [
+                    { "tag": "span", "attrs": { "class": "fas fa-pen", "aria-hidden": "true" } },
+                    { "tag": "span", "text": "Redactar" }
+                  ] },
+                  { "tag": "button", "if": "mailboxView", "attrs": { "class": "btn btn-danger", "id": "mail-delete-selected", "type": "submit", "form": "mail-bulk-form", "disabled": "true" }, "children": [
+                    { "tag": "span", "attrs": { "class": "fas fa-trash-alt", "aria-hidden": "true" } },
+                    { "tag": "span", "text": "Eliminar seleccionados" }
+                  ] }
+                ] }
+              ] }
             ]
           }
         ]

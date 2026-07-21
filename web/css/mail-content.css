@@ -1,0 +1,24 @@
+:root { color-scheme: light; }
+* { box-sizing: border-box; }
+body.gator-email {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 24px;
+    background: #fff;
+    color: #243746;
+    font: 400 16px/1.65 Arial, Helvetica, sans-serif;
+    overflow-wrap: anywhere;
+}
+h1, h2, h3, h4, h5, h6 { margin: 1.3em 0 .55em; color: #183044; line-height: 1.25; }
+h1 { font-size: 1.8rem; } h2 { font-size: 1.5rem; } h3 { font-size: 1.25rem; }
+p, ul, ol, blockquote, table { margin: 0 0 1rem; }
+a { color: #087bab; text-decoration-thickness: 1px; text-underline-offset: 2px; }
+blockquote { padding: .75rem 1rem; border-left: 4px solid #9bc2d2; background: #f4f8fa; color: #526673; }
+table { width: 100%; border-collapse: collapse; }
+th, td { padding: .6rem .7rem; border: 1px solid #dce6ed; text-align: left; vertical-align: top; }
+th { background: #eef5f8; }
+pre, code { border-radius: 5px; background: #f1f4f6; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
+code { padding: .1em .3em; }
+pre { overflow: auto; padding: 1rem; }
+hr { border: 0; border-top: 1px solid #dce6ed; }
+@media (max-width: 600px) { body.gator-email { padding: 16px; font-size: 15px; } }

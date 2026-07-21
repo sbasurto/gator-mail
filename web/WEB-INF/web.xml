@@ -29,4 +29,8 @@
         <param-name>gappConfigFile</param-name>
         <param-value>indexMasterErm</param-value>
     </context-param>
+    <context-param>
+        <param-name>gappContactsDbFile</param-name>
+        <param-value>pg_mail_master</param-value>
+    </context-param>
 </web-app>
