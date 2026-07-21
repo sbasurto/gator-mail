@@ -49,6 +49,10 @@ Las carpetas IMAP se guardan en la tabla jerárquica `mail_carpetas`; el script
 idempotente para crearla está en `db/mail_carpetas.sql`.
 El directorio autónomo y compatible con Gator E se instala con
 `db/mail_contacts.sql`; no requiere tablas externas ni copia hashes de usuario.
+La administración de usuarios y contactos se instala con `db/mail_admin.sql`;
+las cuentas asociadas a `sbasurto@soft-gator.com` y la cuenta local `admin`
+quedan autorizadas inicialmente y pueden ampliarse desde la tabla
+`mail_administradores`.
 En instalaciones Gator, `db/sync_contacts_from_gator.sql` registra la base en
 `broker_db` y replica altas, cambios y bajas hacia Gator Mail. Un fallo del
 destino no bloquea Gator E: queda registrado en `mail_contact_sync_queue`.

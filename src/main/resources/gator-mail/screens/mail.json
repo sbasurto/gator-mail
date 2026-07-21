@@ -13,7 +13,7 @@
           { "tag": "link", "attrs": { "rel": "stylesheet", "href": "/elib/css2/bootstrap-5.3.0/bootstrap.min.css" } },
           { "tag": "link", "attrs": { "rel": "stylesheet", "href": "/elib/css2/fontawesome-free-5.13.0-web/css/all.min.css" } },
           { "tag": "link", "attrs": { "rel": "stylesheet", "href": "/elib/css/colors.css" } },
-          { "tag": "link", "attrs": { "rel": "stylesheet", "href": "${contextPath}/css/gator-mail.css?v=20" } },
+          { "tag": "link", "attrs": { "rel": "stylesheet", "href": "${contextPath}/css/gator-mail.css?v=21" } },
           { "tag": "script", "attrs": { "src": "${contextPath}/js/gator-mail.js?v=6", "defer": "true" } }
         ]
       },
@@ -89,6 +89,26 @@
                       { "tag": "small", "text": "${group.count}" }
                     ] }
                   ] },
+                  { "tag": "details", "if": "configurationAvailable", "attrs": { "class": "mail-folder-group mail-configuration", "open": "${configurationOpen}" }, "children": [
+                    { "tag": "summary", "attrs": { "class": "mail-folder mail-folder-parent" }, "children": [
+                      { "tag": "strong", "children": [
+                        { "tag": "span", "attrs": { "class": "mail-folder-icon fas fa-cog", "aria-hidden": "true" } },
+                        { "tag": "span", "text": "Configuración" }
+                      ] }
+                    ] },
+                    { "tag": "a", "attrs": { "class": "mail-folder mail-folder-child ${configurationUsersClass}", "href": "${contextPath}/mail?action=settings&section=users" }, "children": [
+                      { "tag": "strong", "children": [
+                        { "tag": "span", "attrs": { "class": "mail-folder-icon fas fa-users", "aria-hidden": "true" } },
+                        { "tag": "span", "text": "Usuarios" }
+                      ] }
+                    ] },
+                    { "tag": "a", "attrs": { "class": "mail-folder mail-folder-child ${configurationContactsClass}", "href": "${contextPath}/mail?action=settings&section=contacts" }, "children": [
+                      { "tag": "strong", "children": [
+                        { "tag": "span", "attrs": { "class": "mail-folder-icon fas fa-address-book", "aria-hidden": "true" } },
+                        { "tag": "span", "text": "Contactos" }
+                      ] }
+                    ] }
+                  ] },
                   { "tag": "div", "attrs": { "class": "mail-folder-menu", "id": "mail-folder-menu", "data-csrf": "${csrf}", "role": "menu" }, "children": [
                     { "tag": "button", "attrs": { "class": "mail-folder-menu-item", "id": "mail-folder-rename", "type": "button", "role": "menuitem" }, "children": [
                       { "tag": "span", "attrs": { "class": "fas fa-pen", "aria-hidden": "true" } }, { "tag": "span", "text": "Renombrar" }
@@ -141,6 +161,72 @@
                           }
                         ]
                       }
+                    ]
+                  },
+                  {
+                    "tag": "section",
+                    "if": "configurationUsersView",
+                    "attrs": { "class": "card mail-panel" },
+                    "children": [
+                      { "tag": "header", "attrs": { "class": "card-header mail-panel-header" }, "children": [
+                        { "tag": "div", "children": [
+                          { "tag": "small", "attrs": { "class": "mail-eyebrow" }, "text": "Configuración" },
+                          { "tag": "h1", "attrs": { "class": "mail-panel-title" }, "text": "Usuarios" }
+                        ] },
+                        { "tag": "a", "attrs": { "class": "btn btn-outline-secondary btn-sm", "href": "${contextPath}/mail" }, "text": "Volver al correo" }
+                      ] },
+                      { "tag": "div", "attrs": { "class": "mail-admin-list" }, "children": [
+                        { "tag": "form", "each": "configurationUsers", "as": "user", "attrs": { "class": "mail-admin-row mail-admin-user", "method": "post" }, "children": [
+                          { "tag": "input", "attrs": { "type": "hidden", "name": "csrf", "value": "${csrf}" } },
+                          { "tag": "input", "attrs": { "type": "hidden", "name": "user", "value": "${user.id}" } },
+                          { "tag": "input", "attrs": { "type": "hidden", "name": "enabled", "value": "${user.enabled}" } },
+                          { "tag": "label", "children": [{ "tag": "small", "text": "Usuario" }, { "tag": "strong", "text": "${user.id}" }] },
+                          { "tag": "label", "children": [{ "tag": "small", "text": "Nombre" }, { "tag": "input", "attrs": { "class": "form-control", "name": "name", "value": "${user.name}", "maxlength": "200" } }] },
+                          { "tag": "label", "children": [{ "tag": "small", "text": "Correo" }, { "tag": "strong", "text": "${user.email}" }] },
+                          { "tag": "span", "attrs": { "class": "mail-admin-status" }, "text": "${user.status}" },
+                          { "tag": "div", "attrs": { "class": "mail-admin-actions" }, "children": [
+                            { "tag": "button", "attrs": { "class": "btn btn-primary btn-sm", "type": "submit", "name": "action", "value": "userSave" }, "text": "Guardar" },
+                            { "tag": "button", "attrs": { "class": "btn btn-outline-secondary btn-sm", "type": "submit", "name": "action", "value": "userToggle" }, "text": "${user.toggleLabel}" }
+                          ] }
+                        ] }
+                      ] }
+                    ]
+                  },
+                  {
+                    "tag": "section",
+                    "if": "configurationContactsView",
+                    "attrs": { "class": "card mail-panel" },
+                    "children": [
+                      { "tag": "header", "attrs": { "class": "card-header mail-panel-header" }, "children": [
+                        { "tag": "div", "children": [
+                          { "tag": "small", "attrs": { "class": "mail-eyebrow" }, "text": "Configuración" },
+                          { "tag": "h1", "attrs": { "class": "mail-panel-title" }, "text": "Contactos" }
+                        ] },
+                        { "tag": "a", "attrs": { "class": "btn btn-outline-secondary btn-sm", "href": "${contextPath}/mail" }, "text": "Volver al correo" }
+                      ] },
+                      { "tag": "form", "attrs": { "class": "mail-admin-row mail-admin-contact mail-admin-new", "method": "post" }, "children": [
+                        { "tag": "input", "attrs": { "type": "hidden", "name": "csrf", "value": "${csrf}" } },
+                        { "tag": "input", "attrs": { "type": "hidden", "name": "id", "value": "" } },
+                        { "tag": "label", "children": [{ "tag": "small", "text": "Nombre" }, { "tag": "input", "attrs": { "class": "form-control", "name": "name", "maxlength": "200", "required": "true" } }] },
+                        { "tag": "label", "children": [{ "tag": "small", "text": "Correo" }, { "tag": "input", "attrs": { "class": "form-control", "name": "email", "type": "email", "maxlength": "320", "required": "true" } }] },
+                        { "tag": "label", "children": [{ "tag": "small", "text": "Usuario propietario" }, { "tag": "input", "attrs": { "class": "form-control", "name": "owner" } }] },
+                        { "tag": "label", "children": [{ "tag": "small", "text": "Grupos (IDs)" }, { "tag": "input", "attrs": { "class": "form-control", "name": "group", "placeholder": "2, 3" } }] },
+                        { "tag": "button", "attrs": { "class": "btn btn-primary btn-sm", "type": "submit", "name": "action", "value": "contactSave" }, "text": "Agregar contacto" }
+                      ] },
+                      { "tag": "div", "attrs": { "class": "mail-admin-list" }, "children": [
+                        { "tag": "form", "each": "configurationContacts", "as": "contact", "attrs": { "class": "mail-admin-row mail-admin-contact", "method": "post" }, "children": [
+                          { "tag": "input", "attrs": { "type": "hidden", "name": "csrf", "value": "${csrf}" } },
+                          { "tag": "input", "attrs": { "type": "hidden", "name": "id", "value": "${contact.id}" } },
+                          { "tag": "label", "children": [{ "tag": "small", "text": "Nombre" }, { "tag": "input", "attrs": { "class": "form-control", "name": "name", "value": "${contact.name}", "maxlength": "200", "required": "true" } }] },
+                          { "tag": "label", "children": [{ "tag": "small", "text": "Correo" }, { "tag": "input", "attrs": { "class": "form-control", "name": "email", "type": "email", "value": "${contact.email}", "maxlength": "320", "required": "true" } }] },
+                          { "tag": "label", "children": [{ "tag": "small", "text": "Usuario propietario" }, { "tag": "input", "attrs": { "class": "form-control", "name": "owner", "value": "${contact.owner}" } }] },
+                          { "tag": "label", "children": [{ "tag": "small", "text": "Grupos (IDs)" }, { "tag": "input", "attrs": { "class": "form-control", "name": "group", "value": "${contact.group}", "placeholder": "2, 3" } }] },
+                          { "tag": "div", "attrs": { "class": "mail-admin-actions" }, "children": [
+                            { "tag": "button", "attrs": { "class": "btn btn-primary btn-sm", "type": "submit", "name": "action", "value": "contactSave" }, "text": "Guardar" },
+                            { "tag": "button", "attrs": { "class": "btn btn-outline-danger btn-sm", "type": "submit", "name": "action", "value": "contactDelete" }, "text": "Eliminar" }
+                          ] }
+                        ] }
+                      ] }
                     ]
                   },
                   {

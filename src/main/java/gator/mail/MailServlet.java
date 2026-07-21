@@ -73,6 +73,8 @@ public final class MailServlet extends HttpServlet {
             String notice = challenge(request, session, user);
             if (!Boolean.TRUE.equals(session.getAttribute("mail.challenge.verified"))) {
                 challengeModel(model, session, notice);
+            } else if (configuration(request, response, session, model, mailbox)) {
+                if (response.isCommitted()) return;
             } else if (manageFolders(request, response, session, mailbox, OAuthServlet.accessToken(request))) {
                 return;
             } else if (moveMessage(request, response, session, mailbox, OAuthServlet.accessToken(request))) {
@@ -127,6 +129,12 @@ public final class MailServlet extends HttpServlet {
         model.put("composeSubject", "");
         model.put("composeBody", "");
         model.put("contactsAvailable", false);
+        model.put("configurationAvailable", false);
+        model.put("configurationUsersView", false);
+        model.put("configurationContactsView", false);
+        model.put("configurationOpen", false);
+        model.put("configurationUsersClass", "");
+        model.put("configurationContactsClass", "");
         model.put("query", "");
         model.put("emptyText", "No hay mensajes en esta carpeta.");
         model.put("empty", false);
@@ -468,6 +476,106 @@ public final class MailServlet extends HttpServlet {
         } finally {
             if (database != null) database.close();
         }
+    }
+
+    private boolean configuration(HttpServletRequest request, HttpServletResponse response, HttpSession session,
+            Map<String, Object> model, String mailbox) throws Exception {
+        boolean admin = mailDbCall("mail_fn_admin_access", mailbox).get("admin").getAsBoolean();
+        model.put("configurationAvailable", admin);
+        String action = request.getParameter("action");
+        boolean requested = "settings".equals(action) || "userSave".equals(action) || "userToggle".equals(action)
+                || "contactSave".equals(action) || "contactDelete".equals(action);
+        if (!requested) return false;
+        if (!admin) {
+            response.sendError(HttpServletResponse.SC_FORBIDDEN);
+            return true;
+        }
+        if (!"settings".equals(action)) {
+            if (!"POST".equals(request.getMethod()) || !csrf(session).equals(request.getParameter("csrf"))) {
+                response.sendError(HttpServletResponse.SC_FORBIDDEN);
+                return true;
+            }
+            JsonObject value = new JsonObject();
+            value.addProperty("actor", mailbox);
+            if (action.startsWith("user")) {
+                value.addProperty("user", request.getParameter("user"));
+                value.addProperty("name", request.getParameter("name"));
+                boolean enabled = Boolean.parseBoolean(request.getParameter("enabled"));
+                value.addProperty("enabled", "userToggle".equals(action) ? !enabled : enabled);
+                checked(mailDbCall("mail_fn_admin_usuario_guardar", gson.toJson(value)));
+                response.sendRedirect("mail?action=settings&section=users");
+            } else {
+                value.addProperty("id", request.getParameter("id"));
+                if ("contactDelete".equals(action)) {
+                    checked(mailDbCall("mail_fn_admin_contacto_eliminar", gson.toJson(value)));
+                } else {
+                    value.addProperty("name", request.getParameter("name"));
+                    value.addProperty("email", request.getParameter("email"));
+                    value.addProperty("owner", request.getParameter("owner"));
+                    value.addProperty("group", request.getParameter("group"));
+                    checked(mailDbCall("mail_fn_admin_contacto_guardar", gson.toJson(value)));
+                }
+                response.sendRedirect("mail?action=settings&section=contacts");
+            }
+            return true;
+        }
+        configurationModel(model, request, session);
+        return true;
+    }
+
+    private void configurationModel(Map<String, Object> model, HttpServletRequest request, HttpSession session) {
+        String section = "contacts".equals(request.getParameter("section")) ? "contacts" : "users";
+        model.put("mailContent", true);
+        model.put("layoutClass", "mail-workspace");
+        model.put("contentClass", "mail-content");
+        model.put("folderGroups", List.of());
+        model.put("csrf", csrf(session));
+        model.put("configurationOpen", true);
+        model.put("configurationUsersView", "users".equals(section));
+        model.put("configurationContactsView", "contacts".equals(section));
+        model.put("configurationUsersClass", "users".equals(section) ? "active" : "");
+        model.put("configurationContactsClass", "contacts".equals(section) ? "active" : "");
+        if ("users".equals(section)) {
+            JsonObject result = checked(mailDbCall("mail_fn_admin_usuarios", String.valueOf(model.get("mailbox"))));
+            List<Map<String, Object>> users = new ArrayList<>();
+            for (JsonElement element : result.getAsJsonArray("usuarios")) {
+                JsonObject user = element.getAsJsonObject();
+                boolean enabled = user.get("enabled").getAsBoolean();
+                users.add(Map.of("id", user.get("id").getAsString(), "name", user.get("name").getAsString(),
+                        "email", user.get("email").getAsString(), "enabled", enabled,
+                        "status", enabled ? "Activo" : "Inactivo", "toggleLabel", enabled ? "Desactivar" : "Activar"));
+            }
+            model.put("configurationUsers", users);
+        } else {
+            JsonObject result = checked(mailDbCall("mail_fn_admin_contactos", String.valueOf(model.get("mailbox"))));
+            List<Map<String, Object>> contacts = new ArrayList<>();
+            for (JsonElement element : result.getAsJsonArray("contactos")) {
+                JsonObject contact = element.getAsJsonObject();
+                contacts.add(Map.of("id", contact.get("id").getAsString(),
+                        "name", contact.get("name").getAsString(), "email", contact.get("email").getAsString(),
+                        "owner", contact.get("owner").getAsString(), "group", contact.get("group").getAsString()));
+            }
+            model.put("configurationContacts", contacts);
+        }
+    }
+
+    private JsonObject mailDbCall(String procedure, String value) {
+        ADO database = null;
+        try {
+            GappSQLStatement statement = new GappSQLStatement();
+            statement.setStoreProcedure(procedure);
+            statement.addParam(value);
+            database = new ADO(getServletContext().getInitParameter("gappContactsDbFile"), true);
+            return JsonParser.parseString(database.execStore(statement)).getAsJsonObject();
+        } finally {
+            if (database != null) database.close();
+        }
+    }
+
+    private static JsonObject checked(JsonObject result) {
+        if (!"0".equals(result.get("codigo").getAsString()))
+            throw new IllegalArgumentException(result.get("mensaje").getAsString());
+        return result;
     }
 
     private static JsonObject json(String key, String value) {
