@@ -9,10 +9,11 @@
           { "tag": "meta", "attrs": { "charset": "UTF-8" } },
           { "tag": "meta", "attrs": { "name": "viewport", "content": "width=device-width, initial-scale=1" } },
           { "tag": "title", "text": "Gator Mail" },
+          { "tag": "link", "attrs": { "rel": "icon", "href": "/eimg/softgator/favicon-softgator.png" } },
           { "tag": "link", "attrs": { "rel": "stylesheet", "href": "/elib/css2/bootstrap-5.3.0/bootstrap.min.css" } },
           { "tag": "link", "attrs": { "rel": "stylesheet", "href": "/elib/css2/fontawesome-free-5.13.0-web/css/all.min.css" } },
           { "tag": "link", "attrs": { "rel": "stylesheet", "href": "/elib/css/colors.css" } },
-          { "tag": "link", "attrs": { "rel": "stylesheet", "href": "${contextPath}/css/gator-mail.css?v=18" } },
+          { "tag": "link", "attrs": { "rel": "stylesheet", "href": "${contextPath}/css/gator-mail.css?v=20" } },
           { "tag": "script", "attrs": { "src": "${contextPath}/js/gator-mail.js?v=6", "defer": "true" } }
         ]
       },
@@ -154,27 +155,36 @@
                         ] },
                         { "tag": "a", "attrs": { "class": "btn btn-outline-secondary btn-sm", "href": "${contextPath}/mail" }, "text": "Cancelar" }
                       ] },
-                      { "tag": "form", "attrs": { "class": "mail-compose-form", "method": "post" }, "children": [
+                      { "tag": "form", "attrs": { "class": "mail-compose-form", "method": "post", "enctype": "multipart/form-data" }, "children": [
                         { "tag": "input", "attrs": { "type": "hidden", "name": "csrf", "value": "${csrf}" } },
                         { "tag": "div", "attrs": { "class": "mail-recipient-field" }, "children": [
                           { "tag": "label", "attrs": { "class": "form-label", "for": "mail-compose-to" }, "text": "Para" },
                           { "tag": "div", "attrs": { "class": "mail-recipient-control" }, "children": [
                             { "tag": "input", "attrs": { "class": "form-control", "id": "mail-compose-to", "name": "to", "type": "text", "value": "${composeTo}", "placeholder": "destinatario@dominio.com", "required": "true", "autocomplete": "off" } },
-                            { "tag": "button", "if": "contactsAvailable", "attrs": { "class": "btn btn-outline-secondary mail-contact-open", "type": "button", "data-contact-target": "mail-compose-to", "aria-controls": "mail-contact-picker", "aria-expanded": "false", "title": "Seleccionar contactos para Para" }, "children": [{ "tag": "span", "attrs": { "class": "fas fa-address-book", "aria-hidden": "true" } }] }
+                            { "tag": "button", "if": "contactsAvailable", "attrs": { "class": "btn btn-outline-secondary mail-contact-open", "type": "button", "data-contact-target": "mail-compose-to", "aria-controls": "mail-contact-picker", "aria-expanded": "false", "title": "Seleccionar contactos para Para" }, "children": [
+                              { "tag": "span", "attrs": { "class": "fas fa-address-book", "aria-hidden": "true" } },
+                              { "tag": "span", "text": "Contactos" }
+                            ] }
                           ] }
                         ] },
                         { "tag": "div", "attrs": { "class": "mail-recipient-field" }, "children": [
                           { "tag": "label", "attrs": { "class": "form-label", "for": "mail-compose-cc" }, "text": "CC" },
                           { "tag": "div", "attrs": { "class": "mail-recipient-control" }, "children": [
                             { "tag": "input", "attrs": { "class": "form-control", "id": "mail-compose-cc", "name": "cc", "type": "text", "value": "${composeCc}", "placeholder": "Con copia", "autocomplete": "off" } },
-                            { "tag": "button", "if": "contactsAvailable", "attrs": { "class": "btn btn-outline-secondary mail-contact-open", "type": "button", "data-contact-target": "mail-compose-cc", "aria-controls": "mail-contact-picker", "aria-expanded": "false", "title": "Seleccionar contactos para CC" }, "children": [{ "tag": "span", "attrs": { "class": "fas fa-address-book", "aria-hidden": "true" } }] }
+                            { "tag": "button", "if": "contactsAvailable", "attrs": { "class": "btn btn-outline-secondary mail-contact-open", "type": "button", "data-contact-target": "mail-compose-cc", "aria-controls": "mail-contact-picker", "aria-expanded": "false", "title": "Seleccionar contactos para CC" }, "children": [
+                              { "tag": "span", "attrs": { "class": "fas fa-address-book", "aria-hidden": "true" } },
+                              { "tag": "span", "text": "Contactos" }
+                            ] }
                           ] }
                         ] },
                         { "tag": "div", "attrs": { "class": "mail-recipient-field" }, "children": [
                           { "tag": "label", "attrs": { "class": "form-label", "for": "mail-compose-bcc" }, "text": "CCO" },
                           { "tag": "div", "attrs": { "class": "mail-recipient-control" }, "children": [
                             { "tag": "input", "attrs": { "class": "form-control", "id": "mail-compose-bcc", "name": "bcc", "type": "text", "value": "${composeBcc}", "placeholder": "Con copia oculta", "autocomplete": "off" } },
-                            { "tag": "button", "if": "contactsAvailable", "attrs": { "class": "btn btn-outline-secondary mail-contact-open", "type": "button", "data-contact-target": "mail-compose-bcc", "aria-controls": "mail-contact-picker", "aria-expanded": "false", "title": "Seleccionar contactos para CCO" }, "children": [{ "tag": "span", "attrs": { "class": "fas fa-address-book", "aria-hidden": "true" } }] }
+                            { "tag": "button", "if": "contactsAvailable", "attrs": { "class": "btn btn-outline-secondary mail-contact-open", "type": "button", "data-contact-target": "mail-compose-bcc", "aria-controls": "mail-contact-picker", "aria-expanded": "false", "title": "Seleccionar contactos para CCO" }, "children": [
+                              { "tag": "span", "attrs": { "class": "fas fa-address-book", "aria-hidden": "true" } },
+                              { "tag": "span", "text": "Contactos" }
+                            ] }
                           ] }
                         ] },
                         { "tag": "section", "if": "contactsAvailable", "attrs": { "class": "mail-contact-picker", "id": "mail-contact-picker", "aria-label": "Directorio de contactos" }, "children": [
@@ -204,6 +214,16 @@
                         ] },
                         { "tag": "label", "attrs": { "class": "visually-hidden", "for": "mail-compose-body" }, "text": "Contenido" },
                         { "tag": "textarea", "attrs": { "class": "form-control mail-md-editor", "id": "mail-compose-body", "name": "body", "rows": "18", "spellcheck": "true", "required": "true", "placeholder": "Escribe tu mensaje con Markdown…" }, "text": "${composeBody}" },
+                        { "tag": "div", "attrs": { "class": "mail-file-fields" }, "children": [
+                          { "tag": "label", "attrs": { "class": "mail-file-field", "for": "mail-compose-attachments" }, "children": [
+                            { "tag": "span", "attrs": { "class": "fas fa-paperclip", "aria-hidden": "true" } }, { "tag": "span", "text": "Adjuntar archivos" },
+                            { "tag": "input", "attrs": { "id": "mail-compose-attachments", "name": "attachments", "type": "file", "multiple": "true" } }
+                          ] },
+                          { "tag": "label", "attrs": { "class": "mail-file-field", "for": "mail-compose-images" }, "children": [
+                            { "tag": "span", "attrs": { "class": "fas fa-image", "aria-hidden": "true" } }, { "tag": "span", "text": "Incluir imágenes" },
+                            { "tag": "input", "attrs": { "id": "mail-compose-images", "name": "images", "type": "file", "accept": "image/png,image/jpeg,image/gif", "multiple": "true" } }
+                          ] }
+                        ] },
                         { "tag": "div", "attrs": { "class": "mail-compose-footer" }, "children": [
                           { "tag": "small", "attrs": { "class": "text-muted" }, "text": "Se guardará como texto y HTML sanitizado en Borradores." },
                           { "tag": "div", "attrs": { "class": "mail-compose-actions" }, "children": [
@@ -313,6 +333,13 @@
                           { "tag": "dl", "attrs": { "class": "mail-headers" }, "children": [
                             { "tag": "dt", "text": "De" }, { "tag": "dd", "text": "${from}" },
                             { "tag": "dt", "text": "Para" }, { "tag": "dd", "text": "${to}" }
+                          ] },
+                          { "tag": "section", "if": "attachmentsAvailable", "attrs": { "class": "mail-attachments", "aria-label": "Archivos adjuntos" }, "children": [
+                            { "tag": "strong", "text": "Archivos adjuntos" },
+                            { "tag": "a", "each": "attachments", "as": "attachment", "attrs": { "class": "mail-attachment", "href": "${attachment.href}" }, "children": [
+                              { "tag": "span", "attrs": { "class": "fas fa-paperclip", "aria-hidden": "true" } },
+                              { "tag": "span", "text": "${attachment.name}" }, { "tag": "small", "text": "${attachment.size}" }
+                            ] }
                           ] },
                           { "tag": "pre", "if": "mailText", "attrs": { "class": "mail-body" }, "text": "${body}" },
                           { "tag": "iframe", "if": "mailHtml", "attrs": { "class": "mail-html-body", "sandbox": "", "referrerpolicy": "no-referrer", "title": "Contenido HTML del correo", "srcdoc": "${body}" } }

@@ -52,16 +52,31 @@ select s.user_uid, 1, m.usuario_id, 1, true
 do $function$
 declare
     legacy_count integer;
-    migrated_count integer;
+    identity_count integer;
+    mailbox_count integer;
+    address_count integer;
 begin
     select count(*) into legacy_count from softmail_users;
-    select count(*) into migrated_count
+    select count(*) into identity_count
+      from softmail_users s
+      join app_usuarios u
+        on lower(u.usuario_id) = lower(split_part(s.user_uid, '@', 1))
+       and coalesce(u.usuario_estado, '0') = '1';
+    select count(*) into mailbox_count
       from softmail_users s
       join app_usuario_mail m
         on lower(m.usuario_id) = lower(split_part(s.user_uid, '@', 1))
        and lower(m.mail_domain) = lower(s.user_domain);
-    if migrated_count <> legacy_count then
-        raise exception 'Migrated % of % mail users', migrated_count, legacy_count;
+    select count(*) into address_count
+      from softmail_users s
+     where exists (
+        select 1 from app_usuario_email e
+         where lower(e.usuario_email_email) = lower(s.user_uid)
+           and coalesce(e.usuario_email_estado, 0) >= 0
+     );
+    if identity_count <> legacy_count or mailbox_count <> legacy_count or address_count <> legacy_count then
+        raise exception 'Mail access coverage: identities %, mailboxes %, addresses %, expected %',
+                identity_count, mailbox_count, address_count, legacy_count;
     end if;
 end;
 $function$;

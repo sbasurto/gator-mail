@@ -14,16 +14,23 @@ import jakarta.mail.internet.InternetAddress;
 import jakarta.mail.internet.MimeBodyPart;
 import jakarta.mail.internet.MimeMessage;
 import jakarta.mail.internet.MimeMultipart;
+import jakarta.mail.internet.MimeUtility;
+import jakarta.mail.util.ByteArrayDataSource;
+import java.io.ByteArrayInputStream;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.Comparator;
 import java.util.Date;
 import java.util.List;
 import java.util.Properties;
+import java.util.UUID;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import javax.imageio.ImageIO;
 import org.eclipse.angus.mail.imap.IMAPFolder;
+import org.owasp.html.HtmlPolicyBuilder;
 import org.owasp.html.PolicyFactory;
 import org.owasp.html.Sanitizers;
 import jakarta.mail.search.BodyTerm;
@@ -36,7 +43,10 @@ import jakarta.mail.search.SubjectTerm;
 final class ImapMailbox {
     private static final Logger LOG = Logger.getLogger(ImapMailbox.class.getName());
     private static final PolicyFactory HTML = Sanitizers.FORMATTING.and(Sanitizers.BLOCKS)
-            .and(Sanitizers.TABLES).and(Sanitizers.LINKS);
+            .and(Sanitizers.TABLES).and(Sanitizers.LINKS).and(new HtmlPolicyBuilder()
+                    .allowElements("img").allowAttributes("src", "alt", "title").onElements("img")
+                    .allowUrlProtocols("cid").toFactory());
+    private static final int MAX_FILE_BYTES = 25 * 1024 * 1024;
     record FolderInfo(String name, String label, String parent, String root, int depth, int unread, int total) {
     }
 
@@ -46,10 +56,24 @@ final class ImapMailbox {
     record MessagePage(List<Summary> messages, int total, int page, int size) {
     }
 
-    record Mail(String from, String to, String subject, Instant sent, String body, boolean html) {
+    record Attachment(String part, String name, String type, long size) { }
+
+    record Upload(String name, String type, byte[] data, boolean inline) { }
+
+    record Download(String name, byte[] data) { }
+
+    record Mail(String from, String to, String subject, Instant sent, String body, boolean html,
+            List<Attachment> attachments) {
     }
 
-    private record Content(String body, boolean html) { }
+    private record InlineImage(String cid, String type, byte[] data) { }
+
+    private static final class Parsed {
+        String html = "";
+        String plain = "";
+        final List<Attachment> attachments = new ArrayList<>();
+        final List<InlineImage> images = new ArrayList<>();
+    }
 
     private final String host = env("GATOR_MAIL_IMAP_HOST", "mail.soft-gator.com");
     private final int port = Integer.parseInt(env("GATOR_MAIL_IMAP_PORT", "993"));
@@ -112,11 +136,28 @@ final class ImapMailbox {
             folder.open(Folder.READ_ONLY);
             Message message = ((UIDFolder) folder).getMessageByUID(uid);
             if (message == null) return null;
-            Content content = content(message);
+            Parsed parsed = parse(message);
+            String body = parsed.html.isBlank() ? parsed.plain : inlineImages(parsed.html, parsed.images);
             return new Mail(addresses(message.getFrom()), addresses(message.getRecipients(Message.RecipientType.TO)),
                     text(message.getSubject(), "(Sin asunto)"),
                     message.getSentDate() == null ? Instant.EPOCH : message.getSentDate().toInstant(),
-                    content.body(), content.html());
+                    body, !parsed.html.isBlank(), List.copyOf(parsed.attachments));
+        }
+    }
+
+    Download download(String mailbox, String folderName, long uid, String path, String accessToken) throws Exception {
+        if (path == null || !path.matches("[0-9]+(?:\\.[0-9]+)*"))
+            throw new IllegalArgumentException("Adjunto inválido");
+        try (Store store = connect(mailbox, accessToken); Folder folder = folder(store, folderName)) {
+            folder.open(Folder.READ_ONLY);
+            Message message = ((UIDFolder) folder).getMessageByUID(uid);
+            if (message == null) throw new IllegalArgumentException("Mensaje inexistente");
+            jakarta.mail.Part part = part(message, path);
+            if (part.getFileName() == null && !jakarta.mail.Part.ATTACHMENT.equalsIgnoreCase(part.getDisposition()))
+                throw new IllegalArgumentException("Adjunto inválido");
+            byte[] data = part.getInputStream().readNBytes(MAX_FILE_BYTES + 1);
+            if (data.length > MAX_FILE_BYTES) throw new IllegalArgumentException("El adjunto excede 25 MB");
+            return new Download(fileName(part), data);
         }
     }
 
@@ -191,9 +232,9 @@ final class ImapMailbox {
     }
 
     String saveDraft(String mailbox, String recipients, String cc, String bcc, String subject, String markdown,
-            String html, String accessToken) throws Exception {
+            String html, List<Upload> uploads, String accessToken) throws Exception {
         MimeMessage message = message(Session.getInstance(new Properties()), mailbox, recipients, cc, bcc, subject,
-                markdown, html);
+                markdown, html, uploads);
         message.setFlag(Flags.Flag.DRAFT, true);
         message.saveChanges();
 
@@ -205,7 +246,7 @@ final class ImapMailbox {
     }
 
     String send(String mailbox, String recipients, String cc, String bcc, String subject, String markdown,
-            String html, String accessToken) throws Exception {
+            String html, List<Upload> uploads, String accessToken) throws Exception {
         Properties properties = new Properties();
         properties.setProperty("mail.transport.protocol", "smtp");
         properties.setProperty("mail.smtp.host", smtpHost);
@@ -217,7 +258,7 @@ final class ImapMailbox {
         properties.setProperty("mail.smtp.timeout", "15000");
         properties.setProperty("mail.smtp.writetimeout", "15000");
         MimeMessage message = message(Session.getInstance(properties), mailbox, recipients, cc, bcc, subject,
-                markdown, html);
+                markdown, html, uploads);
         Transport.send(message);
         try (Store store = connect(mailbox, accessToken)) {
             Folder sent = sent(store);
@@ -231,7 +272,7 @@ final class ImapMailbox {
     }
 
     private static MimeMessage message(Session session, String mailbox, String recipients, String cc, String bcc,
-            String subject, String markdown, String html) throws Exception {
+            String subject, String markdown, String html, List<Upload> uploads) throws Exception {
         if (subject == null || subject.length() > 200 || subject.chars().anyMatch(Character::isISOControl)
                 || markdown == null || markdown.isBlank() || markdown.length() > 200_000)
             throw new IllegalArgumentException("El asunto o el contenido no son válidos");
@@ -252,12 +293,40 @@ final class ImapMailbox {
         message.setHeader("X-Gator-Format", "markdown");
         MimeBodyPart plain = new MimeBodyPart();
         plain.setText(markdown, "UTF-8");
+        List<Upload> files = uploads == null ? List.of() : uploads;
+        StringBuilder richBody = new StringBuilder(html);
+        List<String> inlineCids = new ArrayList<>();
+        for (Upload upload : files) if (upload.inline()) {
+            String cid = UUID.randomUUID() + "@gator-mail";
+            inlineCids.add(cid);
+            richBody.append("<p><img src=\"cid:").append(cid).append("\" alt=\"")
+                    .append(escape(upload.name())).append("\"></p>");
+        }
         MimeBodyPart rich = new MimeBodyPart();
-        rich.setContent(html, "text/html; charset=UTF-8");
+        rich.setContent(richBody.toString(), "text/html; charset=UTF-8");
         MimeMultipart content = new MimeMultipart("alternative");
         content.addBodyPart(plain);
         content.addBodyPart(rich);
-        message.setContent(content);
+        MimeBodyPart body = new MimeBodyPart();
+        body.setContent(content);
+        MimeMultipart related = new MimeMultipart("related");
+        related.addBodyPart(body);
+        int inlineIndex = 0;
+        for (Upload upload : files) if (upload.inline()) {
+            MimeBodyPart image = upload(upload);
+            image.setDisposition(jakarta.mail.Part.INLINE);
+            image.setHeader("Content-ID", "<" + inlineCids.get(inlineIndex++) + ">");
+            related.addBodyPart(image);
+        }
+        MimeBodyPart relatedBody = new MimeBodyPart();
+        relatedBody.setContent(related);
+        if (files.stream().anyMatch(upload -> !upload.inline())) {
+            MimeMultipart mixed = new MimeMultipart("mixed");
+            mixed.addBodyPart(relatedBody);
+            for (Upload upload : files) if (!upload.inline()) mixed.addBodyPart(upload(upload));
+            message.setContent(mixed);
+        } else if (inlineIndex > 0) message.setContent(related);
+        else message.setContent(content);
         message.saveChanges();
         return message;
     }
@@ -386,21 +455,92 @@ final class ImapMailbox {
         return store;
     }
 
-    private static Content content(jakarta.mail.Part part) throws Exception {
-        if (jakarta.mail.Part.ATTACHMENT.equalsIgnoreCase(part.getDisposition())) return new Content("", false);
-        if (part.isMimeType("text/html")) return new Content(sanitizeHtml(String.valueOf(part.getContent())), true);
-        if (part.isMimeType("text/plain")) return new Content(limited(String.valueOf(part.getContent())), false);
-        if (!part.isMimeType("multipart/*")) return new Content("", false);
-        Multipart multipart = (Multipart) part.getContent();
-        Content fallback = new Content("", false);
-        for (int i = 0; i < multipart.getCount(); i++) {
-            BodyPart bodyPart = multipart.getBodyPart(i);
-            Content value = content(bodyPart);
-            if (value.body().isBlank()) continue;
-            if (!part.isMimeType("multipart/alternative") || value.html()) return value;
-            fallback = value;
+    private static Parsed parse(jakarta.mail.Part part) throws Exception {
+        Parsed parsed = new Parsed();
+        parse(part, "", parsed);
+        parsed.html = sanitizeHtml(parsed.html);
+        parsed.plain = limited(parsed.plain);
+        return parsed;
+    }
+
+    private static void parse(jakarta.mail.Part part, String path, Parsed parsed) throws Exception {
+        if (part.isMimeType("multipart/*")) {
+            Multipart multipart = (Multipart) part.getContent();
+            for (int i = 0; i < multipart.getCount(); i++)
+                parse(multipart.getBodyPart(i), path.isEmpty() ? String.valueOf(i) : path + "." + i, parsed);
+            return;
         }
-        return fallback;
+        String cid = contentId(part);
+        if (part.isMimeType("image/*") && !cid.isBlank()) {
+            byte[] data = part.getInputStream().readNBytes(5 * 1024 * 1024 + 1);
+            String type = part.getContentType().split(";", 2)[0].toLowerCase(java.util.Locale.ROOT);
+            long imageBytes = parsed.images.stream().mapToLong(image -> image.data().length).sum();
+            if (parsed.images.size() < 10 && imageBytes + data.length <= 15 * 1024 * 1024
+                    && data.length <= 5 * 1024 * 1024 && safeImage(type, data))
+                parsed.images.add(new InlineImage(cid, type, data));
+            return;
+        }
+        if (jakarta.mail.Part.ATTACHMENT.equalsIgnoreCase(part.getDisposition()) || part.getFileName() != null) {
+            parsed.attachments.add(new Attachment(path, fileName(part), "application/octet-stream", part.getSize()));
+            return;
+        }
+        if (part.isMimeType("text/html") && parsed.html.isBlank())
+            parsed.html = limited(String.valueOf(part.getContent()));
+        else if (part.isMimeType("text/plain") && parsed.plain.isBlank())
+            parsed.plain = limited(String.valueOf(part.getContent()));
+    }
+
+    private static jakarta.mail.Part part(jakarta.mail.Part root, String path) throws Exception {
+        jakarta.mail.Part current = root;
+        for (String value : path.split("\\.")) {
+            if (!current.isMimeType("multipart/*")) throw new IllegalArgumentException("Adjunto inválido");
+            Multipart multipart = (Multipart) current.getContent();
+            int index = Integer.parseInt(value);
+            if (index < 0 || index >= multipart.getCount()) throw new IllegalArgumentException("Adjunto inválido");
+            current = multipart.getBodyPart(index);
+        }
+        return current;
+    }
+
+    private static MimeBodyPart upload(Upload upload) throws Exception {
+        MimeBodyPart part = new MimeBodyPart();
+        part.setDataHandler(new jakarta.activation.DataHandler(new ByteArrayDataSource(upload.data(), upload.type())));
+        part.setFileName(MimeUtility.encodeText(upload.name(), "UTF-8", null));
+        return part;
+    }
+
+    private static String inlineImages(String html, List<InlineImage> images) {
+        String result = html;
+        for (InlineImage image : images) {
+            String source = "cid:" + image.cid();
+            String embedded = "data:" + image.type() + ";base64," + Base64.getEncoder().encodeToString(image.data());
+            result = result.replace("src=\"" + source + "\"", "src=\"" + embedded + "\"");
+        }
+        return result;
+    }
+
+    private static String contentId(jakarta.mail.Part part) throws Exception {
+        String[] headers = part.getHeader("Content-ID");
+        if (headers == null || headers.length == 0) return "";
+        return headers[0].strip().replaceAll("^<|>$", "");
+    }
+
+    private static String fileName(jakarta.mail.Part part) throws Exception {
+        String name = part.getFileName() == null ? "archivo" : MimeUtility.decodeText(part.getFileName());
+        name = name.replace('\\', '/');
+        name = name.substring(name.lastIndexOf('/') + 1).replaceAll("[\\p{Cntrl}]", "").strip();
+        return name.isEmpty() ? "archivo" : name.substring(0, Math.min(name.length(), 180));
+    }
+
+    static boolean safeImage(String type, byte[] data) {
+        if (!List.of("image/png", "image/jpeg", "image/gif").contains(type) || data == null || data.length == 0)
+            return false;
+        try { return ImageIO.read(new ByteArrayInputStream(data)) != null; }
+        catch (Exception ignored) { return false; }
+    }
+
+    private static String escape(String value) {
+        return value.replace("&", "&amp;").replace("\"", "&quot;").replace("<", "&lt;").replace(">", "&gt;");
     }
 
     private static String addresses(Address[] addresses) {

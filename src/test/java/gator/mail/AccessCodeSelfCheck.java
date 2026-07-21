@@ -2,6 +2,7 @@ package gator.mail;
 
 import gator.lib.web.gui.GatorJsonView;
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -35,6 +36,12 @@ public final class AccessCodeSelfCheck {
         assert safeMail.contains("<p>Hola <strong>Gator</strong></p>");
         assert !safeMail.contains("script");
         assert !safeMail.contains("alert");
+        String safeImage = ImapMailbox.sanitizeHtml("<img src=\"cid:logo\" onerror=\"alert(1)\">");
+        assert safeImage.contains("cid:logo");
+        assert !safeImage.contains("onerror");
+        assert ImapMailbox.safeImage("image/png", Base64.getDecoder().decode(
+                "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="));
+        assert !ImapMailbox.safeImage("image/svg+xml", "<svg/>".getBytes());
         String logout = OAuthServlet.endSession("id token");
         assert logout.contains("id_token_hint=id+token");
         assert !logout.contains("post_logout_redirect_uri");
@@ -84,6 +91,8 @@ public final class AccessCodeSelfCheck {
         model.put("composeBody", "");
         model.put("contactsAvailable", true);
         model.put("contacts", List.of(Map.of("name", "Contacto Uno", "email", "uno@example.com")));
+        model.put("attachmentsAvailable", true);
+        model.put("attachments", List.of(Map.of("name", "documento.pdf", "size", "10 KB", "href", "mail?action=attachment")));
         model.put("composeAction", true);
         model.put("query", "urgente");
         model.put("emptyText", "No se encontraron mensajes.");
@@ -98,7 +107,7 @@ public final class AccessCodeSelfCheck {
         try {
             String html = new GatorJsonView().renderResource("gator-mail/screens/mail.json", model);
             assert html.contains("Sesión cerrada");
-            assert html.contains("/gator-mail/css/gator-mail.css?v=18");
+            assert html.contains("/gator-mail/css/gator-mail.css?v=20");
             assert html.contains("/gator-mail/js/gator-mail.js?v=6");
             assert html.contains("fontawesome-free-5.13.0-web/css/all.min.css");
             assert html.contains("&lt;user@example.com&gt;");
@@ -107,12 +116,17 @@ public final class AccessCodeSelfCheck {
             assert html.contains("sandbox=\"\"");
             assert html.contains("srcdoc=\"&lt;script&gt;parent.alert(&#39;bad&#39;)&lt;/script&gt;\"");
             assert html.contains("mail-compose-body");
+            assert html.contains("enctype=\"multipart/form-data\"");
+            assert html.contains("name=\"attachments\"");
+            assert html.contains("name=\"images\"");
+            assert html.contains("documento.pdf");
             assert html.contains("Guardar borrador");
             assert html.contains("value=\"sendMessage\"");
             assert html.contains(">Enviar</span>");
             assert html.contains("name=\"cc\"");
             assert html.contains("name=\"bcc\"");
             assert html.contains("data-contact-email=\"uno@example.com\"");
+            assert html.contains(">Contactos</span>");
             assert html.contains("data-message-uid=\"1\"");
             assert html.contains("id=\"mail-select-all\"");
             assert html.contains("value=\"messageDelete\"");
@@ -131,6 +145,7 @@ public final class AccessCodeSelfCheck {
         }
         String document = MailServlet.htmlDocument("/gator-mail", "<p>Hola</p>");
         assert document.contains("/gator-mail/css/mail-content.css?v=1");
+        assert document.contains("img-src data:");
         assert document.contains("<p>Hola</p>");
     }
 }

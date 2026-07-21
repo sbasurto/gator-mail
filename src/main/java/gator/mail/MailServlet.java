@@ -9,13 +9,16 @@ import gator.lib.db.GappSQLStatement;
 import gator.lib.db.helpers.GappDBHelper;
 import gator.lib.web.gui.GatorJsonView;
 import jakarta.mail.AuthenticationFailedException;
+import jakarta.servlet.annotation.MultipartConfig;
 import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
+import jakarta.servlet.http.Part;
 import java.io.IOException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -27,6 +30,7 @@ import java.util.UUID;
 import org.commonmark.parser.Parser;
 import org.commonmark.renderer.html.HtmlRenderer;
 
+@MultipartConfig(fileSizeThreshold = 1_048_576, maxFileSize = 26_214_400, maxRequestSize = 31_457_280)
 public final class MailServlet extends HttpServlet {
     private static final long CODE_LIFETIME_MS = 300_000;
     private static final long RESEND_WAIT_MS = 30_000;
@@ -79,6 +83,8 @@ public final class MailServlet extends HttpServlet {
                 return;
             } else if (saveDraft(request, response, session, mailbox, OAuthServlet.accessToken(request))) {
                 return;
+            } else if (downloadAttachment(request, response, mailbox, OAuthServlet.accessToken(request))) {
+                return;
             } else {
                 mailboxModel(model, request, mailbox, OAuthServlet.accessToken(request));
             }
@@ -110,6 +116,7 @@ public final class MailServlet extends HttpServlet {
         model.put("mailContent", false);
         model.put("mailHtml", false);
         model.put("mailText", false);
+        model.put("attachmentsAvailable", false);
         model.put("composeAction", false);
         model.put("folderActionsDisabled", true);
         model.put("selectedFolder", "");
@@ -237,6 +244,13 @@ public final class MailServlet extends HttpServlet {
             model.put("body", mail.html() ? htmlDocument(request.getContextPath(), mail.body()) : mail.body());
             model.put("mailHtml", mail.html());
             model.put("mailText", !mail.html());
+            List<Map<String, Object>> attachments = new ArrayList<>();
+            for (ImapMailbox.Attachment attachment : mail.attachments()) attachments.add(Map.of(
+                    "name", attachment.name(), "size", fileSize(attachment.size()),
+                    "href", "mail?action=attachment&folder=" + url(folderName) + "&uid=" + uid
+                            + "&part=" + url(attachment.part())));
+            model.put("attachments", attachments);
+            model.put("attachmentsAvailable", !attachments.isEmpty());
             return;
         }
 
@@ -315,7 +329,8 @@ public final class MailServlet extends HttpServlet {
             String markdown = request.getParameter("body");
             String html = ImapMailbox.sanitizeHtml(MARKDOWN_HTML.render(MARKDOWN.parse(markdown == null ? "" : markdown)));
             String drafts = imap.saveDraft(mailbox, request.getParameter("to"), request.getParameter("cc"),
-                    request.getParameter("bcc"), request.getParameter("subject"), markdown, html, accessToken);
+                    request.getParameter("bcc"), request.getParameter("subject"), markdown, html,
+                    uploads(request), accessToken);
             response.sendRedirect("mail?folder=" + url(drafts));
         } catch (IllegalArgumentException error) {
             response.sendError(HttpServletResponse.SC_BAD_REQUEST, error.getMessage());
@@ -333,13 +348,54 @@ public final class MailServlet extends HttpServlet {
         String markdown = request.getParameter("body");
         String html = ImapMailbox.sanitizeHtml(MARKDOWN_HTML.render(MARKDOWN.parse(markdown == null ? "" : markdown)));
         String folder = imap.send(mailbox, request.getParameter("to"), request.getParameter("cc"),
-                request.getParameter("bcc"), request.getParameter("subject"), markdown, html, accessToken);
+                request.getParameter("bcc"), request.getParameter("subject"), markdown, html,
+                uploads(request), accessToken);
         response.sendRedirect("mail?folder=" + url(folder) + "&sent=1");
         return true;
     }
 
+    private boolean downloadAttachment(HttpServletRequest request, HttpServletResponse response, String mailbox,
+            String accessToken) throws Exception {
+        if (!"attachment".equals(request.getParameter("action"))) return false;
+        long uid = Long.parseLong(request.getParameter("uid"));
+        if (uid <= 0) throw new IllegalArgumentException("Adjunto inválido");
+        ImapMailbox.Download download = imap.download(mailbox, request.getParameter("folder"), uid,
+                request.getParameter("part"), accessToken);
+        response.reset();
+        response.setHeader("Cache-Control", "private, no-store");
+        response.setHeader("X-Content-Type-Options", "nosniff");
+        response.setContentType("application/octet-stream");
+        response.setHeader("Content-Disposition", "attachment; filename*=UTF-8''" + url(download.name()));
+        response.setContentLength(download.data().length);
+        response.getOutputStream().write(download.data());
+        return true;
+    }
+
+    private static List<ImapMailbox.Upload> uploads(HttpServletRequest request) throws Exception {
+        List<ImapMailbox.Upload> result = new ArrayList<>();
+        long total = 0;
+        for (Part part : request.getParts()) {
+            boolean inline = "images".equals(part.getName());
+            if (!inline && !"attachments".equals(part.getName())) continue;
+            if (part.getSubmittedFileName() == null || part.getSize() == 0) continue;
+            if (result.size() >= 10 || part.getSize() > 25 * 1024 * 1024 || (total += part.getSize()) > 25 * 1024 * 1024)
+                throw new IllegalArgumentException("Máximo 10 archivos y 25 MB en total");
+            String name = Path.of(part.getSubmittedFileName().replace('\\', '/')).getFileName().toString()
+                    .replaceAll("[\\p{Cntrl}]", "").strip();
+            if (name.isEmpty() || name.length() > 180) throw new IllegalArgumentException("Nombre de archivo inválido");
+            byte[] data = part.getInputStream().readNBytes(25 * 1024 * 1024 + 1);
+            String type = inline ? part.getContentType().split(";", 2)[0].toLowerCase(java.util.Locale.ROOT)
+                    : "application/octet-stream";
+            if (inline && !ImapMailbox.safeImage(type, data))
+                throw new IllegalArgumentException("Solo se permiten imágenes PNG, JPEG o GIF válidas");
+            result.add(new ImapMailbox.Upload(name, type, data, inline));
+        }
+        return result;
+    }
+
     static String htmlDocument(String contextPath, String body) {
         return "<!doctype html><html><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
+                + "<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; style-src 'self'; img-src data:\">"
                 + "<link rel=\"stylesheet\" href=\"" + contextPath + "/css/mail-content.css?v=1\"></head>"
                 + "<body class=\"gator-email\">" + body + "</body></html>";
     }
@@ -479,6 +535,13 @@ public final class MailServlet extends HttpServlet {
 
     private static String url(String value) {
         return URLEncoder.encode(value, StandardCharsets.UTF_8);
+    }
+
+    private static String fileSize(long bytes) {
+        if (bytes < 0) return "";
+        if (bytes < 1024) return bytes + " B";
+        if (bytes < 1024 * 1024) return (bytes / 1024) + " KB";
+        return String.format(java.util.Locale.ROOT, "%.1f MB", bytes / 1048576d);
     }
 
     private static String mailboxHref(String folder, String query, int page, int size) {

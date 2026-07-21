@@ -134,10 +134,11 @@ begin
           join app_contactos c on c.usuario_id = u.usuario_id
           join app_contacto_email ce on ce.contacto_id = c.contacto_id
     ), limpios as (
-        select distinct contacto_id, coalesce(nullif(trim(nombre), ''), trim(email)) nombre, lower(trim(email)) email
+        select distinct on (lower(trim(email))) contacto_id,
+               coalesce(nullif(trim(nombre), ''), trim(email)) nombre, lower(trim(email)) email
           from contactos
-         where position('@' in email) > 1
-         order by nombre, email
+         where email ~ '^[^@[:space:]]+@[^@[:space:]]+[.][^@[:space:]]+$'
+         order by lower(trim(email)), nullif(trim(nombre), '') nulls last
          limit 500
     )
     select coalesce(json_agg(json_build_object('id', contacto_id, 'nombre', nombre, 'email', email)), '[]'::json)
