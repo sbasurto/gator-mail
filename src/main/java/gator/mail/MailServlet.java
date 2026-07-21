@@ -286,10 +286,13 @@ public final class MailServlet extends HttpServlet {
         model.put("hasMessages", !messages.isEmpty());
         List<Map<String, Object>> messageModels = new ArrayList<>();
         for (ImapMailbox.Summary mail : messages) {
+            String state = mail.seen() ? "Leído" : "No leído";
             messageModels.add(Map.of(
                     "href", mailboxHref(folderName, query, result.page(), result.size()) + "&uid=" + mail.uid(),
                     "from", mail.from(), "subject", mail.subject(), "sent", DATE.format(mail.sent()),
-                    "uid", mail.uid(), "folder", folderName));
+                    "uid", mail.uid(), "folder", folderName, "state", state,
+                    "stateClass", mail.seen() ? "is-read" : "is-unread",
+                    "icon", mail.seen() ? "fa-envelope-open" : "fa-envelope"));
         }
         model.put("messages", messageModels);
     }

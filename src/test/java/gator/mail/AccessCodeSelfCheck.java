@@ -122,11 +122,11 @@ public final class AccessCodeSelfCheck {
         model.put("hasNext", false);
         model.put("pageSizes", List.of(Map.of("label", 20, "href", "mail?size=20", "className", "active")));
         model.put("messages", List.of(Map.of("href", "mail?uid=1", "from", "Equipo", "subject", "Hola", "sent", "Hoy",
-                "uid", 1L, "folder", "INBOX")));
+                "uid", 1L, "folder", "INBOX", "state", "No leído", "stateClass", "is-unread", "icon", "fa-envelope")));
         try {
             String html = new GatorJsonView().renderResource("gator-mail/screens/mail.json", model);
             assert html.contains("Sesión cerrada");
-            assert html.contains("/gator-mail/css/gator-mail.css?v=22");
+            assert html.contains("/gator-mail/css/gator-mail.css?v=23");
             assert html.contains("/gator-mail/js/gator-mail.js?v=6");
             assert html.contains("fontawesome-free-5.13.0-web/css/all.min.css");
             assert html.contains("&lt;user@example.com&gt;");
@@ -151,6 +151,7 @@ public final class AccessCodeSelfCheck {
             assert html.contains("value=\"userSave\"");
             assert html.contains("value=\"contactSave\"");
             assert html.contains("data-message-uid=\"1\"");
+            assert html.contains(">No leído</span>");
             assert html.contains("id=\"mail-select-all\"");
             assert html.contains("value=\"messageDelete\"");
             assert html.contains("id=\"mail-folder-menu\"");

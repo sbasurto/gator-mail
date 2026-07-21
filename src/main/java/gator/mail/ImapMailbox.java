@@ -50,7 +50,7 @@ final class ImapMailbox {
     record FolderInfo(String name, String label, String parent, String root, int depth, int unread, int total) {
     }
 
-    record Summary(long uid, String from, String subject, Instant sent) {
+    record Summary(long uid, String from, String subject, Instant sent, boolean seen) {
     }
 
     record MessagePage(List<Summary> messages, int total, int page, int size) {
@@ -147,7 +147,8 @@ final class ImapMailbox {
                 Message message = messages[i];
                 result.add(new Summary(uidFolder.getUID(message), addresses(message.getFrom()),
                         text(message.getSubject(), "(Sin asunto)"),
-                        message.getSentDate() == null ? Instant.EPOCH : message.getSentDate().toInstant()));
+                        message.getSentDate() == null ? Instant.EPOCH : message.getSentDate().toInstant(),
+                        message.isSet(Flags.Flag.SEEN)));
             }
             return new MessagePage(result, total, page, size);
         }
@@ -155,10 +156,11 @@ final class ImapMailbox {
 
     Mail read(String mailbox, String folderName, long uid, String accessToken) throws Exception {
         try (Store store = connect(mailbox, accessToken); Folder folder = folder(store, folderName)) {
-            folder.open(Folder.READ_ONLY);
+            folder.open(Folder.READ_WRITE);
             Message message = ((UIDFolder) folder).getMessageByUID(uid);
             if (message == null) return null;
             Parsed parsed = parse(message);
+            message.setFlag(Flags.Flag.SEEN, true);
             String body = parsed.html.isBlank() ? parsed.plain : inlineImages(parsed.html, parsed.images);
             return new Mail(addresses(message.getFrom()), addresses(message.getRecipients(Message.RecipientType.TO)),
                     text(message.getSubject(), "(Sin asunto)"),
