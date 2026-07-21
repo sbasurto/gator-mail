@@ -13,8 +13,9 @@
           { "tag": "link", "attrs": { "rel": "stylesheet", "href": "/elib/css2/bootstrap-5.3.0/bootstrap.min.css" } },
           { "tag": "link", "attrs": { "rel": "stylesheet", "href": "/elib/css2/fontawesome-free-5.13.0-web/css/all.min.css" } },
           { "tag": "link", "attrs": { "rel": "stylesheet", "href": "/elib/css/colors.css" } },
-          { "tag": "link", "attrs": { "rel": "stylesheet", "href": "${contextPath}/css/gator-mail.css?v=24" } },
-          { "tag": "script", "attrs": { "src": "${contextPath}/js/gator-mail.js?v=6", "defer": "true" } }
+          { "tag": "link", "attrs": { "rel": "stylesheet", "href": "${contextPath}/css/gator-mail.css?v=25" } },
+          { "tag": "script", "attrs": { "src": "/elib/js/sweetalert2.all.min.js", "defer": "true" } },
+          { "tag": "script", "attrs": { "src": "${contextPath}/js/gator-mail.js?v=7", "defer": "true" } }
         ]
       },
       {
@@ -97,6 +98,12 @@
                     ] }
                     ] }
                   ] },
+                  { "tag": "a", "attrs": { "class": "mail-folder ${calendarClass}", "href": "${contextPath}/mail?action=calendar" }, "children": [
+                    { "tag": "strong", "children": [
+                      { "tag": "span", "attrs": { "class": "mail-folder-icon fas fa-calendar-alt", "aria-hidden": "true" } },
+                      { "tag": "span", "text": "Calendario" }
+                    ] }
+                  ] },
                   { "tag": "details", "if": "configurationAvailable", "attrs": { "class": "mail-folder-group mail-configuration", "open": "${configurationOpen}" }, "children": [
                     { "tag": "summary", "attrs": { "class": "mail-folder mail-folder-parent" }, "children": [
                       { "tag": "strong", "children": [
@@ -133,6 +140,56 @@
                 "children": [
                   {
                     "tag": "section",
+                    "if": "calendarView",
+                    "attrs": { "class": "mail-calendar-grid" },
+                    "children": [
+                      { "tag": "section", "attrs": { "class": "card mail-panel" }, "children": [
+                        { "tag": "header", "attrs": { "class": "card-header mail-panel-header" }, "children": [
+                          { "tag": "div", "children": [
+                            { "tag": "small", "attrs": { "class": "mail-eyebrow" }, "text": "Calendario" },
+                            { "tag": "h1", "attrs": { "class": "mail-panel-title" }, "text": "Eventos" }
+                          ] }
+                        ] },
+                        { "tag": "p", "if": "eventsEmpty", "attrs": { "class": "mail-empty text-muted" }, "text": "No hay eventos en este periodo." },
+                        { "tag": "div", "if": "eventsAvailable", "attrs": { "class": "mail-event-list" }, "children": [
+                          { "tag": "div", "each": "events", "as": "event", "attrs": { "class": "mail-event ${event.statusClass}" }, "children": [
+                            { "tag": "span", "attrs": { "class": "mail-event-icon fas fa-calendar-day", "aria-hidden": "true" } },
+                            { "tag": "div", "attrs": { "class": "mail-event-copy" }, "children": [
+                              { "tag": "strong", "text": "${event.summary}" },
+                              { "tag": "p", "text": "${event.description}" },
+                              { "tag": "small", "text": "Inicia: ${event.start} · Termina: ${event.end}" },
+                              { "tag": "small", "if": "event.place", "text": "Lugar: ${event.place}" }
+                            ] },
+                            { "tag": "span", "attrs": { "class": "mail-event-status" }, "text": "${event.status}" }
+                          ] }
+                        ] }
+                      ] },
+                      { "tag": "section", "attrs": { "class": "card mail-panel mail-stats-panel" }, "children": [
+                        { "tag": "header", "attrs": { "class": "card-header mail-panel-header" }, "children": [
+                          { "tag": "div", "children": [
+                            { "tag": "small", "attrs": { "class": "mail-eyebrow" }, "text": "Entrada" },
+                            { "tag": "h1", "attrs": { "class": "mail-panel-title" }, "text": "Resumen de correo" }
+                          ] }
+                        ] },
+                        { "tag": "div", "attrs": { "class": "mail-stats" }, "children": [
+                          { "tag": "div", "attrs": { "class": "mail-stat" }, "children": [
+                            { "tag": "span", "attrs": { "class": "fas fa-envelope", "aria-hidden": "true" } },
+                            { "tag": "strong", "text": "${mailTotal}" }, { "tag": "small", "text": "Total de correos" }
+                          ] },
+                          { "tag": "div", "attrs": { "class": "mail-stat is-unread" }, "children": [
+                            { "tag": "span", "attrs": { "class": "fas fa-envelope", "aria-hidden": "true" } },
+                            { "tag": "strong", "text": "${mailUnread}" }, { "tag": "small", "text": "No leídos" }
+                          ] },
+                          { "tag": "div", "attrs": { "class": "mail-stat is-read" }, "children": [
+                            { "tag": "span", "attrs": { "class": "fas fa-envelope-open", "aria-hidden": "true" } },
+                            { "tag": "strong", "text": "${mailRead}" }, { "tag": "small", "text": "Leídos" }
+                          ] }
+                        ] }
+                      ] }
+                    ]
+                  },
+                  {
+                    "tag": "section",
                     "if": "challenge",
                     "attrs": { "class": "card mail-state-card mail-auth-card" },
                     "children": [
@@ -144,7 +201,7 @@
                           { "tag": "p", "attrs": { "class": "mail-eyebrow" }, "text": "Segundo paso" },
                           { "tag": "h1", "attrs": { "class": "mail-state-title" }, "text": "Confirma que eres tú" },
                           { "tag": "p", "attrs": { "class": "mail-state-copy" }, "text": "Enviamos una clave temporal por SMS al teléfono asociado con tu cuenta." },
-                          { "tag": "p", "if": "noticeVisible", "attrs": { "class": "alert alert-info", "role": "status" }, "text": "${notice}" },
+                          { "tag": "span", "if": "noticeVisible", "attrs": { "class": "d-none mail-swal mail-swal-info", "title": "Aviso" }, "text": "${notice}" },
                           {
                             "tag": "form",
                             "attrs": { "method": "post", "class": "mail-challenge-form" },
@@ -361,7 +418,7 @@
                           ] }
                         ]
                       },
-                      { "tag": "p", "if": "sendNotice", "attrs": { "class": "alert alert-success mail-send-notice", "role": "status" }, "text": "Mensaje enviado correctamente." },
+                      { "tag": "span", "if": "sendNotice", "attrs": { "class": "d-none mail-swal mail-swal-success", "title": "Mensaje enviado" }, "text": "El correo se envió correctamente." },
                       { "tag": "p", "if": "empty", "attrs": { "class": "mail-empty text-muted" }, "text": "${emptyText}" },
                       {
                         "tag": "form",

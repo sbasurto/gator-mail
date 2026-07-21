@@ -75,6 +75,7 @@ public final class MailServlet extends HttpServlet {
                 challengeModel(model, session, notice);
             } else if (configuration(request, response, session, model, mailbox)) {
                 if (response.isCommitted()) return;
+            } else if (calendar(request, session, model, mailbox, OAuthServlet.accessToken(request))) {
             } else if (manageFolders(request, response, session, mailbox, OAuthServlet.accessToken(request))) {
                 return;
             } else if (moveMessage(request, response, session, mailbox, OAuthServlet.accessToken(request))) {
@@ -135,6 +136,10 @@ public final class MailServlet extends HttpServlet {
         model.put("configurationOpen", false);
         model.put("configurationUsersClass", "");
         model.put("configurationContactsClass", "");
+        model.put("calendarView", false);
+        model.put("calendarClass", "");
+        model.put("eventsAvailable", false);
+        model.put("eventsEmpty", false);
         model.put("mailOpen", true);
         model.put("query", "");
         model.put("emptyText", "No hay mensajes en esta carpeta.");
@@ -192,6 +197,47 @@ public final class MailServlet extends HttpServlet {
             return "Enviamos una clave temporal por SMS";
         }
         return "";
+    }
+
+    private boolean calendar(HttpServletRequest request, HttpSession session, Map<String, Object> model,
+            String mailbox, String accessToken) throws Exception {
+        if (!"calendar".equals(request.getParameter("action"))) return false;
+        List<ImapMailbox.FolderInfo> folders = imap.folders(mailbox, accessToken);
+        int total = 0;
+        int unread = 0;
+        for (ImapMailbox.FolderInfo folder : folders) {
+            if (!folder.name().equalsIgnoreCase("INBOX")) continue;
+            total = folder.total();
+            unread = folder.unread();
+            break;
+        }
+        int size = rememberedPageSize(request, session);
+        model.put("folderGroups", folderGroups(folders, "", size));
+        model.put("csrf", csrf(session));
+        model.put("mailContent", true);
+        model.put("layoutClass", "mail-workspace");
+        model.put("contentClass", "mail-content");
+        model.put("mailOpen", false);
+        model.put("calendarView", true);
+        model.put("calendarClass", "active");
+        model.put("mailTotal", total);
+        model.put("mailUnread", unread);
+        model.put("mailRead", Math.max(0, total - unread));
+
+        JsonObject result = checked(mailDbCall("mail_fn_get_eventos", mailbox));
+        List<Map<String, Object>> events = new ArrayList<>();
+        for (JsonElement element : result.getAsJsonArray("eventos")) {
+            JsonObject event = element.getAsJsonObject();
+            events.add(Map.of("summary", event.get("summary").getAsString(),
+                    "description", event.get("description").getAsString(),
+                    "place", event.get("place").getAsString(), "start", event.get("start").getAsString(),
+                    "end", event.get("end").getAsString(), "status", event.get("status").getAsString(),
+                    "statusClass", event.get("statusClass").getAsString()));
+        }
+        model.put("events", events);
+        model.put("eventsAvailable", !events.isEmpty());
+        model.put("eventsEmpty", events.isEmpty());
+        return true;
     }
 
     private void challengeModel(Map<String, Object> model, HttpSession session, String notice) {

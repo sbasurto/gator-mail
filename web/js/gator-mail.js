@@ -1,4 +1,10 @@
 (() => {
+    document.querySelectorAll(".mail-swal").forEach(alert => Swal.fire({
+        icon: alert.classList.contains("mail-swal-success") ? "success" : "info",
+        title: alert.title,
+        text: alert.textContent
+    }));
+
     const post = (action, values, csrf) => {
         const form = document.createElement("form");
         form.method = "post";
@@ -71,14 +77,30 @@
     });
 
     const rename = document.querySelector("#mail-folder-rename");
-    rename?.addEventListener("click", () => {
-        const name = window.prompt("Nuevo nombre de la carpeta:");
+    rename?.addEventListener("click", async () => {
+        const { value: name } = await Swal.fire({
+            title: "Renombrar carpeta",
+            input: "text",
+            inputLabel: "Nuevo nombre",
+            showCancelButton: true,
+            confirmButtonText: "Renombrar",
+            cancelButtonText: "Cancelar"
+        });
         if (name?.trim()) post("folderRename", { folder: rename.dataset.folder, name: name.trim() }, rename.dataset.csrf);
     });
 
     const remove = document.querySelector("#mail-folder-delete");
-    remove?.addEventListener("click", () => {
-        if (window.confirm("Se eliminará la carpeta y todo su contenido. ¿Deseas continuar?"))
+    remove?.addEventListener("click", async () => {
+        const result = await Swal.fire({
+            title: "¿Eliminar carpeta?",
+            text: "Se eliminará la carpeta y todo su contenido.",
+            icon: "warning",
+            showCancelButton: true,
+            confirmButtonText: "Eliminar",
+            cancelButtonText: "Cancelar",
+            confirmButtonColor: "#b52f3a"
+        });
+        if (result.isConfirmed)
             post("folderDelete", { folder: remove.dataset.folder }, remove.dataset.csrf);
     });
 
@@ -118,10 +140,20 @@
         updateSelection();
     });
     selections.forEach(input => input.addEventListener("change", updateSelection));
-    bulkForm?.addEventListener("submit", event => {
+    bulkForm?.addEventListener("submit", async event => {
+        event.preventDefault();
         const count = selections.filter(input => input.checked).length;
-        if (!count || !window.confirm(`¿Eliminar ${count} mensaje${count === 1 ? "" : "s"}? En Papelera la eliminación será definitiva.`))
-            event.preventDefault();
+        if (!count) return;
+        const result = await Swal.fire({
+            title: `¿Eliminar ${count} mensaje${count === 1 ? "" : "s"}?`,
+            text: "En Papelera la eliminación será definitiva.",
+            icon: "warning",
+            showCancelButton: true,
+            confirmButtonText: "Eliminar",
+            cancelButtonText: "Cancelar",
+            confirmButtonColor: "#b52f3a"
+        });
+        if (result.isConfirmed) bulkForm.submit();
     });
 
     const contactPicker = document.querySelector("#mail-contact-picker");

@@ -53,6 +53,10 @@ La administración de usuarios y contactos se instala con `db/mail_admin.sql`;
 las cuentas asociadas a `sbasurto@soft-gator.com` y la cuenta local `admin`
 quedan autorizadas inicialmente y pueden ampliarse desde la tabla
 `mail_administradores`.
+El calendario autónomo se instala con `db/mail_calendar.sql`; replica sólo
+eventos, grupos y participantes. `db/sync_events_from_gator.sql` registra los
+cambios de G-ERM —incluidos los hechos por `app_fn_admon_tablas_all`— y los
+envía a `db_gatormail` sin bloquear la operación de origen.
 En instalaciones Gator, `db/sync_contacts_from_gator.sql` registra la base en
 `broker_db` y replica altas, cambios y bajas hacia Gator Mail. Un fallo del
 destino no bloquea Gator E: queda registrado en `mail_contact_sync_queue`.

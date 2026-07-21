@@ -79,8 +79,9 @@ public final class AccessCodeSelfCheck {
 
         Map<String, Object> model = new HashMap<>();
         for (String key : new String[]{"challenge", "composeView", "mailboxView", "messageView", "mailContent", "empty",
-                "hasMessages", "pending", "error", "loggedOut", "noticeVisible", "mailHtml",
-                "configurationAvailable", "configurationUsersView", "configurationContactsView"}) model.put(key, true);
+                "hasMessages", "pending", "error", "loggedOut", "noticeVisible", "sendNotice", "mailHtml",
+                "configurationAvailable", "configurationUsersView", "configurationContactsView", "calendarView",
+                "eventsAvailable"}) model.put(key, true);
         model.put("mailText", false);
         model.put("body", "<script>parent.alert('bad')</script>");
         model.put("contextPath", "/gator-mail");
@@ -106,6 +107,14 @@ public final class AccessCodeSelfCheck {
         model.put("mailOpen", true);
         model.put("configurationUsersClass", "active");
         model.put("configurationContactsClass", "");
+        model.put("calendarClass", "active");
+        model.put("eventsEmpty", false);
+        model.put("mailTotal", 12);
+        model.put("mailUnread", 5);
+        model.put("mailRead", 7);
+        model.put("events", List.of(Map.of("summary", "Evento Uno", "description", "Descripción",
+                "place", "Oficina", "start", "21/07/2026 10:00", "end", "21/07/2026 11:00",
+                "status", "A tiempo", "statusClass", "is-on-time")));
         model.put("configurationUsers", List.of(Map.of("id", "usuario", "name", "Usuario Uno",
                 "email", "usuario@example.com", "enabled", true, "status", "Activo", "toggleLabel", "Desactivar")));
         model.put("configurationContacts", List.of(Map.of("id", "contacto", "name", "Contacto Uno",
@@ -126,8 +135,9 @@ public final class AccessCodeSelfCheck {
         try {
             String html = new GatorJsonView().renderResource("gator-mail/screens/mail.json", model);
             assert html.contains("Sesión cerrada");
-            assert html.contains("/gator-mail/css/gator-mail.css?v=24");
-            assert html.contains("/gator-mail/js/gator-mail.js?v=6");
+            assert html.contains("/gator-mail/css/gator-mail.css?v=25");
+            assert html.contains("/elib/js/sweetalert2.all.min.js");
+            assert html.contains("/gator-mail/js/gator-mail.js?v=7");
             assert html.contains("fontawesome-free-5.13.0-web/css/all.min.css");
             assert html.contains("&lt;user@example.com&gt;");
             assert html.contains("pattern=\"[A-Za-z0-9]{8,12}\"");
@@ -148,10 +158,14 @@ public final class AccessCodeSelfCheck {
             assert html.contains(">Contactos</span>");
             assert html.contains(">Configuración</span>");
             assert html.contains(">Correo</span>");
+            assert html.contains(">Calendario</span>");
+            assert html.contains(">Evento Uno</strong>");
+            assert html.contains(">Total de correos</small>");
             assert html.contains("value=\"userSave\"");
             assert html.contains("value=\"contactSave\"");
             assert html.contains("data-message-uid=\"1\"");
             assert html.contains(">No leído</span>");
+            assert html.contains("class=\"d-none mail-swal mail-swal-success\"");
             assert html.contains("id=\"mail-select-all\"");
             assert html.contains("value=\"messageDelete\"");
             assert html.contains("id=\"mail-folder-menu\"");
