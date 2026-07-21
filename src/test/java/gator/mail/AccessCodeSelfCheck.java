@@ -126,7 +126,7 @@ public final class AccessCodeSelfCheck {
         try {
             String html = new GatorJsonView().renderResource("gator-mail/screens/mail.json", model);
             assert html.contains("Sesión cerrada");
-            assert html.contains("/gator-mail/css/gator-mail.css?v=23");
+            assert html.contains("/gator-mail/css/gator-mail.css?v=24");
             assert html.contains("/gator-mail/js/gator-mail.js?v=6");
             assert html.contains("fontawesome-free-5.13.0-web/css/all.min.css");
             assert html.contains("&lt;user@example.com&gt;");

@@ -13,7 +13,7 @@
           { "tag": "link", "attrs": { "rel": "stylesheet", "href": "/elib/css2/bootstrap-5.3.0/bootstrap.min.css" } },
           { "tag": "link", "attrs": { "rel": "stylesheet", "href": "/elib/css2/fontawesome-free-5.13.0-web/css/all.min.css" } },
           { "tag": "link", "attrs": { "rel": "stylesheet", "href": "/elib/css/colors.css" } },
-          { "tag": "link", "attrs": { "rel": "stylesheet", "href": "${contextPath}/css/gator-mail.css?v=23" } },
+          { "tag": "link", "attrs": { "rel": "stylesheet", "href": "${contextPath}/css/gator-mail.css?v=24" } },
           { "tag": "script", "attrs": { "src": "${contextPath}/js/gator-mail.js?v=6", "defer": "true" } }
         ]
       },
@@ -391,8 +391,8 @@
                                 { "tag": "div", "attrs": { "class": "mail-message-copy" }, "children": [
                                   { "tag": "div", "attrs": { "class": "mail-message-meta" }, "children": [
                                     { "tag": "strong", "text": "${message.from}" },
-                                    { "tag": "span", "attrs": { "class": "mail-message-state ${message.stateClass}" }, "text": "${message.state}" },
-                                    { "tag": "time", "attrs": { "class": "text-muted" }, "text": "${message.sent}" }
+                                    { "tag": "time", "attrs": { "class": "text-muted" }, "text": "${message.sent}" },
+                                    { "tag": "span", "attrs": { "class": "mail-message-state ${message.stateClass}" }, "text": "${message.state}" }
                                   ] },
                                   { "tag": "span", "attrs": { "class": "mail-subject" }, "text": "${message.subject}" }
                                 ] }

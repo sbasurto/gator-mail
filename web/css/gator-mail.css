@@ -79,8 +79,8 @@ body { min-height: 100vh; margin: 0; color: var(--gator-ink); background: var(--
 .mail-message-link { display: grid; grid-template-columns: 2.5rem minmax(0, 1fr); align-items: center; gap: .85rem; min-width: 0; color: inherit; text-decoration: none; }
 .mail-message-icon { display: grid; place-items: center; width: 2.35rem; height: 2.35rem; border-radius: 9px; background: #edf5f8; color: #6f8794; }
 .mail-message-copy { display: grid; min-width: 0; gap: .25rem; }
-.mail-message-meta { display: flex; justify-content: space-between; gap: 1rem; }
-.mail-message-meta strong { overflow: hidden; font-size: .9rem; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.mail-message-meta { display: flex; align-items: center; gap: 1rem; }
+.mail-message-meta strong { flex: 1 1 auto; overflow: hidden; font-size: .9rem; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
 .mail-message-state { flex: 0 0 auto; padding: .18rem .45rem; border-radius: 999px; background: #edf2f5; color: var(--gator-muted); font-size: .68rem; font-weight: 700; }
 .mail-message-state.is-unread { background: #dff3fb; color: var(--gator-blue-dark); }
 .mail-message-meta time { flex: 0 0 auto; color: #81909c; font-size: .75rem; white-space: nowrap; }
