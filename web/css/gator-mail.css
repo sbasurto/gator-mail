@@ -87,7 +87,7 @@ body { min-height: 100vh; margin: 0; color: var(--gator-ink); background: var(--
 .mail-page-size { display: grid; place-items: center; min-width: 1.75rem; min-height: 1.75rem; border-radius: 6px; color: var(--gator-blue-dark); text-decoration: none; }
 .mail-page-size:hover, .mail-page-size.active { background: #e8f4f9; color: var(--gator-blue-dark); font-weight: 700; }
 .mail-page-nav .btn { display: inline-flex; align-items: center; gap: .35rem; border-radius: 7px; }
-.mail-action-bar { position: fixed; z-index: 20; bottom: 1rem; left: 50%; display: flex; align-items: center; flex-direction: column; gap: .5rem; max-width: calc(100vw - 2rem); padding: .55rem; border: 1px solid #d6e1e8; border-radius: 14px; background: #fffffff2; box-shadow: 0 14px 36px #173c5433; transform: translateX(-50%); backdrop-filter: blur(10px); }
+.mail-action-bar { position: fixed; z-index: 20; right: 1rem; bottom: 1rem; display: flex; align-items: center; flex-direction: column; gap: .5rem; max-width: calc(100vw - 2rem); padding: .55rem; border: 1px solid #d6e1e8; border-radius: 14px; background: #fffffff2; box-shadow: 0 14px 36px #173c5433; backdrop-filter: blur(10px); }
 .mail-action-bar .btn { display: inline-flex; align-items: center; gap: .45rem; border-radius: 9px; white-space: nowrap; }
 .mail-action-pager, .mail-action-buttons { display: flex; align-items: center; justify-content: center; gap: .65rem; }
 .mail-action-pager { width: 100%; padding: 0 0 .4rem; border-bottom: 1px solid var(--gator-line); color: var(--gator-muted); font-size: .75rem; }
