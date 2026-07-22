@@ -61,6 +61,10 @@ public final class AccessCodeSelfCheck {
         assert MailServlet.page("3") == 3;
         assert MailServlet.pageSize(null) == 20;
         assert MailServlet.pageSize("100") == 100;
+        assert "Re: Hola".equals(MailServlet.subject("Hola", "Re:"));
+        assert "re: Hola".equals(MailServlet.subject("re: Hola", "Re:"));
+        assert "otro@example.com".equals(MailServlet.replyAllCc("yo@example.com", "autor@example.com",
+                "yo@example.com, otro@example.com", "autor@example.com"));
         assert "Junk".equals(ImapMailbox.promotedName("INBOX.Junk", '.'));
         assert "Spam".equals(ImapMailbox.promotedName("INBOX.Spam", '.'));
         assert ImapMailbox.promotedName("INBOX.Archivo", '.').isEmpty();
@@ -105,6 +109,8 @@ public final class AccessCodeSelfCheck {
         model.put("composeBcc", "");
         model.put("composeSubject", "");
         model.put("composeBody", "");
+        model.put("composeTitle", "Responder");
+        model.put("composeCancelHref", "mail?folder=INBOX&uid=1");
         model.put("contactsAvailable", true);
         model.put("contacts", List.of(Map.of("name", "Contacto Uno", "email", "uno@example.com")));
         model.put("configurationOpen", true);
@@ -135,6 +141,10 @@ public final class AccessCodeSelfCheck {
                 "email", "uno@example.com", "owner", "usuario", "group", "2")));
         model.put("attachmentsAvailable", true);
         model.put("attachments", List.of(Map.of("name", "documento.pdf", "size", "10 KB", "href", "mail?action=attachment")));
+        model.put("cc", "copia@example.com");
+        model.put("replyHref", "mail?action=reply&uid=1");
+        model.put("replyAllHref", "mail?action=replyAll&uid=1");
+        model.put("forwardHref", "mail?action=forward&uid=1");
         model.put("composeAction", true);
         model.put("query", "urgente");
         model.put("emptyText", "No se encontraron mensajes.");
@@ -149,9 +159,9 @@ public final class AccessCodeSelfCheck {
         try {
             String html = new GatorJsonView().renderResource("gator-mail/screens/mail.json", model);
             assert html.contains("Sesión cerrada");
-            assert html.contains("/gator-mail/css/gator-mail.css?v=27");
+            assert html.contains("/gator-mail/css/gator-mail.css?v=28");
             assert html.contains("/elib/js/sweetalert2.all.min.js");
-            assert html.contains("/gator-mail/js/gator-mail.js?v=7");
+            assert html.contains("/gator-mail/js/gator-mail.js?v=8");
             assert html.contains("href=\"/gator-mail/oauth/password\"");
             assert html.contains("fontawesome-free-5.13.0-web/css/all.min.css");
             assert html.contains("&lt;user@example.com&gt;");
@@ -164,6 +174,9 @@ public final class AccessCodeSelfCheck {
             assert html.contains("name=\"attachments\"");
             assert html.contains("name=\"images\"");
             assert html.contains("documento.pdf");
+            assert html.contains("title=\"Descargar documento.pdf\"");
+            assert html.contains(">Responder a todos</span>");
+            assert html.contains(">Reenviar</span>");
             assert html.contains("Guardar borrador");
             assert html.contains("value=\"sendMessage\"");
             assert html.contains(">Enviar</span>");

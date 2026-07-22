@@ -9,6 +9,7 @@ import gator.lib.db.GappSQLStatement;
 import gator.lib.db.helpers.GappDBHelper;
 import gator.lib.web.gui.GatorJsonView;
 import jakarta.mail.AuthenticationFailedException;
+import jakarta.mail.internet.InternetAddress;
 import jakarta.servlet.annotation.MultipartConfig;
 import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
@@ -151,6 +152,8 @@ public final class MailServlet extends HttpServlet {
         model.put("composeBcc", "");
         model.put("composeSubject", "");
         model.put("composeBody", "");
+        model.put("composeTitle", "Nuevo mensaje");
+        model.put("composeCancelHref", request.getContextPath() + "/mail");
         model.put("contactsAvailable", false);
         model.put("configurationAvailable", false);
         model.put("configurationUsersView", false);
@@ -500,10 +503,21 @@ public final class MailServlet extends HttpServlet {
         model.put("contentClass", "mail-content");
         model.put("sendNotice", "1".equals(request.getParameter("sent")));
 
-        if ("compose".equals(request.getParameter("action"))) {
+        String action = request.getParameter("action");
+        if ("compose".equals(action) || "reply".equals(action) || "replyAll".equals(action)
+                || "forward".equals(action)) {
             model.put("composeView", true);
             model.put("composeAction", false);
             contactsModel(model, mailbox);
+            if (!"compose".equals(action)) {
+                String uid = request.getParameter("uid");
+                if (uid == null || !uid.matches("[0-9]+")) throw new IllegalArgumentException("Mensaje inválido");
+                ImapMailbox.Mail mail = imap.read(mailbox, folderName, Long.parseLong(uid), accessToken);
+                if (mail == null) throw new IllegalArgumentException("Mensaje inexistente");
+                model.put("composeCancelHref", mailboxHref(folderName, query, page(request.getParameter("page")), size)
+                        + "&uid=" + uid);
+                composeReply(model, action, mailbox, mail);
+            }
             return;
         }
 
@@ -522,6 +536,7 @@ public final class MailServlet extends HttpServlet {
             model.put("subject", mail.subject());
             model.put("from", mail.from());
             model.put("to", mail.to());
+            model.put("cc", mail.cc());
             model.put("sent", DATE.format(mail.sent()));
             model.put("body", mail.html() ? htmlDocument(request.getContextPath(), mail.body()) : mail.body());
             model.put("mailHtml", mail.html());
@@ -533,6 +548,10 @@ public final class MailServlet extends HttpServlet {
                             + "&part=" + url(attachment.part())));
             model.put("attachments", attachments);
             model.put("attachmentsAvailable", !attachments.isEmpty());
+            String source = "&folder=" + url(folderName) + "&uid=" + uid;
+            model.put("replyHref", "mail?action=reply" + source);
+            model.put("replyAllHref", "mail?action=replyAll" + source);
+            model.put("forwardHref", "mail?action=forward" + source);
             return;
         }
 
@@ -594,13 +613,45 @@ public final class MailServlet extends HttpServlet {
         }
         try {
             String source = request.getParameter("source");
-            imap.moveMessage(mailbox, source, request.getParameter("target"),
-                    Long.parseLong(request.getParameter("uid")), accessToken);
+            imap.moveMessages(mailbox, source, request.getParameter("target"),
+                    uids(request.getParameterValues("uid")), accessToken);
             response.sendRedirect("mail?folder=" + url(source));
         } catch (IllegalArgumentException error) {
             response.sendError(HttpServletResponse.SC_BAD_REQUEST, "No fue posible mover el mensaje");
         }
         return true;
+    }
+
+    private static void composeReply(Map<String, Object> model, String action, String mailbox,
+            ImapMailbox.Mail mail) {
+        boolean forward = "forward".equals(action);
+        model.put("composeTitle", forward ? "Reenviar" : "replyAll".equals(action) ? "Responder a todos" : "Responder");
+        model.put("composeTo", forward ? "" : mail.replyTo());
+        model.put("composeCc", "replyAll".equals(action) ? replyAllCc(mailbox, mail.replyTo(), mail.to(), mail.cc()) : "");
+        model.put("composeSubject", subject(mail.subject(), forward ? "RV:" : "Re:"));
+        String original = mail.plain().isBlank() ? mail.body().replaceAll("<[^>]+>", "") : mail.plain();
+        String header = forward
+                ? "---------- Mensaje reenviado ----------\nDe: " + mail.from() + "\nFecha: " + DATE.format(mail.sent())
+                        + "\nAsunto: " + mail.subject() + "\nPara: " + mail.to() + "\n\n"
+                : "El " + DATE.format(mail.sent()) + ", " + mail.from() + " escribió:\n\n> ";
+        model.put("composeBody", "\n\n" + header + (forward ? original : original.replace("\n", "\n> ")));
+    }
+
+    static String subject(String value, String prefix) {
+        return value.regionMatches(true, 0, prefix, 0, prefix.length()) ? value : prefix + " " + value;
+    }
+
+    static String replyAllCc(String mailbox, String replyTo, String to, String cc) {
+        Map<String, String> values = new LinkedHashMap<>();
+        for (String source : List.of(to, cc)) try {
+            for (InternetAddress address : InternetAddress.parse(source, false))
+                values.putIfAbsent(address.getAddress().toLowerCase(Locale.ROOT), address.toUnicodeString());
+        } catch (Exception ignored) { }
+        for (String source : List.of(mailbox, replyTo)) try {
+            for (InternetAddress address : InternetAddress.parse(source, false))
+                values.remove(address.getAddress().toLowerCase(Locale.ROOT));
+        } catch (Exception ignored) { }
+        return String.join(", ", values.values());
     }
 
     private boolean saveDraft(HttpServletRequest request, HttpServletResponse response, HttpSession session,

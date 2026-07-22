@@ -62,7 +62,8 @@ final class ImapMailbox {
 
     record Download(String name, byte[] data) { }
 
-    record Mail(String from, String to, String subject, Instant sent, String body, boolean html,
+    record Mail(String from, String replyTo, String to, String cc, String subject, Instant sent, String body,
+            String plain, boolean html,
             List<Attachment> attachments) {
     }
 
@@ -162,10 +163,11 @@ final class ImapMailbox {
             Parsed parsed = parse(message);
             message.setFlag(Flags.Flag.SEEN, true);
             String body = parsed.html.isBlank() ? parsed.plain : inlineImages(parsed.html, parsed.images);
-            return new Mail(addresses(message.getFrom()), addresses(message.getRecipients(Message.RecipientType.TO)),
-                    text(message.getSubject(), "(Sin asunto)"),
+            return new Mail(addresses(message.getFrom()), addresses(message.getReplyTo()),
+                    addresses(message.getRecipients(Message.RecipientType.TO)),
+                    addresses(message.getRecipients(Message.RecipientType.CC)), text(message.getSubject(), "(Sin asunto)"),
                     message.getSentDate() == null ? Instant.EPOCH : message.getSentDate().toInstant(),
-                    body, !parsed.html.isBlank(), List.copyOf(parsed.attachments));
+                    body, parsed.plain, !parsed.html.isBlank(), List.copyOf(parsed.attachments));
         }
     }
 
@@ -217,18 +219,20 @@ final class ImapMailbox {
         }
     }
 
-    void moveMessage(String mailbox, String sourceName, String destinationName, long uid, String accessToken)
+    void moveMessages(String mailbox, String sourceName, String destinationName, long[] uids, String accessToken)
             throws Exception {
-        if (uid <= 0 || sourceName == null || destinationName == null || sourceName.equals(destinationName))
+        if (uids == null || uids.length == 0 || uids.length > 100 || Arrays.stream(uids).anyMatch(uid -> uid <= 0)
+                || sourceName == null || destinationName == null || sourceName.equals(destinationName))
             throw new IllegalArgumentException("El mensaje o la carpeta destino no son válidos");
         try (Store store = connect(mailbox, accessToken)) {
             Folder source = folder(store, sourceName);
             Folder destination = folder(store, destinationName);
             source.open(Folder.READ_WRITE);
             try {
-                Message message = ((UIDFolder) source).getMessageByUID(uid);
-                if (message == null) return;
-                ((IMAPFolder) source).moveMessages(new Message[]{message}, destination);
+                Message[] messages = Arrays.stream(((UIDFolder) source).getMessagesByUID(uids))
+                        .filter(message -> message != null).toArray(Message[]::new);
+                if (messages.length == 0) return;
+                ((IMAPFolder) source).moveMessages(messages, destination);
             } finally {
                 if (source.isOpen()) source.close(false);
             }

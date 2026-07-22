@@ -9,13 +9,13 @@
         const form = document.createElement("form");
         form.method = "post";
         form.action = "mail";
-        Object.entries({ action, csrf, ...values }).forEach(([name, value]) => {
+        Object.entries({ action, csrf, ...values }).forEach(([name, value]) => (Array.isArray(value) ? value : [value]).forEach(item => {
             const input = document.createElement("input");
             input.type = "hidden";
             input.name = name;
-            input.value = value ?? "";
+            input.value = item ?? "";
             form.append(input);
-        });
+        }));
         document.body.append(form);
         form.submit();
     };
@@ -38,7 +38,9 @@
 
     document.querySelectorAll(".mail-message-row[data-message-uid]").forEach(message => {
         message.addEventListener("dragstart", event => {
-            draggedMessage = { uid: message.dataset.messageUid, source: message.dataset.folder };
+            const checked = [...document.querySelectorAll(".mail-message-select:checked")].map(input => input.value);
+            draggedMessage = { uid: checked.includes(message.dataset.messageUid) ? checked : [message.dataset.messageUid],
+                source: message.dataset.folder };
             draggedFolder = null;
             event.dataTransfer.effectAllowed = "move";
             event.dataTransfer.setData("text/plain", draggedMessage.uid);

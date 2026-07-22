@@ -14,9 +14,9 @@
           { "tag": "link", "attrs": { "rel": "stylesheet", "href": "/elib/css2/fontawesome-free-5.13.0-web/css/all.min.css" } },
           { "tag": "link", "attrs": { "rel": "stylesheet", "href": "/elib/css/colors.css" } },
           { "tag": "link", "attrs": { "rel": "stylesheet", "href": "/elib/css2/sweetalert2.min.css?v=11.23.0" } },
-          { "tag": "link", "attrs": { "rel": "stylesheet", "href": "${contextPath}/css/gator-mail.css?v=27" } },
+          { "tag": "link", "attrs": { "rel": "stylesheet", "href": "${contextPath}/css/gator-mail.css?v=28" } },
           { "tag": "script", "attrs": { "src": "/elib/js/sweetalert2.all.min.js", "defer": "true" } },
-          { "tag": "script", "attrs": { "src": "${contextPath}/js/gator-mail.js?v=7", "defer": "true" } }
+          { "tag": "script", "attrs": { "src": "${contextPath}/js/gator-mail.js?v=8", "defer": "true" } }
         ]
       },
       {
@@ -424,9 +424,9 @@
                       { "tag": "header", "attrs": { "class": "card-header mail-panel-header" }, "children": [
                         { "tag": "div", "children": [
                           { "tag": "small", "attrs": { "class": "mail-eyebrow" }, "text": "Markdown" },
-                          { "tag": "h1", "attrs": { "class": "mail-panel-title" }, "text": "Nuevo mensaje" }
+                          { "tag": "h1", "attrs": { "class": "mail-panel-title" }, "text": "${composeTitle}" }
                         ] },
-                        { "tag": "a", "attrs": { "class": "btn btn-outline-secondary btn-sm", "href": "${contextPath}/mail" }, "text": "Cancelar" }
+                        { "tag": "a", "attrs": { "class": "btn btn-outline-secondary btn-sm", "href": "${composeCancelHref}" }, "text": "Cancelar" }
                       ] },
                       { "tag": "form", "attrs": { "class": "mail-compose-form", "method": "post", "enctype": "multipart/form-data" }, "children": [
                         { "tag": "input", "attrs": { "type": "hidden", "name": "csrf", "value": "${csrf}" } },
@@ -606,12 +606,24 @@
                           { "tag": "h1", "attrs": { "class": "mail-message-title" }, "text": "${subject}" },
                           { "tag": "dl", "attrs": { "class": "mail-headers" }, "children": [
                             { "tag": "dt", "text": "De" }, { "tag": "dd", "text": "${from}" },
-                            { "tag": "dt", "text": "Para" }, { "tag": "dd", "text": "${to}" }
+                            { "tag": "dt", "text": "Para" }, { "tag": "dd", "text": "${to}" },
+                            { "tag": "dt", "text": "CC" }, { "tag": "dd", "text": "${cc}" }
+                          ] },
+                          { "tag": "nav", "attrs": { "class": "mail-message-actions", "aria-label": "Acciones del mensaje" }, "children": [
+                            { "tag": "a", "attrs": { "class": "btn btn-sm btn-outline-primary", "href": "${replyHref}" }, "children": [
+                              { "tag": "span", "attrs": { "class": "fas fa-reply", "aria-hidden": "true" } }, { "tag": "span", "text": "Responder" }
+                            ] },
+                            { "tag": "a", "attrs": { "class": "btn btn-sm btn-outline-primary", "href": "${replyAllHref}" }, "children": [
+                              { "tag": "span", "attrs": { "class": "fas fa-reply-all", "aria-hidden": "true" } }, { "tag": "span", "text": "Responder a todos" }
+                            ] },
+                            { "tag": "a", "attrs": { "class": "btn btn-sm btn-outline-primary", "href": "${forwardHref}" }, "children": [
+                              { "tag": "span", "attrs": { "class": "fas fa-share", "aria-hidden": "true" } }, { "tag": "span", "text": "Reenviar" }
+                            ] }
                           ] },
                           { "tag": "section", "if": "attachmentsAvailable", "attrs": { "class": "mail-attachments", "aria-label": "Archivos adjuntos" }, "children": [
                             { "tag": "strong", "text": "Archivos adjuntos" },
-                            { "tag": "a", "each": "attachments", "as": "attachment", "attrs": { "class": "mail-attachment", "href": "${attachment.href}" }, "children": [
-                              { "tag": "span", "attrs": { "class": "fas fa-paperclip", "aria-hidden": "true" } },
+                            { "tag": "a", "each": "attachments", "as": "attachment", "attrs": { "class": "mail-attachment", "href": "${attachment.href}", "title": "Descargar ${attachment.name}" }, "children": [
+                              { "tag": "span", "attrs": { "class": "fas fa-download", "aria-hidden": "true" } },
                               { "tag": "span", "text": "${attachment.name}" }, { "tag": "small", "text": "${attachment.size}" }
                             ] }
                           ] },

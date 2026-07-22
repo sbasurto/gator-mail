@@ -143,6 +143,8 @@ body { min-height: 100vh; margin: 0; color: var(--gator-ink); background: var(--
 .mail-headers { display: grid; grid-template-columns: auto 1fr; gap: .2rem .75rem; margin: 1.4rem 0; color: var(--gator-muted); font-size: .85rem; }
 .mail-headers dt { color: var(--gator-ink); }
 .mail-headers dd { margin: 0; overflow-wrap: anywhere; }
+.mail-message-actions { display: flex; flex-wrap: wrap; gap: .5rem; margin-bottom: 1rem; }
+.mail-message-actions .btn { display: inline-flex; align-items: center; gap: .4rem; }
 .mail-body { margin: 0; padding: 1.6rem 0 0; border-top: 1px solid var(--gator-line); background: transparent; color: #2d4252; font: 400 .96rem/1.7 inherit; white-space: pre-wrap; overflow-wrap: anywhere; }
 .mail-html-body { width: 100%; min-height: 65vh; margin-top: 1.6rem; border: 1px solid var(--gator-line); border-radius: 9px; background: #fff; }
 .mail-attachments { display: flex; flex-wrap: wrap; align-items: center; gap: .45rem; margin: 1rem 0; }
