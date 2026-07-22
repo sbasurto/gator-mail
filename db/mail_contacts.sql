@@ -92,6 +92,8 @@ create or replace function mail_fn_get_contactos(v_email text)
 returns text
 language plpgsql
 stable
+security definer
+set search_path = public
 as $$
 declare
     resultado json;
@@ -150,3 +152,5 @@ exception when others then
     return json_build_object('codigo', '-1', 'mensaje', sqlerrm)::text;
 end;
 $$;
+
+revoke all on function mail_fn_get_contactos(text) from public;

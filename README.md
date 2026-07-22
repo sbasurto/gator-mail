@@ -1,8 +1,8 @@
 # Gator Mail
 
 Cliente web IMAP ligero integrado con las cuentas, grupos y aplicaciones de
-Gator. El primer alcance permite iniciar sesión, verificar el acceso mediante
-una clave enviada exclusivamente por SMS, consultar las carpetas IMAP y leer
+Gator. El primer alcance permite iniciar sesión, verificar opcionalmente el acceso
+mediante una clave enviada por SMS, consultar las carpetas IMAP y leer
 mensajes de texto o HTML aislado. También permite mover, renombrar y eliminar
 carpetas directamente en el servidor IMAP, redactar en Markdown y guardar el
 resultado como texto y HTML sanitizado en Borradores. Los mensajes se pueden
@@ -22,7 +22,7 @@ almacenar contraseñas por usuario.
 ## Requisitos
 
 - Java 21 y un contenedor compatible con Jakarta Servlet 6.1, como Tomcat 11.
-- PostgreSQL con el esquema Gator y las funciones de acceso y desafío instaladas.
+- PostgreSQL con el esquema autónomo de Gator Mail instalado.
 - Keycloak 26.7 con el proveedor de usuarios Gator instalado.
 - Dovecot 2.3.21 o posterior con TLS, `OAUTHBEARER` y `XOAUTH2`.
 - `gator-lib` 1.0.0-SNAPSHOT. Durante el desarrollo se resuelve como un build
@@ -40,6 +40,8 @@ El proceso de Tomcat puede recibir estas variables de entorno:
   `https://mail.soft-gator.com/auth/realms/gator`)
 - `GATOR_MAIL_OAUTH_REDIRECT_URI` (opcional; se calcula desde la petición si
   no se define)
+- `GATOR_MAIL_SMS_ENDPOINT` (opcional; URL HTTPS del proveedor de desafíos)
+- `GATOR_MAIL_SMS_SECRET` (secreto Bearer compartido con ese proveedor)
 
 El cliente público `gator-mail` debe habilitar Authorization Code con PKCE S256
 y registrar exactamente los URI de retorno usados por cada entorno.
@@ -71,19 +73,24 @@ El artefacto queda en `dist/gator-mail.war`.
 El contexto esperado es `/gator-mail`. La aplicación requiere acceso a la
 configuración de identidad `pg_mail_identity`, una entrada `broker_db` con
 `db_use = 'mail'` y la asignación de esa aplicación a los grupos autorizados.
-La función de desafío debe aceptar `smsOnly = true` y devolver únicamente el
-hash de la clave temporal. También acepta `application` y `userHint` opcionales
-para identificar el origen y la cuenta en el SMS; la definición compatible se
-encuentra en `db/app_fn_send_login_challenge.sql`. No requiere Shiro ni
-contraseñas de correo.
+El segundo factor sólo se solicita cuando `GATOR_MAIL_SMS_ENDPOINT` y
+`GATOR_MAIL_SMS_SECRET` están configurados. El endpoint recibe JSON por `POST`
+con autenticación `Bearer`: `action` (`send` o `correct`), `usuario`,
+`application`, `userHint` y, para corregir, `telefono`. Debe devolver
+`codigo`, `phoneSent`, `challengeHash`, `expiresAt` y, en errores de envío,
+`mensaje` y `phoneCorrectionAllowed`. Cada instalación puede reemplazarlo por
+su propio proveedor; sin endpoint, el correo abre sin solicitar clave.
 
 La sesión HTTP se conserva durante reinicios controlados de Gator Mail para no
 repetir el segundo factor mientras la misma sesión continúe activa. Cerrar
 sesión o dejarla expirar elimina esa verificación.
+Si el primer SMS no puede entregarse, el proveedor puede habilitar una única
+corrección del teléfono mediante `phoneCorrectionAllowed`.
 
-El vínculo **Contraseña** abre la consola de cuenta de Keycloak. Los cambios
-usan el proveedor Gator existente, que sincroniza `app_usuarios` mediante
-`app_fn_admon_tablas_all`.
+El vínculo **Contraseña** inicia directamente la acción OIDC `UPDATE_PASSWORD`
+con el formulario del tema de Gator Mail; no abre la consola de cuenta de
+Keycloak. Los cambios usan el proveedor Gator existente, que sincroniza
+`app_usuarios` mediante `app_fn_admon_tablas_all`.
 
 ## Aprovisionamiento de buzones
 

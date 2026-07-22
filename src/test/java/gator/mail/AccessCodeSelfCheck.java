@@ -46,11 +46,15 @@ public final class AccessCodeSelfCheck {
         assert logout.contains("id_token_hint=id+token");
         assert !logout.contains("post_logout_redirect_uri");
         assert !OAuthServlet.endSession("").contains("id_token_hint");
-        assert OAuthServlet.accountUrl().endsWith("/account/#/security/signingin");
         assert "sb***to".equals(MailServlet.userHint("sbasurto"));
         assert "sb***to".equals(MailServlet.userHint("sbasurto@soft-gator.com"));
         assert "s***g".equals(MailServlet.userHint("sg" + "g"));
         assert "**".equals(MailServlet.userHint("sg"));
+        assert "+5215511186677".equals(MailServlet.phone(" +52 (1) 55-1118-6677 "));
+        boolean rejectedPhone = false;
+        try { MailServlet.phone("5511186677"); }
+        catch (IllegalArgumentException expected) { rejectedPhone = true; }
+        assert rejectedPhone;
         assert Arrays.equals(new long[]{1, 42}, MailServlet.uids(new String[]{"1", "42"}));
         assert "asunto urgente".equals(MailServlet.searchQuery("  asunto urgente  "));
         assert MailServlet.page(null) == 1;
@@ -78,7 +82,7 @@ public final class AccessCodeSelfCheck {
         assert rejectedUid;
 
         Map<String, Object> model = new HashMap<>();
-        for (String key : new String[]{"challenge", "composeView", "mailboxView", "messageView", "mailContent", "empty",
+        for (String key : new String[]{"challenge", "codeChallenge", "phoneCorrection", "composeView", "mailboxView", "messageView", "mailContent", "empty",
                 "hasMessages", "pending", "error", "loggedOut", "noticeVisible", "sendNotice", "mailHtml",
                 "configurationAvailable", "configurationUsersView", "configurationContactsView", "calendarView",
                 "dashboardView", "eventsAvailable", "eventFormView", "eventCreated"}) model.put(key, true);
@@ -89,7 +93,7 @@ public final class AccessCodeSelfCheck {
         model.put("contentClass", "mail-content");
         model.put("sessionActive", true);
         model.put("mailbox", "<user@example.com>");
-        model.put("accountHref", OAuthServlet.accountUrl());
+        model.put("accountHref", "/gator-mail/oauth/password");
         model.put("folderGroups", List.of(Map.of("className", "active", "href", "mail?folder=INBOX",
                 "label", "Entrada", "count", "1", "icon", "fas fa-inbox", "folder", "INBOX",
                 "draggable", false, "leaf", true, "hasChildren", false)));
@@ -148,6 +152,7 @@ public final class AccessCodeSelfCheck {
             assert html.contains("/gator-mail/css/gator-mail.css?v=27");
             assert html.contains("/elib/js/sweetalert2.all.min.js");
             assert html.contains("/gator-mail/js/gator-mail.js?v=7");
+            assert html.contains("href=\"/gator-mail/oauth/password\"");
             assert html.contains("fontawesome-free-5.13.0-web/css/all.min.css");
             assert html.contains("&lt;user@example.com&gt;");
             assert html.contains("pattern=\"[A-Za-z0-9]{8,12}\"");

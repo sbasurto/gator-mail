@@ -17,6 +17,10 @@ import jakarta.servlet.http.HttpSession;
 import jakarta.servlet.http.Part;
 import java.io.IOException;
 import java.net.URLEncoder;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.time.LocalDate;
@@ -41,6 +45,9 @@ public final class MailServlet extends HttpServlet {
     private static final long CODE_LIFETIME_MS = 300_000;
     private static final long RESEND_WAIT_MS = 30_000;
     private static final int MAX_ATTEMPTS = 5;
+    private static final String SMS_ENDPOINT = System.getenv("GATOR_MAIL_SMS_ENDPOINT");
+    private static final String SMS_SECRET = System.getenv("GATOR_MAIL_SMS_SECRET");
+    private static final HttpClient HTTP = HttpClient.newHttpClient();
     private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")
             .withZone(ZoneId.systemDefault());
     private static final Parser MARKDOWN = Parser.builder().build();
@@ -102,6 +109,12 @@ public final class MailServlet extends HttpServlet {
             response.sendError(HttpServletResponse.SC_BAD_REQUEST, error.getMessage());
             return;
         } catch (Exception error) {
+            if (causedBy(error, AuthenticationFailedException.class) && !OAuthServlet.active(request)) {
+                session.invalidate();
+                response.sendRedirect(request.getContextPath() + "/oauth/login");
+                return;
+            }
+            getServletContext().log("No fue posible abrir el correo de " + user, error);
             response.setStatus(HttpServletResponse.SC_SERVICE_UNAVAILABLE);
             model.put(causedBy(error, AuthenticationFailedException.class) ? "pending" : "error", true);
         }
@@ -118,8 +131,10 @@ public final class MailServlet extends HttpServlet {
         Map<String, Object> model = new HashMap<>();
         model.put("contextPath", request.getContextPath());
         model.put("mailbox", mailbox);
-        model.put("accountHref", OAuthServlet.accountUrl());
+        model.put("accountHref", request.getContextPath() + "/oauth/password");
         model.put("challenge", false);
+        model.put("codeChallenge", false);
+        model.put("phoneCorrection", false);
         model.put("mailboxView", false);
         model.put("messageView", false);
         model.put("composeView", false);
@@ -166,6 +181,10 @@ public final class MailServlet extends HttpServlet {
     }
 
     private String challenge(HttpServletRequest request, HttpSession session, String user) {
+        if (!smsConfigured()) {
+            session.setAttribute("mail.challenge.verified", true);
+            return "";
+        }
         if (Boolean.TRUE.equals(session.getAttribute("mail.challenge.verified"))) return "";
         String token = (String) session.getAttribute("mail.challenge.token");
         if (token == null) {
@@ -173,6 +192,23 @@ public final class MailServlet extends HttpServlet {
             session.setAttribute("mail.challenge.token", token);
         }
         long now = System.currentTimeMillis();
+        if ("correctPhone".equals(request.getParameter("action"))) {
+            if (!token.equals(request.getParameter("token"))
+                    || !Boolean.TRUE.equals(session.getAttribute("mail.phone.correction")))
+                return "Solicitud inválida";
+            JsonObject requestJson = json("usuario", user);
+            requestJson.addProperty("action", "correct");
+            requestJson.addProperty("telefono", phone(request.getParameter("phone")));
+            requestJson.addProperty("application", "Gator Mail");
+            requestJson.addProperty("userHint", userHint(user));
+            JsonObject result = sms(requestJson);
+            session.setAttribute("mail.phone.correction.used", true);
+            session.removeAttribute("mail.phone.correction");
+            if (!"0".equals(result.get("codigo").getAsString()) || !result.get("phoneSent").getAsBoolean())
+                return result.has("mensaje") ? result.get("mensaje").getAsString() : "No fue posible enviar la clave por SMS";
+            saveChallenge(session, result, now);
+            return "Guardamos el teléfono y enviamos una clave temporal por SMS";
+        }
         if ("verify".equals(request.getParameter("action"))) {
             if (!token.equals(request.getParameter("token"))) return "Solicitud inválida";
             long expires = number(session.getAttribute("mail.challenge.expires"));
@@ -193,16 +229,18 @@ public final class MailServlet extends HttpServlet {
             return "Espera 30 segundos antes de solicitar otra clave";
         if (session.getAttribute("mail.challenge.hash") == null || resend) {
             JsonObject requestJson = json("usuario", user);
+            requestJson.addProperty("action", "send");
             requestJson.addProperty("smsOnly", true);
             requestJson.addProperty("application", "Gator Mail");
             requestJson.addProperty("userHint", userHint(user));
-            JsonObject result = call("app_fn_send_login_challenge", requestJson);
-            if (!"0".equals(result.get("codigo").getAsString()) || !result.get("phoneSent").getAsBoolean())
+            JsonObject result = sms(requestJson);
+            if (!"0".equals(result.get("codigo").getAsString()) || !result.get("phoneSent").getAsBoolean()) {
+                if (!Boolean.TRUE.equals(session.getAttribute("mail.phone.correction.used"))
+                        && result.has("phoneCorrectionAllowed") && result.get("phoneCorrectionAllowed").getAsBoolean())
+                    session.setAttribute("mail.phone.correction", true);
                 return result.has("mensaje") ? result.get("mensaje").getAsString() : "No fue posible enviar la clave por SMS";
-            session.setAttribute("mail.challenge.hash", result.get("challengeHash").getAsString());
-            session.setAttribute("mail.challenge.expires", Math.min(result.get("expiresAt").getAsLong(), now + CODE_LIFETIME_MS));
-            session.setAttribute("mail.challenge.attempts", 0L);
-            session.setAttribute("mail.challenge.sent", now);
+            }
+            saveChallenge(session, result, now);
             return "Enviamos una clave temporal por SMS";
         }
         return "";
@@ -430,6 +468,9 @@ public final class MailServlet extends HttpServlet {
         long remaining = Math.max(0, (RESEND_WAIT_MS - (System.currentTimeMillis()
                 - number(session.getAttribute("mail.challenge.sent"))) + 999) / 1000);
         model.put("challenge", true);
+        boolean correction = Boolean.TRUE.equals(session.getAttribute("mail.phone.correction"));
+        model.put("phoneCorrection", correction);
+        model.put("codeChallenge", !correction);
         model.put("token", String.valueOf(session.getAttribute("mail.challenge.token")));
         model.put("notice", notice);
         model.put("noticeVisible", !notice.isBlank());
@@ -955,6 +996,38 @@ public final class MailServlet extends HttpServlet {
         if (identity.length() <= 2) return "*".repeat(identity.length());
         if (identity.length() <= 4) return identity.charAt(0) + "***" + identity.substring(identity.length() - 1);
         return identity.substring(0, 2) + "***" + identity.substring(identity.length() - 2);
+    }
+
+    static String phone(String value) {
+        String phone = value == null ? "" : value.replaceAll("[\\s().-]", "");
+        if (!phone.matches("\\+[1-9][0-9]{7,14}"))
+            throw new IllegalArgumentException("Captura el teléfono con código de país, por ejemplo +5215512345678");
+        return phone;
+    }
+
+    private static boolean smsConfigured() {
+        return SMS_ENDPOINT != null && !SMS_ENDPOINT.isBlank() && SMS_SECRET != null && !SMS_SECRET.isBlank();
+    }
+
+    private JsonObject sms(JsonObject value) {
+        try {
+            HttpRequest request = HttpRequest.newBuilder(URI.create(SMS_ENDPOINT))
+                    .header("Authorization", "Bearer " + SMS_SECRET)
+                    .header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(gson.toJson(value))).build();
+            HttpResponse<String> response = HTTP.send(request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() != 200) throw new IllegalStateException("El servicio SMS respondió " + response.statusCode());
+            return JsonParser.parseString(response.body()).getAsJsonObject();
+        } catch (Exception error) {
+            throw new IllegalStateException("No fue posible consultar el servicio SMS", error);
+        }
+    }
+
+    private static void saveChallenge(HttpSession session, JsonObject result, long now) {
+        session.setAttribute("mail.challenge.hash", result.get("challengeHash").getAsString());
+        session.setAttribute("mail.challenge.expires", Math.min(result.get("expiresAt").getAsLong(), now + CODE_LIFETIME_MS));
+        session.setAttribute("mail.challenge.attempts", 0L);
+        session.setAttribute("mail.challenge.sent", now);
     }
 
     private static boolean causedBy(Throwable error, Class<? extends Throwable> type) {

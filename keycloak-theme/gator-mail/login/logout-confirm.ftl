@@ -21,6 +21,10 @@
                 <div id="kc-info-message">
                     <a href="${client.baseUrl}">Ingresar nuevamente</a>
                 </div>
+            <#else>
+                <div id="kc-info-message">
+                    <a href="${url.loginUrl}">Ingresar nuevamente</a>
+                </div>
             </#if>
         </div>
     </#if>

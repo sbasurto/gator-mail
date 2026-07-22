@@ -21,7 +21,7 @@ public final class OAuthServlet extends HttpServlet {
         if ("/callback".equals(req.getPathInfo())) callback(req, res);
         else if ("/logout".equals(req.getPathInfo())) logout(req, res);
         else if ("/logged-out".equals(req.getPathInfo())) loggedOut(req, res);
-        else login(req, res);
+        else login(req, res, "/password".equals(req.getPathInfo()) ? "UPDATE_PASSWORD" : "");
     }
 
     private void logout(HttpServletRequest req, HttpServletResponse res) throws IOException {
@@ -38,11 +38,12 @@ public final class OAuthServlet extends HttpServlet {
         model.put("sessionActive", false);
         res.getWriter().print(new GatorJsonView().renderResource("gator-mail/screens/mail.json", model));
     }
-    private void login(HttpServletRequest req, HttpServletResponse res) throws IOException {
+    private void login(HttpServletRequest req, HttpServletResponse res, String action) throws IOException {
         HttpSession s = req.getSession(true); String state = random(24), verifier = random(48);
         s.setAttribute("oidc.state", state); s.setAttribute("oidc.verifier", verifier);
         res.sendRedirect(ISSUER + "/protocol/openid-connect/auth?response_type=code&scope=openid%20profile%20email&client_id=gator-mail&redirect_uri="
-                + enc(redirect(req)) + "&state=" + enc(state) + "&code_challenge_method=S256&code_challenge=" + enc(challenge(verifier)));
+                + enc(redirect(req)) + "&state=" + enc(state) + "&code_challenge_method=S256&code_challenge=" + enc(challenge(verifier))
+                + (action.isBlank() ? "" : "&kc_action=" + enc(action)));
     }
     private void callback(HttpServletRequest req, HttpServletResponse res) throws IOException {
         HttpSession s = req.getSession(false);
@@ -57,9 +58,7 @@ public final class OAuthServlet extends HttpServlet {
             if (info.statusCode() != 200) throw new IllegalStateException();
             JsonObject user = JsonParser.parseString(info.body()).getAsJsonObject();
             req.changeSessionId();
-            s.setAttribute("oidc.user", user.has("email") && !user.get("email").isJsonNull()
-                    ? user.get("email").getAsString()
-                    : user.get("preferred_username").getAsString());
+            s.setAttribute("oidc.user", user.get("preferred_username").getAsString());
             s.removeAttribute("oidc.state"); s.removeAttribute("oidc.verifier");
             res.sendRedirect(req.getContextPath() + "/mail");
         } catch (Exception e) { res.sendError(503, "No fue posible completar el acceso OAuth"); }
@@ -70,6 +69,17 @@ public final class OAuthServlet extends HttpServlet {
             save(s, token("grant_type=refresh_token&client_id=gator-mail&refresh_token=" + enc(String.valueOf(s.getAttribute("oidc.refresh")))));
         }
         return String.valueOf(s.getAttribute("oidc.access"));
+    }
+    static boolean active(HttpServletRequest req) {
+        HttpSession session = req.getSession(false);
+        if (session == null || session.getAttribute("oidc.access") == null) return false;
+        try {
+            HttpRequest info = HttpRequest.newBuilder(URI.create(ISSUER + "/protocol/openid-connect/userinfo"))
+                    .header("Authorization", "Bearer " + session.getAttribute("oidc.access")).GET().build();
+            return HTTP.send(info, HttpResponse.BodyHandlers.discarding()).statusCode() == 200;
+        } catch (Exception error) {
+            return false;
+        }
     }
     private static JsonObject token(String body) throws Exception {
         HttpRequest req = HttpRequest.newBuilder(URI.create(ISSUER + "/protocol/openid-connect/token"))
@@ -83,7 +93,6 @@ public final class OAuthServlet extends HttpServlet {
         String hint = idToken.isBlank() || "null".equals(idToken) ? "" : "&id_token_hint=" + enc(idToken);
         return ISSUER + "/protocol/openid-connect/logout?client_id=gator-mail" + hint;
     }
-    static String accountUrl() { return ISSUER + "/account/#/security/signingin"; }
     private static String redirect(HttpServletRequest request) {
         String configured = System.getenv("GATOR_MAIL_OAUTH_REDIRECT_URI");
         if (configured != null && !configured.isBlank()) return configured;
