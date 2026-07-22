@@ -13,7 +13,7 @@
           { "tag": "link", "attrs": { "rel": "stylesheet", "href": "/elib/css2/bootstrap-5.3.0/bootstrap.min.css" } },
           { "tag": "link", "attrs": { "rel": "stylesheet", "href": "/elib/css2/fontawesome-free-5.13.0-web/css/all.min.css" } },
           { "tag": "link", "attrs": { "rel": "stylesheet", "href": "/elib/css/colors.css" } },
-          { "tag": "link", "attrs": { "rel": "stylesheet", "href": "${contextPath}/css/gator-mail.css?v=25" } },
+          { "tag": "link", "attrs": { "rel": "stylesheet", "href": "${contextPath}/css/gator-mail.css?v=26" } },
           { "tag": "script", "attrs": { "src": "/elib/js/sweetalert2.all.min.js", "defer": "true" } },
           { "tag": "script", "attrs": { "src": "${contextPath}/js/gator-mail.js?v=7", "defer": "true" } }
         ]
@@ -140,8 +140,8 @@
                 "children": [
                   {
                     "tag": "section",
-                    "if": "calendarView",
-                    "attrs": { "class": "mail-calendar-grid" },
+                    "if": "dashboardView",
+                    "attrs": { "class": "mail-dashboard-grid" },
                     "children": [
                       { "tag": "section", "attrs": { "class": "card mail-panel" }, "children": [
                         { "tag": "header", "attrs": { "class": "card-header mail-panel-header" }, "children": [
@@ -183,6 +183,39 @@
                           { "tag": "div", "attrs": { "class": "mail-stat is-read" }, "children": [
                             { "tag": "span", "attrs": { "class": "fas fa-envelope-open", "aria-hidden": "true" } },
                             { "tag": "strong", "text": "${mailRead}" }, { "tag": "small", "text": "Leídos" }
+                          ] }
+                        ] }
+                      ] }
+                    ]
+                  },
+                  {
+                    "tag": "section",
+                    "if": "calendarView",
+                    "attrs": { "class": "card mail-panel mail-agenda" },
+                    "children": [
+                      { "tag": "header", "attrs": { "class": "card-header mail-panel-header" }, "children": [
+                        { "tag": "a", "attrs": { "class": "btn btn-outline-secondary btn-sm", "href": "${calendarPrevious}", "aria-label": "Mes anterior" }, "children": [
+                          { "tag": "span", "attrs": { "class": "fas fa-chevron-left", "aria-hidden": "true" } }
+                        ] },
+                        { "tag": "div", "attrs": { "class": "mail-agenda-title" }, "children": [
+                          { "tag": "small", "attrs": { "class": "mail-eyebrow" }, "text": "Agenda" },
+                          { "tag": "h1", "attrs": { "class": "mail-panel-title" }, "text": "${calendarMonth}" }
+                        ] },
+                        { "tag": "a", "attrs": { "class": "btn btn-outline-secondary btn-sm", "href": "${calendarNext}", "aria-label": "Mes siguiente" }, "children": [
+                          { "tag": "span", "attrs": { "class": "fas fa-chevron-right", "aria-hidden": "true" } }
+                        ] }
+                      ] },
+                      { "tag": "div", "attrs": { "class": "mail-agenda-scroll" }, "children": [
+                        { "tag": "div", "attrs": { "class": "mail-agenda-weekdays" }, "children": [
+                          { "tag": "strong", "text": "Dom" }, { "tag": "strong", "text": "Lun" },
+                          { "tag": "strong", "text": "Mar" }, { "tag": "strong", "text": "Mié" },
+                          { "tag": "strong", "text": "Jue" }, { "tag": "strong", "text": "Vie" },
+                          { "tag": "strong", "text": "Sáb" }
+                        ] },
+                        { "tag": "div", "attrs": { "class": "mail-agenda-days" }, "children": [
+                          { "tag": "div", "each": "calendarDays", "as": "day", "attrs": { "class": "mail-agenda-day ${day.className}" }, "children": [
+                            { "tag": "strong", "attrs": { "class": "mail-agenda-number" }, "text": "${day.number}" },
+                            { "tag": "div", "each": "day.events", "as": "event", "attrs": { "class": "mail-agenda-event ${event.statusClass}", "title": "${event.description}" }, "text": "${event.time} ${event.summary}" }
                           ] }
                         ] }
                       ] }

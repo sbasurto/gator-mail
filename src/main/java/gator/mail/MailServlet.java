@@ -19,12 +19,15 @@ import java.io.IOException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.time.LocalDate;
+import java.time.YearMonth;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import org.commonmark.parser.Parser;
@@ -75,7 +78,7 @@ public final class MailServlet extends HttpServlet {
                 challengeModel(model, session, notice);
             } else if (configuration(request, response, session, model, mailbox)) {
                 if (response.isCommitted()) return;
-            } else if (calendar(request, session, model, mailbox, OAuthServlet.accessToken(request))) {
+            } else if (overview(request, session, model, mailbox, OAuthServlet.accessToken(request))) {
             } else if (manageFolders(request, response, session, mailbox, OAuthServlet.accessToken(request))) {
                 return;
             } else if (moveMessage(request, response, session, mailbox, OAuthServlet.accessToken(request))) {
@@ -137,6 +140,7 @@ public final class MailServlet extends HttpServlet {
         model.put("configurationUsersClass", "");
         model.put("configurationContactsClass", "");
         model.put("calendarView", false);
+        model.put("dashboardView", false);
         model.put("calendarClass", "");
         model.put("eventsAvailable", false);
         model.put("eventsEmpty", false);
@@ -199,9 +203,13 @@ public final class MailServlet extends HttpServlet {
         return "";
     }
 
-    private boolean calendar(HttpServletRequest request, HttpSession session, Map<String, Object> model,
+    private boolean overview(HttpServletRequest request, HttpSession session, Map<String, Object> model,
             String mailbox, String accessToken) throws Exception {
-        if (!"calendar".equals(request.getParameter("action"))) return false;
+        String action = request.getParameter("action");
+        boolean calendar = "calendar".equals(action);
+        boolean dashboard = (action == null || action.isBlank() || "verify".equals(action))
+                && request.getParameter("folder") == null;
+        if (!calendar && !dashboard) return false;
         List<ImapMailbox.FolderInfo> folders = imap.folders(mailbox, accessToken);
         int total = 0;
         int unread = 0;
@@ -218,12 +226,17 @@ public final class MailServlet extends HttpServlet {
         model.put("layoutClass", "mail-workspace");
         model.put("contentClass", "mail-content");
         model.put("mailOpen", false);
-        model.put("calendarView", true);
-        model.put("calendarClass", "active");
         model.put("mailTotal", total);
         model.put("mailUnread", unread);
         model.put("mailRead", Math.max(0, total - unread));
 
+        if (calendar) calendarModel(request, model, mailbox);
+        else dashboardModel(model, mailbox);
+        return true;
+    }
+
+    private void dashboardModel(Map<String, Object> model, String mailbox) {
+        model.put("dashboardView", true);
         JsonObject result = checked(mailDbCall("mail_fn_get_eventos", mailbox));
         List<Map<String, Object>> events = new ArrayList<>();
         for (JsonElement element : result.getAsJsonArray("eventos")) {
@@ -237,7 +250,43 @@ public final class MailServlet extends HttpServlet {
         model.put("events", events);
         model.put("eventsAvailable", !events.isEmpty());
         model.put("eventsEmpty", events.isEmpty());
-        return true;
+    }
+
+    private void calendarModel(HttpServletRequest request, Map<String, Object> model, String mailbox) {
+        YearMonth month;
+        try { month = YearMonth.parse(request.getParameter("month")); }
+        catch (RuntimeException ignored) { month = YearMonth.now(); }
+        JsonObject value = new JsonObject();
+        value.addProperty("email", mailbox);
+        value.addProperty("month", month.toString());
+        JsonObject result = checked(mailDbCall("mail_fn_get_calendario", gson.toJson(value)));
+        Map<String, List<Map<String, Object>>> byDay = new HashMap<>();
+        for (JsonElement element : result.getAsJsonArray("eventos")) {
+            JsonObject event = element.getAsJsonObject();
+            byDay.computeIfAbsent(event.get("date").getAsString(), ignored -> new ArrayList<>()).add(Map.of(
+                    "summary", event.get("summary").getAsString(),
+                    "description", event.get("description").getAsString(),
+                    "time", event.get("time").getAsString(),
+                    "statusClass", event.get("statusClass").getAsString()));
+        }
+        LocalDate first = month.atDay(1);
+        LocalDate start = first.minusDays(first.getDayOfWeek().getValue() % 7);
+        LocalDate today = LocalDate.now();
+        List<Map<String, Object>> days = new ArrayList<>();
+        for (int index = 0; index < 42; index++) {
+            LocalDate day = start.plusDays(index);
+            String className = (YearMonth.from(day).equals(month) ? "" : "is-outside ")
+                    + (day.equals(today) ? "is-today" : "");
+            days.add(Map.of("number", day.getDayOfMonth(), "className", className,
+                    "events", byDay.getOrDefault(day.toString(), List.of())));
+        }
+        String label = month.format(DateTimeFormatter.ofPattern("MMMM yyyy", Locale.forLanguageTag("es-MX")));
+        model.put("calendarView", true);
+        model.put("calendarClass", "active");
+        model.put("calendarMonth", Character.toUpperCase(label.charAt(0)) + label.substring(1));
+        model.put("calendarPrevious", "mail?action=calendar&month=" + month.minusMonths(1));
+        model.put("calendarNext", "mail?action=calendar&month=" + month.plusMonths(1));
+        model.put("calendarDays", days);
     }
 
     private void challengeModel(Map<String, Object> model, HttpSession session, String notice) {

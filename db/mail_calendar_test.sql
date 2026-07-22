@@ -16,6 +16,9 @@ declare resultado text := mail_fn_get_eventos('mail-calendar-test@soft-gator.com
 begin
     assert position('Evento visible' in resultado) > 0, 'No se listó el evento del usuario';
     assert position('Evento ajeno' in resultado) = 0, 'Se listó un evento ajeno';
+    resultado := mail_fn_get_calendario(json_build_object(
+        'email', 'mail-calendar-test@soft-gator.com', 'month', to_char(current_date, 'YYYY-MM'))::text);
+    assert position('Evento visible' in resultado) > 0, 'El calendario no incluyó el evento del usuario';
 end;
 $$;
 

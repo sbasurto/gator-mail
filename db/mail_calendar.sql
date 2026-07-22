@@ -108,5 +108,57 @@ exception when others then
 end;
 $$;
 
+create or replace function mail_fn_get_calendario(v_json text)
+returns text language plpgsql stable security definer set search_path = public as $$
+declare
+    v jsonb := v_json::jsonb;
+    correo text := trim(v ->> 'email');
+    mes_texto text := trim(v ->> 'month');
+    mes date;
+    resultado json;
+begin
+    if correo is null or length(correo) > 320 or position('@' in correo) < 2
+            or mes_texto !~ '^[0-9]{4}-[0-9]{2}$' then
+        return json_build_object('codigo', '-1', 'mensaje', 'Calendario inválido')::text;
+    end if;
+    mes := to_date(mes_texto, 'YYYY-MM');
+    if to_char(mes, 'YYYY-MM') <> mes_texto then
+        return json_build_object('codigo', '-1', 'mensaje', 'Mes inválido')::text;
+    end if;
+
+    with usuarios as (
+        select distinct usuario_id from app_usuario_email
+         where lower(usuario_email_email) = lower(correo)
+           and coalesce(usuario_email_estado, 0) >= 0
+    ), visibles as (
+        select distinct e.* from app_eventos e
+         where e.evento_fecha_ini < mes + interval '1 month'
+           and coalesce(e.evento_fecha_fin, e.evento_fecha_ini) >= mes
+           and (mail_fn_es_admin(correo)
+                or e.usuario_id in (select usuario_id from usuarios)
+                or exists (select 1 from app_grupo_evento ge
+                            join broker_usuario_grupo ug on ug.grupo_id = ge.grupo_id
+                           where ge.evento_id = e.evento_id and ug.usuario_id in (select usuario_id from usuarios))
+                or exists (select 1 from app_evento_participante ep
+                            join app_contactos c on c.contacto_id = ep.contacto_id
+                           where ep.evento_id = e.evento_id and c.usuario_id in (select usuario_id from usuarios)))
+    )
+    select coalesce(json_agg(json_build_object(
+               'summary', coalesce(nullif(evento_resumen, ''), '(Sin título)'),
+               'description', coalesce(evento_descripcion, ''),
+               'date', to_char(evento_fecha_ini, 'YYYY-MM-DD'),
+               'time', to_char(evento_fecha_ini, 'HH24:MI'),
+               'statusClass', case when evento_estatus = 4 then 'is-done'
+                                   when evento_fecha_ini < current_timestamp then 'is-delayed'
+                                   when evento_fecha_ini < current_timestamp + interval '2 hours' then 'is-next'
+                                   else 'is-on-time' end
+           ) order by evento_fecha_ini), '[]'::json)
+      into resultado from visibles;
+    return json_build_object('codigo', '0', 'eventos', resultado)::text;
+exception when others then
+    return json_build_object('codigo', '-1', 'mensaje', sqlerrm)::text;
+end;
+$$;
+
 revoke all on app_eventos, app_grupo_evento, app_evento_participante from public;
-revoke all on function mail_fn_get_eventos(text) from public;
+revoke all on function mail_fn_get_eventos(text), mail_fn_get_calendario(text) from public;

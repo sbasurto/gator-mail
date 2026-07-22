@@ -81,7 +81,7 @@ public final class AccessCodeSelfCheck {
         for (String key : new String[]{"challenge", "composeView", "mailboxView", "messageView", "mailContent", "empty",
                 "hasMessages", "pending", "error", "loggedOut", "noticeVisible", "sendNotice", "mailHtml",
                 "configurationAvailable", "configurationUsersView", "configurationContactsView", "calendarView",
-                "eventsAvailable"}) model.put(key, true);
+                "dashboardView", "eventsAvailable"}) model.put(key, true);
         model.put("mailText", false);
         model.put("body", "<script>parent.alert('bad')</script>");
         model.put("contextPath", "/gator-mail");
@@ -112,6 +112,12 @@ public final class AccessCodeSelfCheck {
         model.put("mailTotal", 12);
         model.put("mailUnread", 5);
         model.put("mailRead", 7);
+        model.put("calendarMonth", "Julio 2026");
+        model.put("calendarPrevious", "mail?action=calendar&month=2026-06");
+        model.put("calendarNext", "mail?action=calendar&month=2026-08");
+        model.put("calendarDays", List.of(Map.of("number", 21, "className", "is-today",
+                "events", List.of(Map.of("summary", "Evento Uno", "description", "Descripción",
+                        "time", "10:00", "statusClass", "is-on-time")))));
         model.put("events", List.of(Map.of("summary", "Evento Uno", "description", "Descripción",
                 "place", "Oficina", "start", "21/07/2026 10:00", "end", "21/07/2026 11:00",
                 "status", "A tiempo", "statusClass", "is-on-time")));
@@ -135,7 +141,7 @@ public final class AccessCodeSelfCheck {
         try {
             String html = new GatorJsonView().renderResource("gator-mail/screens/mail.json", model);
             assert html.contains("Sesión cerrada");
-            assert html.contains("/gator-mail/css/gator-mail.css?v=25");
+            assert html.contains("/gator-mail/css/gator-mail.css?v=26");
             assert html.contains("/elib/js/sweetalert2.all.min.js");
             assert html.contains("/gator-mail/js/gator-mail.js?v=7");
             assert html.contains("fontawesome-free-5.13.0-web/css/all.min.css");
@@ -161,6 +167,8 @@ public final class AccessCodeSelfCheck {
             assert html.contains(">Calendario</span>");
             assert html.contains(">Evento Uno</strong>");
             assert html.contains(">Total de correos</small>");
+            assert html.contains(">Julio 2026</h1>");
+            assert html.contains("class=\"mail-agenda-day is-today\"");
             assert html.contains("value=\"userSave\"");
             assert html.contains("value=\"contactSave\"");
             assert html.contains("data-message-uid=\"1\"");
