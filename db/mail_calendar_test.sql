@@ -14,6 +14,22 @@ values (-10001, 'mail-calendar-visible', 'Evento visible', current_timestamp,
 do $$
 declare resultado text := mail_fn_get_eventos('mail-calendar-test@soft-gator.com');
 begin
+    resultado := mail_fn_evento_guardar(json_build_object(
+        'eventId', '7dc5dfc8-756b-4d35-b6db-dba287f46d71',
+        'organizer', 'mail-calendar-test@soft-gator.com',
+        'summary', 'Evento creado', 'description', 'Descripción', 'place', 'Sala 1',
+        'start', to_char(current_timestamp + interval '1 day', 'YYYY-MM-DD HH24:MI:SS'),
+        'end', to_char(current_timestamp + interval '1 day 1 hour', 'YYYY-MM-DD HH24:MI:SS'),
+        'timezone', 'America/Mexico_City', 'tags', 'prueba', 'link', 'https://example.com',
+        'guests', json_build_array(json_build_object(
+            'id', 'bcfbd02f-751f-4647-b0de-8fb5b764cc46', 'email', 'invitado@example.com'))
+    )::text);
+    assert resultado::jsonb ->> 'codigo' = '0', 'No se creó el evento';
+    assert exists (select 1 from app_eventos where evento_id = '7dc5dfc8-756b-4d35-b6db-dba287f46d71'),
+        'No se persistió el evento';
+    assert exists (select 1 from app_evento_participante
+        where evento_part_id = 'bcfbd02f-751f-4647-b0de-8fb5b764cc46'), 'No se persistió el invitado';
+    resultado := mail_fn_get_eventos('mail-calendar-test@soft-gator.com');
     assert position('Evento visible' in resultado) > 0, 'No se listó el evento del usuario';
     assert position('Evento ajeno' in resultado) = 0, 'Se listó un evento ajeno';
     resultado := mail_fn_get_calendario(json_build_object(

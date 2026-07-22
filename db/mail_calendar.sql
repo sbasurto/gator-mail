@@ -1,4 +1,4 @@
--- Réplica mínima y de sólo lectura del calendario de G-ERM.
+-- Calendario autónomo de Gator Mail.
 create extension if not exists "uuid-ossp";
 
 create table if not exists app_eventos (
@@ -56,6 +56,71 @@ create index if not exists app_eventos_calendar_idx
 create index if not exists app_grupo_evento_grupo_idx on app_grupo_evento(grupo_id, evento_id);
 create index if not exists app_evento_participante_evento_idx
     on app_evento_participante(evento_id, contacto_id);
+
+create sequence if not exists mail_event_rowid_seq increment by -1 minvalue -2147483648 start with -1;
+create sequence if not exists mail_event_part_rowid_seq increment by -1 minvalue -2147483648 start with -1;
+
+create or replace function mail_fn_evento_guardar(v_json text)
+returns text language plpgsql security definer set search_path = public as $$
+declare
+    v jsonb := v_json::jsonb;
+    correo text := lower(trim(v ->> 'organizer'));
+    evento_id text := v ->> 'eventId';
+    usuario text;
+    fecha_ini timestamp;
+    fecha_fin timestamp;
+    invitados jsonb := coalesce(v -> 'guests', '[]'::jsonb);
+    invitado jsonb;
+begin
+    if correo is null or length(correo) > 320 or position('@' in correo) < 2
+            or evento_id is null or evento_id !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+            or length(trim(coalesce(v ->> 'summary', ''))) not between 1 and 200 then
+        return json_build_object('codigo', '-1', 'mensaje', 'Datos del evento inválidos')::text;
+    end if;
+    begin
+        fecha_ini := (v ->> 'start')::timestamp;
+        fecha_fin := (v ->> 'end')::timestamp;
+    exception when others then
+        return json_build_object('codigo', '-1', 'mensaje', 'Fechas inválidas')::text;
+    end;
+    if fecha_fin <= fecha_ini then
+        return json_build_object('codigo', '-1', 'mensaje', 'La fecha final debe ser posterior a la inicial')::text;
+    end if;
+    select usuario_id into usuario from app_usuario_email
+     where lower(usuario_email_email) = correo and coalesce(usuario_email_estado, 0) >= 0
+     order by case when lower(usuario_id) = 'admin' then 1 else 0 end, usuario_id limit 1;
+    if usuario is null then
+        return json_build_object('codigo', '-1', 'mensaje', 'El organizador no está registrado')::text;
+    end if;
+
+    if jsonb_array_length(invitados) > 100 then
+        return json_build_object('codigo', '-1', 'mensaje', 'Máximo 100 invitados')::text;
+    end if;
+    for invitado in select value from jsonb_array_elements(invitados) loop
+        if (invitado ->> 'id') !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+                or length(trim(invitado ->> 'email')) > 320
+                or position('@' in trim(invitado ->> 'email')) < 2 then
+            return json_build_object('codigo', '-1', 'mensaje', 'Correo de invitado inválido')::text;
+        end if;
+    end loop;
+
+    insert into app_eventos(rowid, evento_id, evento_organizador, evento_resumen, evento_descripcion,
+        evento_lugar, evento_fecha_ini, evento_fecha_fin, evento_estatus, evento_tags, evento_link,
+        evento_timezone, evento_pendiente, evento_reagendado, cuenta_id, bodega_id, usuario_id)
+    values (nextval('mail_event_rowid_seq'), evento_id, correo, v ->> 'summary', v ->> 'description',
+        v ->> 'place', fecha_ini, fecha_fin, 0, v ->> 'tags', v ->> 'link', v ->> 'timezone',
+        1, 0, 1, 1, usuario);
+    for invitado in select value from jsonb_array_elements(invitados) loop
+        insert into app_evento_participante(rowid, evento_id, evento_part_nombre, evento_part_email,
+            cuenta_id, bodega_id, evento_part_id)
+        values (nextval('mail_event_part_rowid_seq'), evento_id, invitado ->> 'email', invitado ->> 'email',
+            1, 1, invitado ->> 'id');
+    end loop;
+    return json_build_object('codigo', '0', 'eventoId', evento_id)::text;
+exception when others then
+    return json_build_object('codigo', '-1', 'mensaje', sqlerrm)::text;
+end;
+$$;
 
 create or replace function mail_fn_get_eventos(v_email text)
 returns text language plpgsql stable security definer set search_path = public as $$
@@ -161,4 +226,4 @@ end;
 $$;
 
 revoke all on app_eventos, app_grupo_evento, app_evento_participante from public;
-revoke all on function mail_fn_get_eventos(text), mail_fn_get_calendario(text) from public;
+revoke all on function mail_fn_get_eventos(text), mail_fn_get_calendario(text), mail_fn_evento_guardar(text) from public;

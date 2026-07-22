@@ -20,8 +20,11 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.time.YearMonth;
 import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -78,7 +81,8 @@ public final class MailServlet extends HttpServlet {
                 challengeModel(model, session, notice);
             } else if (configuration(request, response, session, model, mailbox)) {
                 if (response.isCommitted()) return;
-            } else if (overview(request, session, model, mailbox, OAuthServlet.accessToken(request))) {
+            } else if (overview(request, response, session, model, mailbox, OAuthServlet.accessToken(request))) {
+                if (response.isCommitted()) return;
             } else if (manageFolders(request, response, session, mailbox, OAuthServlet.accessToken(request))) {
                 return;
             } else if (moveMessage(request, response, session, mailbox, OAuthServlet.accessToken(request))) {
@@ -140,6 +144,7 @@ public final class MailServlet extends HttpServlet {
         model.put("configurationUsersClass", "");
         model.put("configurationContactsClass", "");
         model.put("calendarView", false);
+        model.put("eventFormView", false);
         model.put("dashboardView", false);
         model.put("calendarClass", "");
         model.put("eventsAvailable", false);
@@ -203,13 +208,20 @@ public final class MailServlet extends HttpServlet {
         return "";
     }
 
-    private boolean overview(HttpServletRequest request, HttpSession session, Map<String, Object> model,
+    private boolean overview(HttpServletRequest request, HttpServletResponse response, HttpSession session,
+            Map<String, Object> model,
             String mailbox, String accessToken) throws Exception {
         String action = request.getParameter("action");
         boolean calendar = "calendar".equals(action);
+        boolean eventNew = "eventNew".equals(action);
+        boolean eventSave = "eventSave".equals(action);
         boolean dashboard = (action == null || action.isBlank() || "verify".equals(action))
                 && request.getParameter("folder") == null;
-        if (!calendar && !dashboard) return false;
+        if (!calendar && !dashboard && !eventNew && !eventSave) return false;
+        if (eventSave) {
+            saveEvent(request, response, session, mailbox, accessToken);
+            return true;
+        }
         List<ImapMailbox.FolderInfo> folders = imap.folders(mailbox, accessToken);
         int total = 0;
         int unread = 0;
@@ -230,9 +242,133 @@ public final class MailServlet extends HttpServlet {
         model.put("mailUnread", unread);
         model.put("mailRead", Math.max(0, total - unread));
 
-        if (calendar) calendarModel(request, model, mailbox);
+        if (eventNew) eventFormModel(model, mailbox);
+        else if (calendar) calendarModel(request, model, mailbox);
         else dashboardModel(model, mailbox);
         return true;
+    }
+
+    private void eventFormModel(Map<String, Object> model, String mailbox) {
+        LocalDateTime start = LocalDateTime.now().plusHours(1).withMinute(0).withSecond(0).withNano(0);
+        model.put("eventFormView", true);
+        model.put("eventOrganizer", mailbox);
+        model.put("eventStart", start.toString());
+        model.put("eventEnd", start.plusHours(1).toString());
+        model.put("eventTimezone", "America/Mexico_City");
+    }
+
+    private void saveEvent(HttpServletRequest request, HttpServletResponse response, HttpSession session,
+            String mailbox, String accessToken) throws Exception {
+        if (!"POST".equals(request.getMethod()) || !csrf(session).equals(request.getParameter("csrf"))) {
+            response.sendError(HttpServletResponse.SC_FORBIDDEN);
+            return;
+        }
+        EventDraft event = EventDraft.from(request, mailbox);
+        String eventId = UUID.randomUUID().toString();
+        JsonObject value = event.json(eventId);
+        JsonObject saved = checked(mailDbCall("mail_fn_evento_guardar", gson.toJson(value)));
+        eventId = saved.get("eventoId").getAsString();
+        if (!event.guests().isEmpty()) {
+            byte[] calendar = event.ics(eventId);
+            String body = "Has sido invitado al evento **" + event.summary() + "**.\n\n"
+                    + "Inicia: " + event.start().format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm"))
+                    + "\n\nSe adjunta event.ics para incorporarlo a tu calendario.";
+            String html = ImapMailbox.sanitizeHtml(MARKDOWN_HTML.render(MARKDOWN.parse(body)));
+            imap.send(mailbox, String.join(",", event.guests()), "", "", "Invitacion: " + event.summary(),
+                    body, html, List.of(new ImapMailbox.Upload("event.ics",
+                            "text/calendar; method=REQUEST; charset=UTF-8", calendar, false)), accessToken);
+        }
+        response.sendRedirect("mail?action=calendar&month=" + YearMonth.from(event.start()) + "&created=1");
+    }
+
+    private record EventDraft(String organizer, String summary, String description, String place,
+            LocalDateTime start, LocalDateTime end, ZoneId timezone, String tags, String link,
+            List<String> guests) {
+        static EventDraft from(HttpServletRequest request, String mailbox) throws Exception {
+            String summary = required(request, "summary", 200);
+            LocalDateTime start = dateTime(request.getParameter("start"));
+            LocalDateTime end = dateTime(request.getParameter("end"));
+            if (!end.isAfter(start)) throw new IllegalArgumentException("La fecha final debe ser posterior a la inicial");
+            ZoneId timezone;
+            try { timezone = ZoneId.of(text(request.getParameter("timezone"), 80)); }
+            catch (RuntimeException error) { throw new IllegalArgumentException("Zona horaria inválida"); }
+            List<String> guests = new ArrayList<>();
+            String rawGuests = text(request.getParameter("guests"), 20_000);
+            if (!rawGuests.isBlank()) {
+                for (jakarta.mail.internet.InternetAddress address
+                        : jakarta.mail.internet.InternetAddress.parse(rawGuests.replace(';', ','), true)) {
+                    String email = address.getAddress().strip().toLowerCase(Locale.ROOT);
+                    if (!guests.contains(email)) guests.add(email);
+                }
+            }
+            if (guests.size() > 100) throw new IllegalArgumentException("Máximo 100 invitados");
+            return new EventDraft(mailbox, summary, text(request.getParameter("description"), 5000),
+                    text(request.getParameter("place"), 500), start, end, timezone,
+                    text(request.getParameter("tags"), 500), text(request.getParameter("link"), 1000),
+                    List.copyOf(guests));
+        }
+
+        JsonObject json(String eventId) {
+            JsonObject value = new JsonObject();
+            value.addProperty("eventId", eventId);
+            value.addProperty("organizer", organizer);
+            value.addProperty("summary", summary);
+            value.addProperty("description", description);
+            value.addProperty("place", place);
+            value.addProperty("start", start.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")));
+            value.addProperty("end", end.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")));
+            value.addProperty("timezone", timezone.getId());
+            value.addProperty("tags", tags);
+            value.addProperty("link", link);
+            com.google.gson.JsonArray invitees = new com.google.gson.JsonArray();
+            for (String guest : guests) {
+                JsonObject invitee = new JsonObject();
+                invitee.addProperty("id", UUID.randomUUID().toString());
+                invitee.addProperty("email", guest);
+                invitees.add(invitee);
+            }
+            value.add("guests", invitees);
+            return value;
+        }
+
+        byte[] ics(String id) {
+            DateTimeFormatter utc = DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss'Z'");
+            StringBuilder value = new StringBuilder("BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//SoftGator//Gator Mail//ES\r\nCALSCALE:GREGORIAN\r\nMETHOD:REQUEST\r\nBEGIN:VEVENT\r\n");
+            value.append("UID:").append(escapeIcs(id + "@soft-gator.com")).append("\r\n")
+                    .append("DTSTAMP:").append(OffsetDateTime.now(ZoneOffset.UTC).format(utc)).append("\r\n")
+                    .append("DTSTART:").append(start.atZone(timezone).withZoneSameInstant(ZoneOffset.UTC).format(utc)).append("\r\n")
+                    .append("DTEND:").append(end.atZone(timezone).withZoneSameInstant(ZoneOffset.UTC).format(utc)).append("\r\n")
+                    .append("ORGANIZER:mailto:").append(escapeIcs(organizer)).append("\r\n");
+            for (String guest : guests) value.append("ATTENDEE;RSVP=TRUE:mailto:").append(escapeIcs(guest)).append("\r\n");
+            value.append("SUMMARY:").append(escapeIcs(summary)).append("\r\n")
+                    .append("DESCRIPTION:").append(escapeIcs(description)).append("\r\n")
+                    .append("LOCATION:").append(escapeIcs(place)).append("\r\n")
+                    .append("URL:").append(escapeIcs(link)).append("\r\n")
+                    .append("STATUS:CONFIRMED\r\nSEQUENCE:0\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n");
+            return value.toString().getBytes(StandardCharsets.UTF_8);
+        }
+
+        private static String escapeIcs(String value) {
+            return value.replace("\\", "\\\\").replace(";", "\\;").replace(",", "\\,")
+                    .replace("\r\n", "\\n").replace("\n", "\\n").replace("\r", "\\n");
+        }
+
+        private static LocalDateTime dateTime(String value) {
+            try { return LocalDateTime.parse(value); }
+            catch (RuntimeException error) { throw new IllegalArgumentException("Fecha de evento inválida"); }
+        }
+
+        private static String required(HttpServletRequest request, String name, int max) {
+            String value = text(request.getParameter(name), max);
+            if (value.isBlank()) throw new IllegalArgumentException("El resumen es obligatorio");
+            return value;
+        }
+
+        private static String text(String value, int max) {
+            String result = value == null ? "" : value.strip();
+            if (result.length() > max) throw new IllegalArgumentException("Un campo excede la longitud permitida");
+            return result;
+        }
     }
 
     private void dashboardModel(Map<String, Object> model, String mailbox) {
@@ -287,6 +423,7 @@ public final class MailServlet extends HttpServlet {
         model.put("calendarPrevious", "mail?action=calendar&month=" + month.minusMonths(1));
         model.put("calendarNext", "mail?action=calendar&month=" + month.plusMonths(1));
         model.put("calendarDays", days);
+        model.put("eventCreated", "1".equals(request.getParameter("created")));
     }
 
     private void challengeModel(Map<String, Object> model, HttpSession session, String notice) {

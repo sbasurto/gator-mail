@@ -1,4 +1,4 @@
--- Directorio de contactos autónomo y compatible por columnas con Gator E.
+-- Directorio de contactos autónomo de Gator Mail.
 -- Se omiten únicamente llaves foráneas hacia tablas ajenas al módulo de correo.
 create extension if not exists "uuid-ossp";
 

@@ -90,6 +90,15 @@ body { min-height: 100vh; margin: 0; color: var(--gator-ink); background: var(--
 .mail-agenda-event.is-delayed { background: #fdebec; color: #9d2832; }
 .mail-agenda-event.is-next { background: #fff5dc; color: #886314; }
 .mail-agenda-event.is-done { background: #edf0f2; color: var(--gator-muted); }
+.mail-event-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; padding: 1.25rem; }
+.mail-event-field { display: grid; gap: .35rem; margin: 0; }
+.mail-event-field > small { color: var(--gator-muted); font-size: .72rem; font-weight: 750; }
+.mail-event-field > span { color: var(--gator-muted); font-size: .72rem; }
+.mail-event-organizer { padding: .55rem .75rem; border: 1px solid var(--gator-line); border-radius: 8px; background: #f7fafb; font-size: .9rem; }
+.mail-event-field textarea { resize: vertical; }
+.mail-event-wide { grid-column: 1 / -1; }
+.mail-event-actions { display: flex; justify-content: flex-end; gap: .6rem; padding-top: .25rem; }
+.mail-event-actions .btn { display: inline-flex; align-items: center; gap: .45rem; }
 
 .mail-content { flex: 1 1 auto; min-width: 0; padding: 1rem 1rem 6rem; }
 .mail-panel { overflow: hidden; width: 100%; border: 1px solid #e2e8ec; border-radius: 14px; background: var(--gator-surface); box-shadow: 0 10px 30px #173c540c; }
@@ -231,4 +240,6 @@ body { min-height: 100vh; margin: 0; color: var(--gator-ink); background: var(--
     .mail-admin-new { margin: .75rem; }
     .mail-dashboard-grid { grid-template-columns: 1fr; }
     .mail-stats { grid-template-columns: 1fr; }
+    .mail-event-form { grid-template-columns: 1fr; padding: 1rem; }
+    .mail-event-wide { grid-column: auto; }
 }

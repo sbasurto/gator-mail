@@ -13,7 +13,7 @@
           { "tag": "link", "attrs": { "rel": "stylesheet", "href": "/elib/css2/bootstrap-5.3.0/bootstrap.min.css" } },
           { "tag": "link", "attrs": { "rel": "stylesheet", "href": "/elib/css2/fontawesome-free-5.13.0-web/css/all.min.css" } },
           { "tag": "link", "attrs": { "rel": "stylesheet", "href": "/elib/css/colors.css" } },
-          { "tag": "link", "attrs": { "rel": "stylesheet", "href": "${contextPath}/css/gator-mail.css?v=26" } },
+          { "tag": "link", "attrs": { "rel": "stylesheet", "href": "${contextPath}/css/gator-mail.css?v=27" } },
           { "tag": "script", "attrs": { "src": "/elib/js/sweetalert2.all.min.js", "defer": "true" } },
           { "tag": "script", "attrs": { "src": "${contextPath}/js/gator-mail.js?v=7", "defer": "true" } }
         ]
@@ -201,10 +201,16 @@
                           { "tag": "small", "attrs": { "class": "mail-eyebrow" }, "text": "Agenda" },
                           { "tag": "h1", "attrs": { "class": "mail-panel-title" }, "text": "${calendarMonth}" }
                         ] },
-                        { "tag": "a", "attrs": { "class": "btn btn-outline-secondary btn-sm", "href": "${calendarNext}", "aria-label": "Mes siguiente" }, "children": [
-                          { "tag": "span", "attrs": { "class": "fas fa-chevron-right", "aria-hidden": "true" } }
+                        { "tag": "div", "attrs": { "class": "mail-header-actions" }, "children": [
+                          { "tag": "a", "attrs": { "class": "btn btn-primary btn-sm", "href": "${contextPath}/mail?action=eventNew" }, "children": [
+                            { "tag": "span", "attrs": { "class": "fas fa-plus", "aria-hidden": "true" } }, { "tag": "span", "text": "Agregar evento" }
+                          ] },
+                          { "tag": "a", "attrs": { "class": "btn btn-outline-secondary btn-sm", "href": "${calendarNext}", "aria-label": "Mes siguiente" }, "children": [
+                            { "tag": "span", "attrs": { "class": "fas fa-chevron-right", "aria-hidden": "true" } }
+                          ] }
                         ] }
                       ] },
+                      { "tag": "span", "if": "eventCreated", "attrs": { "class": "d-none mail-swal mail-swal-success", "title": "Evento creado" }, "text": "El evento se guardó y las invitaciones fueron enviadas." },
                       { "tag": "div", "attrs": { "class": "mail-agenda-scroll" }, "children": [
                         { "tag": "div", "attrs": { "class": "mail-agenda-weekdays" }, "children": [
                           { "tag": "strong", "text": "Dom" }, { "tag": "strong", "text": "Lun" },
@@ -216,6 +222,71 @@
                           { "tag": "div", "each": "calendarDays", "as": "day", "attrs": { "class": "mail-agenda-day ${day.className}" }, "children": [
                             { "tag": "strong", "attrs": { "class": "mail-agenda-number" }, "text": "${day.number}" },
                             { "tag": "div", "each": "day.events", "as": "event", "attrs": { "class": "mail-agenda-event ${event.statusClass}", "title": "${event.description}" }, "text": "${event.time} ${event.summary}" }
+                          ] }
+                        ] }
+                      ] }
+                    ]
+                  },
+                  {
+                    "tag": "section",
+                    "if": "eventFormView",
+                    "attrs": { "class": "card mail-panel" },
+                    "children": [
+                      { "tag": "header", "attrs": { "class": "card-header mail-panel-header" }, "children": [
+                        { "tag": "div", "children": [
+                          { "tag": "small", "attrs": { "class": "mail-eyebrow" }, "text": "Calendario" },
+                          { "tag": "h1", "attrs": { "class": "mail-panel-title" }, "text": "Agregar evento" }
+                        ] },
+                        { "tag": "a", "attrs": { "class": "btn btn-outline-secondary btn-sm", "href": "${contextPath}/mail?action=calendar" }, "text": "Cancelar" }
+                      ] },
+                      { "tag": "form", "attrs": { "class": "mail-event-form", "method": "post" }, "children": [
+                        { "tag": "input", "attrs": { "type": "hidden", "name": "action", "value": "eventSave" } },
+                        { "tag": "input", "attrs": { "type": "hidden", "name": "csrf", "value": "${csrf}" } },
+                        { "tag": "label", "attrs": { "class": "mail-event-field mail-event-wide" }, "children": [
+                          { "tag": "small", "text": "Organiza" },
+                          { "tag": "strong", "attrs": { "class": "mail-event-organizer" }, "text": "${eventOrganizer}" }
+                        ] },
+                        { "tag": "label", "attrs": { "class": "mail-event-field mail-event-wide" }, "children": [
+                          { "tag": "small", "text": "Resumen" },
+                          { "tag": "input", "attrs": { "class": "form-control", "name": "summary", "maxlength": "200", "required": "true", "autofocus": "true", "placeholder": "Título del evento" } }
+                        ] },
+                        { "tag": "label", "attrs": { "class": "mail-event-field" }, "children": [
+                          { "tag": "small", "text": "Fecha inicial" },
+                          { "tag": "input", "attrs": { "class": "form-control", "name": "start", "type": "datetime-local", "value": "${eventStart}", "required": "true" } }
+                        ] },
+                        { "tag": "label", "attrs": { "class": "mail-event-field" }, "children": [
+                          { "tag": "small", "text": "Fecha final" },
+                          { "tag": "input", "attrs": { "class": "form-control", "name": "end", "type": "datetime-local", "value": "${eventEnd}", "required": "true" } }
+                        ] },
+                        { "tag": "label", "attrs": { "class": "mail-event-field" }, "children": [
+                          { "tag": "small", "text": "Lugar" },
+                          { "tag": "input", "attrs": { "class": "form-control", "name": "place", "maxlength": "500", "placeholder": "Sala o dirección" } }
+                        ] },
+                        { "tag": "label", "attrs": { "class": "mail-event-field" }, "children": [
+                          { "tag": "small", "text": "Zona horaria" },
+                          { "tag": "input", "attrs": { "class": "form-control", "name": "timezone", "value": "${eventTimezone}", "maxlength": "80", "required": "true" } }
+                        ] },
+                        { "tag": "label", "attrs": { "class": "mail-event-field mail-event-wide" }, "children": [
+                          { "tag": "small", "text": "Descripción" },
+                          { "tag": "textarea", "attrs": { "class": "form-control", "name": "description", "rows": "5", "maxlength": "5000" } }
+                        ] },
+                        { "tag": "label", "attrs": { "class": "mail-event-field mail-event-wide" }, "children": [
+                          { "tag": "small", "text": "Invitados" },
+                          { "tag": "textarea", "attrs": { "class": "form-control", "name": "guests", "rows": "3", "maxlength": "20000", "placeholder": "persona@dominio.com, otra@dominio.com" } },
+                          { "tag": "span", "text": "Se enviará una invitación por correo con event.ics." }
+                        ] },
+                        { "tag": "label", "attrs": { "class": "mail-event-field" }, "children": [
+                          { "tag": "small", "text": "Etiquetas" },
+                          { "tag": "input", "attrs": { "class": "form-control", "name": "tags", "maxlength": "500", "placeholder": "reunión, seguimiento" } }
+                        ] },
+                        { "tag": "label", "attrs": { "class": "mail-event-field" }, "children": [
+                          { "tag": "small", "text": "Enlace" },
+                          { "tag": "input", "attrs": { "class": "form-control", "name": "link", "type": "url", "maxlength": "1000", "placeholder": "https://" } }
+                        ] },
+                        { "tag": "div", "attrs": { "class": "mail-event-actions mail-event-wide" }, "children": [
+                          { "tag": "a", "attrs": { "class": "btn btn-outline-secondary", "href": "${contextPath}/mail?action=calendar" }, "text": "Cancelar" },
+                          { "tag": "button", "attrs": { "class": "btn btn-primary", "type": "submit" }, "children": [
+                            { "tag": "span", "attrs": { "class": "fas fa-paper-plane", "aria-hidden": "true" } }, { "tag": "span", "text": "Guardar y enviar invitaciones" }
                           ] }
                         ] }
                       ] }

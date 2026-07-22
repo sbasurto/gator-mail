@@ -133,7 +133,7 @@ begin
     for target in
         select db_id, db_hostaddr, db_port, db_sid, db_user, db_passwd
           from public.broker_db
-         where db_kind = 'pgsql' and db_type = 'DAT' and db_use in ('erm', 'store', 'wms')
+         where db_kind = 'pgsql' and db_type = 'DAT' and db_use in ('store', 'wms')
          order by db_id
     loop
         configured := configured + 1;

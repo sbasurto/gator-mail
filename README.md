@@ -47,19 +47,14 @@ El tema claro de entrada y salida se encuentra en `keycloak-theme/gator-mail`.
 
 Las carpetas IMAP se guardan en la tabla jerárquica `mail_carpetas`; el script
 idempotente para crearla está en `db/mail_carpetas.sql`.
-El directorio autónomo y compatible con Gator E se instala con
-`db/mail_contacts.sql`; no requiere tablas externas ni copia hashes de usuario.
+El directorio autónomo se instala con `db/mail_contacts.sql`; no requiere
+tablas externas ni copia hashes de usuario.
 La administración de usuarios y contactos se instala con `db/mail_admin.sql`;
 las cuentas asociadas a `sbasurto@soft-gator.com` y la cuenta local `admin`
 quedan autorizadas inicialmente y pueden ampliarse desde la tabla
 `mail_administradores`.
-El calendario autónomo se instala con `db/mail_calendar.sql`; replica sólo
-eventos, grupos y participantes. `db/sync_events_from_gator.sql` registra los
-cambios de G-ERM —incluidos los hechos por `app_fn_admon_tablas_all`— y los
-envía a `db_gatormail` sin bloquear la operación de origen.
-En instalaciones Gator, `db/sync_contacts_from_gator.sql` registra la base en
-`broker_db` y replica altas, cambios y bajas hacia Gator Mail. Un fallo del
-destino no bloquea Gator E: queda registrado en `mail_contact_sync_queue`.
+El calendario autónomo se instala con `db/mail_calendar.sql` y administra sus
+eventos, grupos y participantes directamente en `db_gatormail`.
 
 ## Compilar y probar
 
@@ -74,7 +69,7 @@ El artefacto queda en `dist/gator-mail.war`.
 ## Despliegue Gator
 
 El contexto esperado es `/gator-mail`. La aplicación requiere acceso a la
-configuración de base `indexMasterErm`, una entrada `broker_db` con
+configuración de base `pg_mail_master`, una entrada `broker_db` con
 `db_use = 'mail'` y la asignación de esa aplicación a los grupos autorizados.
 La función de desafío debe aceptar `smsOnly = true` y devolver únicamente el
 hash de la clave temporal. También acepta `application` y `userHint` opcionales
