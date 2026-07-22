@@ -69,7 +69,7 @@ El artefacto queda en `dist/gator-mail.war`.
 ## Despliegue Gator
 
 El contexto esperado es `/gator-mail`. La aplicación requiere acceso a la
-configuración de base `pg_mail_master`, una entrada `broker_db` con
+configuración de identidad `pg_mail_identity`, una entrada `broker_db` con
 `db_use = 'mail'` y la asignación de esa aplicación a los grupos autorizados.
 La función de desafío debe aceptar `smsOnly = true` y devolver únicamente el
 hash de la clave temporal. También acepta `application` y `userHint` opcionales
