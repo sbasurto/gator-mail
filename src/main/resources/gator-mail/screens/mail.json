@@ -505,8 +505,8 @@
                             { "tag": "input", "attrs": { "id": "mail-compose-attachments", "name": "attachments", "type": "file", "multiple": "true" } }
                           ] },
                           { "tag": "label", "attrs": { "class": "mail-file-field", "for": "mail-compose-images" }, "children": [
-                            { "tag": "span", "attrs": { "class": "fas fa-image", "aria-hidden": "true" } }, { "tag": "span", "text": "Incluir imágenes" },
-                            { "tag": "input", "attrs": { "id": "mail-compose-images", "name": "images", "type": "file", "accept": "image/png,image/jpeg,image/gif", "multiple": "true" } }
+                            { "tag": "span", "attrs": { "class": "fas fa-image", "aria-hidden": "true" } }, { "tag": "span", "text": "Incluir imágenes o archivos" },
+                            { "tag": "input", "attrs": { "id": "mail-compose-images", "name": "images", "type": "file", "multiple": "true" } }
                           ] }
                         ] },
                         { "tag": "div", "attrs": { "class": "mail-compose-footer" }, "children": [

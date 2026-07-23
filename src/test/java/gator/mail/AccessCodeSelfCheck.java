@@ -42,6 +42,10 @@ public final class AccessCodeSelfCheck {
         assert ImapMailbox.safeImage("image/png", Base64.getDecoder().decode(
                 "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="));
         assert !ImapMailbox.safeImage("image/svg+xml", "<svg/>".getBytes());
+        ImapMailbox.Upload arbitraryFile = MailServlet.upload("documento.pdf", "application/pdf",
+                "%PDF".getBytes(), true);
+        assert !arbitraryFile.inline();
+        assert "application/octet-stream".equals(arbitraryFile.type());
         String logout = OAuthServlet.endSession("id token");
         assert logout.contains("id_token_hint=id+token");
         assert !logout.contains("post_logout_redirect_uri");

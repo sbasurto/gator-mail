@@ -736,13 +736,15 @@ public final class MailServlet extends HttpServlet {
                     .replaceAll("[\\p{Cntrl}]", "").strip();
             if (name.isEmpty() || name.length() > 180) throw new IllegalArgumentException("Nombre de archivo inválido");
             byte[] data = part.getInputStream().readNBytes(25 * 1024 * 1024 + 1);
-            String type = inline ? part.getContentType().split(";", 2)[0].toLowerCase(java.util.Locale.ROOT)
-                    : "application/octet-stream";
-            if (inline && !ImapMailbox.safeImage(type, data))
-                throw new IllegalArgumentException("Solo se permiten imágenes PNG, JPEG o GIF válidas");
-            result.add(new ImapMailbox.Upload(name, type, data, inline));
+            result.add(upload(name, part.getContentType(), data, inline));
         }
         return result;
+    }
+
+    static ImapMailbox.Upload upload(String name, String contentType, byte[] data, boolean requestedInline) {
+        String type = contentType == null ? "" : contentType.split(";", 2)[0].toLowerCase(Locale.ROOT);
+        boolean inline = requestedInline && ImapMailbox.safeImage(type, data);
+        return new ImapMailbox.Upload(name, inline ? type : "application/octet-stream", data, inline);
     }
 
     static String htmlDocument(String contextPath, String body) {
