@@ -364,7 +364,7 @@
                       ] },
                       { "tag": "div", "attrs": { "class": "mail-admin-list" }, "children": [
                         { "tag": "span", "if": "passwordReset", "attrs": { "class": "d-none mail-swal mail-swal-success", "title": "Contraseña restablecida" }, "text": "Contraseña temporal: ${temporaryPassword}. El usuario deberá cambiarla al ingresar." },
-                        { "tag": "form", "each": "configurationUsers", "as": "user", "attrs": { "class": "mail-admin-row mail-admin-user", "method": "post" }, "children": [
+                        { "tag": "form", "each": "configurationUsers", "as": "user", "attrs": { "class": "mail-admin-row mail-admin-user", "method": "post", "action": "${contextPath}/mail" }, "children": [
                           { "tag": "input", "attrs": { "type": "hidden", "name": "csrf", "value": "${csrf}" } },
                           { "tag": "input", "attrs": { "type": "hidden", "name": "user", "value": "${user.id}" } },
                           { "tag": "input", "attrs": { "type": "hidden", "name": "enabled", "value": "${user.enabled}" } },

@@ -201,6 +201,7 @@ public final class AccessCodeSelfCheck {
             assert html.contains("class=\"mail-agenda-day is-today\"");
             assert html.contains("value=\"userSave\"");
             assert html.contains("value=\"userReset\"");
+            assert html.contains("class=\"mail-admin-row mail-admin-user\" method=\"post\" action=\"/gator-mail/mail\"");
             assert html.contains("Contraseña temporal: Abcd_1234-Efgh_5678-Ijkl");
             assert html.contains("value=\"contactSave\"");
             assert html.contains("data-message-uid=\"1\"");
