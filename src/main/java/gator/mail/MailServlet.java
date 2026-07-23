@@ -171,6 +171,8 @@ public final class MailServlet extends HttpServlet {
         model.put("eventsAvailable", false);
         model.put("eventsEmpty", false);
         model.put("mailOpen", true);
+        model.put("mailFoldersMenu", true);
+        model.put("mailNavigationOnly", false);
         model.put("query", "");
         model.put("emptyText", "No hay mensajes en esta carpeta.");
         model.put("empty", false);
@@ -871,6 +873,8 @@ public final class MailServlet extends HttpServlet {
         model.put("contentClass", "mail-content");
         model.put("folderGroups", List.of());
         model.put("mailOpen", false);
+        model.put("mailFoldersMenu", false);
+        model.put("mailNavigationOnly", true);
         model.put("csrf", csrf(session));
         model.put("configurationOpen", true);
         model.put("configurationUsersView", "users".equals(section));

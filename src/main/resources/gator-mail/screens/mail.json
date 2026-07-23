@@ -66,7 +66,13 @@
                 "children": [
                   { "tag": "p", "attrs": { "class": "mail-sidebar-kicker" }, "text": "Tu correo" },
                   { "tag": "h2", "attrs": { "class": "mail-sidebar-title", "data-drop-root": "true" }, "text": "Carpetas" },
-                  { "tag": "details", "attrs": { "class": "mail-folder-group", "open": "${mailOpen}" }, "children": [
+                  { "tag": "a", "if": "mailNavigationOnly", "attrs": { "class": "mail-folder mail-folder-parent", "href": "${contextPath}/mail" }, "children": [
+                    { "tag": "strong", "children": [
+                      { "tag": "span", "attrs": { "class": "mail-folder-icon fas fa-envelope", "aria-hidden": "true" } },
+                      { "tag": "span", "text": "Correo" }
+                    ] }
+                  ] },
+                  { "tag": "details", "if": "mailFoldersMenu", "attrs": { "class": "mail-folder-group", "open": "${mailOpen}" }, "children": [
                     { "tag": "summary", "attrs": { "class": "mail-folder mail-folder-parent" }, "children": [
                       { "tag": "strong", "children": [
                         { "tag": "span", "attrs": { "class": "mail-folder-icon fas fa-envelope", "aria-hidden": "true" } },
