@@ -81,7 +81,7 @@
                     ] },
                     { "tag": "div", "each": "folderGroups", "as": "group", "children": [
                     { "tag": "details", "if": "group.hasChildren", "attrs": { "class": "mail-folder-group", "open": "${group.open}" }, "children": [
-                      { "tag": "summary", "attrs": { "class": "mail-folder mail-folder-parent", "draggable": "${group.draggable}", "data-folder": "${group.folder}", "data-csrf": "${csrf}" }, "children": [
+                      { "tag": "summary", "attrs": { "class": "mail-folder mail-folder-parent mail-folder-child", "draggable": "${group.draggable}", "data-folder": "${group.folder}", "data-csrf": "${csrf}" }, "children": [
                         { "tag": "strong", "children": [
                           { "tag": "span", "attrs": { "class": "mail-folder-icon ${group.icon}", "aria-hidden": "true" } },
                           { "tag": "span", "text": "${group.label}" }
@@ -96,7 +96,7 @@
                         { "tag": "small", "text": "${folder.count}" }
                       ] }
                     ] },
-                    { "tag": "a", "if": "group.leaf", "attrs": { "class": "mail-folder ${group.className}", "href": "${group.href}", "draggable": "${group.draggable}", "data-folder": "${group.folder}", "data-csrf": "${csrf}" }, "children": [
+                    { "tag": "a", "if": "group.leaf", "attrs": { "class": "mail-folder mail-folder-child ${group.className}", "href": "${group.href}", "draggable": "${group.draggable}", "data-folder": "${group.folder}", "data-csrf": "${csrf}" }, "children": [
                       { "tag": "strong", "children": [
                         { "tag": "span", "attrs": { "class": "mail-folder-icon ${group.icon}", "aria-hidden": "true" } },
                         { "tag": "span", "text": "${group.label}" }

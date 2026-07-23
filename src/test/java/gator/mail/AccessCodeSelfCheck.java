@@ -120,7 +120,7 @@ public final class AccessCodeSelfCheck {
         model.put("contacts", List.of(Map.of("name", "Contacto Uno", "email", "uno@example.com")));
         model.put("configurationOpen", true);
         model.put("mailOpen", true);
-        model.put("mailFoldersMenu", false);
+        model.put("mailFoldersMenu", true);
         model.put("mailNavigationOnly", true);
         model.put("configurationUsersClass", "active");
         model.put("configurationContactsClass", "");
@@ -194,6 +194,7 @@ public final class AccessCodeSelfCheck {
             assert html.contains(">Configuración</span>");
             assert html.contains(">Correo</span>");
             assert html.contains("class=\"mail-folder mail-folder-parent\" href=\"/gator-mail/mail\"");
+            assert html.contains("class=\"mail-folder mail-folder-child active\"");
             assert html.contains(">Calendario</span>");
             assert html.contains(">Evento Uno</strong>");
             assert html.contains(">Total de correos</small>");
