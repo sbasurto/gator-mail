@@ -154,3 +154,4 @@ end;
 $$;
 
 revoke all on function mail_fn_get_contactos(text) from public;
+grant execute on function mail_fn_get_contactos(text) to w3apps;

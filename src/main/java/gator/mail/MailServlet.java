@@ -160,6 +160,7 @@ public final class MailServlet extends HttpServlet {
         model.put("composeTitle", "Nuevo mensaje");
         model.put("composeCancelHref", request.getContextPath() + "/mail");
         model.put("contactsAvailable", false);
+        model.put("contactsEmpty", true);
         model.put("configurationAvailable", false);
         model.put("configurationUsersView", false);
         model.put("configurationContactsView", false);
@@ -814,6 +815,7 @@ public final class MailServlet extends HttpServlet {
             }
             model.put("contacts", contacts);
             model.put("contactsAvailable", !contacts.isEmpty());
+            model.put("contactsEmpty", contacts.isEmpty());
         } catch (Exception error) {
             getServletContext().log("No fue posible cargar el directorio de contactos", error);
         } finally {

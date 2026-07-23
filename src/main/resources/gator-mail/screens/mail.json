@@ -402,7 +402,7 @@
                         ] },
                         { "tag": "a", "attrs": { "class": "btn btn-outline-secondary btn-sm", "href": "${contextPath}/mail" }, "text": "Volver al correo" }
                       ] },
-                      { "tag": "form", "attrs": { "class": "mail-admin-row mail-admin-contact mail-admin-new", "method": "post" }, "children": [
+                      { "tag": "form", "attrs": { "class": "mail-admin-row mail-admin-contact mail-admin-new", "method": "post", "action": "${contextPath}/mail" }, "children": [
                         { "tag": "input", "attrs": { "type": "hidden", "name": "csrf", "value": "${csrf}" } },
                         { "tag": "input", "attrs": { "type": "hidden", "name": "id", "value": "" } },
                         { "tag": "label", "children": [{ "tag": "small", "text": "Nombre" }, { "tag": "input", "attrs": { "class": "form-control", "name": "name", "maxlength": "200", "required": "true" } }] },
@@ -412,7 +412,7 @@
                         { "tag": "button", "attrs": { "class": "btn btn-primary btn-sm", "type": "submit", "name": "action", "value": "contactSave" }, "text": "Agregar contacto" }
                       ] },
                       { "tag": "div", "attrs": { "class": "mail-admin-list" }, "children": [
-                        { "tag": "form", "each": "configurationContacts", "as": "contact", "attrs": { "class": "mail-admin-row mail-admin-contact", "method": "post" }, "children": [
+                        { "tag": "form", "each": "configurationContacts", "as": "contact", "attrs": { "class": "mail-admin-row mail-admin-contact", "method": "post", "action": "${contextPath}/mail" }, "children": [
                           { "tag": "input", "attrs": { "type": "hidden", "name": "csrf", "value": "${csrf}" } },
                           { "tag": "input", "attrs": { "type": "hidden", "name": "id", "value": "${contact.id}" } },
                           { "tag": "label", "children": [{ "tag": "small", "text": "Nombre" }, { "tag": "input", "attrs": { "class": "form-control", "name": "name", "value": "${contact.name}", "maxlength": "200", "required": "true" } }] },
@@ -439,13 +439,13 @@
                         ] },
                         { "tag": "a", "attrs": { "class": "btn btn-outline-secondary btn-sm", "href": "${composeCancelHref}" }, "text": "Cancelar" }
                       ] },
-                      { "tag": "form", "attrs": { "class": "mail-compose-form", "method": "post", "enctype": "multipart/form-data" }, "children": [
+                      { "tag": "form", "attrs": { "class": "mail-compose-form", "method": "post", "action": "${contextPath}/mail", "enctype": "multipart/form-data" }, "children": [
                         { "tag": "input", "attrs": { "type": "hidden", "name": "csrf", "value": "${csrf}" } },
                         { "tag": "div", "attrs": { "class": "mail-recipient-field" }, "children": [
                           { "tag": "label", "attrs": { "class": "form-label", "for": "mail-compose-to" }, "text": "Para" },
                           { "tag": "div", "attrs": { "class": "mail-recipient-control" }, "children": [
                             { "tag": "input", "attrs": { "class": "form-control", "id": "mail-compose-to", "name": "to", "type": "text", "value": "${composeTo}", "placeholder": "destinatario@dominio.com", "required": "true", "autocomplete": "off" } },
-                            { "tag": "button", "if": "contactsAvailable", "attrs": { "class": "btn btn-outline-secondary mail-contact-open", "type": "button", "data-contact-target": "mail-compose-to", "aria-controls": "mail-contact-picker", "aria-expanded": "false", "title": "Seleccionar contactos para Para" }, "children": [
+                            { "tag": "button", "attrs": { "class": "btn btn-outline-secondary mail-contact-open", "type": "button", "data-contact-target": "mail-compose-to", "aria-controls": "mail-contact-picker", "aria-expanded": "false", "title": "Seleccionar contactos para Para" }, "children": [
                               { "tag": "span", "attrs": { "class": "fas fa-address-book", "aria-hidden": "true" } },
                               { "tag": "span", "text": "Contactos" }
                             ] }
@@ -455,7 +455,7 @@
                           { "tag": "label", "attrs": { "class": "form-label", "for": "mail-compose-cc" }, "text": "CC" },
                           { "tag": "div", "attrs": { "class": "mail-recipient-control" }, "children": [
                             { "tag": "input", "attrs": { "class": "form-control", "id": "mail-compose-cc", "name": "cc", "type": "text", "value": "${composeCc}", "placeholder": "Con copia", "autocomplete": "off" } },
-                            { "tag": "button", "if": "contactsAvailable", "attrs": { "class": "btn btn-outline-secondary mail-contact-open", "type": "button", "data-contact-target": "mail-compose-cc", "aria-controls": "mail-contact-picker", "aria-expanded": "false", "title": "Seleccionar contactos para CC" }, "children": [
+                            { "tag": "button", "attrs": { "class": "btn btn-outline-secondary mail-contact-open", "type": "button", "data-contact-target": "mail-compose-cc", "aria-controls": "mail-contact-picker", "aria-expanded": "false", "title": "Seleccionar contactos para CC" }, "children": [
                               { "tag": "span", "attrs": { "class": "fas fa-address-book", "aria-hidden": "true" } },
                               { "tag": "span", "text": "Contactos" }
                             ] }
@@ -465,18 +465,19 @@
                           { "tag": "label", "attrs": { "class": "form-label", "for": "mail-compose-bcc" }, "text": "CCO" },
                           { "tag": "div", "attrs": { "class": "mail-recipient-control" }, "children": [
                             { "tag": "input", "attrs": { "class": "form-control", "id": "mail-compose-bcc", "name": "bcc", "type": "text", "value": "${composeBcc}", "placeholder": "Con copia oculta", "autocomplete": "off" } },
-                            { "tag": "button", "if": "contactsAvailable", "attrs": { "class": "btn btn-outline-secondary mail-contact-open", "type": "button", "data-contact-target": "mail-compose-bcc", "aria-controls": "mail-contact-picker", "aria-expanded": "false", "title": "Seleccionar contactos para CCO" }, "children": [
+                            { "tag": "button", "attrs": { "class": "btn btn-outline-secondary mail-contact-open", "type": "button", "data-contact-target": "mail-compose-bcc", "aria-controls": "mail-contact-picker", "aria-expanded": "false", "title": "Seleccionar contactos para CCO" }, "children": [
                               { "tag": "span", "attrs": { "class": "fas fa-address-book", "aria-hidden": "true" } },
                               { "tag": "span", "text": "Contactos" }
                             ] }
                           ] }
                         ] },
-                        { "tag": "section", "if": "contactsAvailable", "attrs": { "class": "mail-contact-picker", "id": "mail-contact-picker", "aria-label": "Directorio de contactos" }, "children": [
+                        { "tag": "section", "attrs": { "class": "mail-contact-picker", "id": "mail-contact-picker", "aria-label": "Directorio de contactos" }, "children": [
                           { "tag": "header", "attrs": { "class": "mail-contact-picker-header" }, "children": [
                             { "tag": "strong", "text": "Contactos" },
                             { "tag": "input", "attrs": { "class": "form-control form-control-sm", "id": "mail-contact-search", "type": "search", "placeholder": "Buscar contacto", "aria-label": "Buscar contacto" } },
                             { "tag": "button", "attrs": { "class": "btn btn-sm btn-light", "id": "mail-contact-close", "type": "button", "title": "Cerrar contactos" }, "children": [{ "tag": "span", "attrs": { "class": "fas fa-times", "aria-hidden": "true" } }] }
                           ] },
+                          { "tag": "p", "if": "contactsEmpty", "attrs": { "class": "mail-empty text-muted" }, "text": "No hay contactos disponibles. Agrégalos en Configuración > Contactos." },
                           { "tag": "div", "attrs": { "class": "mail-contact-list" }, "children": [
                             { "tag": "button", "each": "contacts", "as": "contact", "attrs": { "class": "mail-contact-item", "type": "button", "data-contact-email": "${contact.email}" }, "children": [
                               { "tag": "strong", "text": "${contact.name}" },

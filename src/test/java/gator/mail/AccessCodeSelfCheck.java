@@ -122,6 +122,7 @@ public final class AccessCodeSelfCheck {
         model.put("composeTitle", "Responder");
         model.put("composeCancelHref", "mail?folder=INBOX&uid=1");
         model.put("contactsAvailable", true);
+        model.put("contactsEmpty", true);
         model.put("contacts", List.of(Map.of("name", "Contacto Uno", "email", "uno@example.com")));
         model.put("configurationOpen", true);
         model.put("mailOpen", true);
@@ -182,6 +183,7 @@ public final class AccessCodeSelfCheck {
             assert html.contains("sandbox=\"\"");
             assert html.contains("srcdoc=\"&lt;script&gt;parent.alert(&#39;bad&#39;)&lt;/script&gt;\"");
             assert html.contains("mail-compose-body");
+            assert html.contains("class=\"mail-compose-form\" method=\"post\" action=\"/gator-mail/mail\"");
             assert html.contains("enctype=\"multipart/form-data\"");
             assert html.contains("name=\"attachments\"");
             assert html.contains("name=\"images\"");
@@ -195,6 +197,7 @@ public final class AccessCodeSelfCheck {
             assert html.contains("name=\"cc\"");
             assert html.contains("name=\"bcc\"");
             assert html.contains("data-contact-email=\"uno@example.com\"");
+            assert html.contains("No hay contactos disponibles. Agrégalos en Configuración &gt; Contactos.");
             assert html.contains(">Contactos</span>");
             assert html.contains(">Configuración</span>");
             assert html.contains(">Correo</span>");
@@ -216,6 +219,7 @@ public final class AccessCodeSelfCheck {
             assert html.contains("class=\"mail-admin-row mail-admin-user\" method=\"post\" action=\"/gator-mail/mail\"");
             assert html.contains("Contraseña temporal: Abcd_1234-Efgh_5678-Ijkl");
             assert html.contains("value=\"contactSave\"");
+            assert html.contains("class=\"mail-admin-row mail-admin-contact mail-admin-new\" method=\"post\" action=\"/gator-mail/mail\"");
             assert html.contains("data-message-uid=\"1\"");
             assert html.contains(">No leído</span>");
             assert html.contains("class=\"d-none mail-swal mail-swal-success\"");
