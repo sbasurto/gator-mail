@@ -72,14 +72,15 @@
                       { "tag": "span", "text": "Correo" }
                     ] }
                   ] },
-                  { "tag": "details", "if": "mailFoldersMenu", "attrs": { "class": "mail-folder-group", "open": "${mailOpen}" }, "children": [
+                  { "tag": "div", "if": "mailFoldersMenu", "children": [
+                  { "tag": "details", "each": "folderMenus", "as": "menu", "attrs": { "class": "mail-folder-group", "open": "${menu.open}" }, "children": [
                     { "tag": "summary", "attrs": { "class": "mail-folder mail-folder-parent" }, "children": [
                       { "tag": "strong", "children": [
-                        { "tag": "span", "attrs": { "class": "mail-folder-icon fas fa-envelope", "aria-hidden": "true" } },
-                        { "tag": "span", "text": "Correo" }
+                        { "tag": "span", "attrs": { "class": "mail-folder-icon ${menu.icon}", "aria-hidden": "true" } },
+                        { "tag": "span", "text": "${menu.label}" }
                       ] }
                     ] },
-                    { "tag": "div", "each": "folderGroups", "as": "group", "children": [
+                    { "tag": "div", "each": "menu.groups", "as": "group", "children": [
                     { "tag": "details", "if": "group.hasChildren", "attrs": { "class": "mail-folder-group", "open": "${group.open}" }, "children": [
                       { "tag": "summary", "attrs": { "class": "mail-folder mail-folder-parent mail-folder-child", "draggable": "${group.draggable}", "data-folder": "${group.folder}", "data-csrf": "${csrf}" }, "children": [
                         { "tag": "strong", "children": [
@@ -104,6 +105,7 @@
                       { "tag": "small", "text": "${group.count}" }
                     ] }
                     ] }
+                  ] }
                   ] },
                   { "tag": "a", "attrs": { "class": "mail-folder ${calendarClass}", "href": "${contextPath}/mail?action=calendar" }, "children": [
                     { "tag": "strong", "children": [

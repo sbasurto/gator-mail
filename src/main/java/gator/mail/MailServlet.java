@@ -173,6 +173,7 @@ public final class MailServlet extends HttpServlet {
         model.put("mailOpen", true);
         model.put("mailFoldersMenu", true);
         model.put("mailNavigationOnly", false);
+        model.put("folderMenus", List.of());
         model.put("query", "");
         model.put("emptyText", "No hay mensajes en esta carpeta.");
         model.put("empty", false);
@@ -280,7 +281,7 @@ public final class MailServlet extends HttpServlet {
             break;
         }
         int size = rememberedPageSize(request, session);
-        model.put("folderGroups", folderGroups(folders, "", size));
+        model.put("folderMenus", folderMenus(folders, "", size));
         model.put("csrf", csrf(session));
         model.put("mailContent", true);
         model.put("layoutClass", "mail-workspace");
@@ -498,7 +499,7 @@ public final class MailServlet extends HttpServlet {
         String folderName = selected.name();
         String query = searchQuery(request.getParameter("q"));
         int size = rememberedPageSize(request, request.getSession());
-        model.put("folderGroups", folderGroups(folders, folderName, size));
+        model.put("folderMenus", folderMenus(folders, folderName, size));
         model.put("selectedFolder", folderName);
         model.put("pageSize", size);
         model.put("folderActionsDisabled", folderName.equalsIgnoreCase("INBOX"));
@@ -966,6 +967,26 @@ public final class MailServlet extends HttpServlet {
             groups.add(group);
         }
         return groups;
+    }
+
+    static List<Map<String, Object>> folderMenus(List<ImapMailbox.FolderInfo> folders, String selected, int size) {
+        List<ImapMailbox.FolderInfo> system = folders.stream().filter(MailServlet::systemFolder).toList();
+        List<ImapMailbox.FolderInfo> personal = folders.stream().filter(folder -> !systemFolder(folder)).toList();
+        boolean personalSelected = personal.stream().anyMatch(folder -> folder.name().equals(selected));
+        List<Map<String, Object>> menus = new ArrayList<>();
+        menus.add(Map.of("label", "Correo", "icon", "fas fa-envelope", "open",
+                !selected.isBlank() && !personalSelected, "groups", folderGroups(system, selected, size)));
+        if (!personal.isEmpty())
+            menus.add(Map.of("label", "Carpetas personales", "icon", "fas fa-folder", "open",
+                    personalSelected, "groups", folderGroups(personal, selected, size)));
+        return menus;
+    }
+
+    private static boolean systemFolder(ImapMailbox.FolderInfo folder) {
+        return switch (folder.label()) {
+            case "Entrada", "Enviados", "Borradores", "Spam", "Papelera" -> true;
+            default -> false;
+        };
     }
 
     private static Map<String, Object> folderModel(ImapMailbox.FolderInfo folder, String selected, boolean child,

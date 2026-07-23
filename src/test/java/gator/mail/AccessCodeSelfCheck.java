@@ -83,6 +83,13 @@ public final class AccessCodeSelfCheck {
         assert "Spam".equals(pagedFolders.get(2).get("label"));
         assert Boolean.TRUE.equals(pagedFolders.get(2).get("leaf"));
         assert "mail?folder=Archive&page=1&size=60".equals(pagedFolders.get(3).get("href"));
+        List<Map<String, Object>> folderMenus = MailServlet.folderMenus(List.of(
+                new ImapMailbox.FolderInfo("INBOX", "Entrada", "", "INBOX", 0, 0, 1),
+                new ImapMailbox.FolderInfo("Sent", "Enviados", "", "Sent", 0, 0, 4),
+                new ImapMailbox.FolderInfo("Archive", "Archivo", "", "Archive", 0, 0, 50)), "Archive", 60);
+        assert "Correo".equals(folderMenus.get(0).get("label"));
+        assert "Carpetas personales".equals(folderMenus.get(1).get("label"));
+        assert Boolean.TRUE.equals(folderMenus.get(1).get("open"));
         boolean rejectedUid = false;
         try { MailServlet.uids(new String[]{"0"}); }
         catch (IllegalArgumentException expected) { rejectedUid = true; }
@@ -103,9 +110,7 @@ public final class AccessCodeSelfCheck {
         model.put("sessionActive", true);
         model.put("mailbox", "<user@example.com>");
         model.put("accountHref", "/gator-mail/oauth/password");
-        model.put("folderGroups", List.of(Map.of("className", "active", "href", "mail?folder=INBOX",
-                "label", "Entrada", "count", "1", "icon", "fas fa-inbox", "folder", "INBOX",
-                "draggable", false, "leaf", true, "hasChildren", false)));
+        model.put("folderMenus", folderMenus);
         model.put("selectedFolder", "INBOX");
         model.put("folderActionsDisabled", true);
         model.put("csrf", "csrf-token");
@@ -193,6 +198,7 @@ public final class AccessCodeSelfCheck {
             assert html.contains(">Contactos</span>");
             assert html.contains(">Configuración</span>");
             assert html.contains(">Correo</span>");
+            assert html.contains(">Carpetas personales</span>");
             assert html.contains("class=\"mail-folder mail-folder-parent\" href=\"/gator-mail/mail\"");
             assert html.contains("class=\"mail-folder mail-folder-child active\"");
             assert html.contains(">Calendario</span>");
