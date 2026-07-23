@@ -60,9 +60,12 @@ quedan autorizadas inicialmente y pueden ampliarse desde la tabla
 El calendario autónomo se instala con `db/mail_calendar.sql` y administra sus
 eventos, grupos y participantes directamente en `db_gatormail`.
 Cuando `GATOR_MAIL_EVENT_ENDPOINT` y `GATOR_MAIL_EVENT_SECRET` están definidos,
-cada alta se envía además por `POST` como JSON con `action: event`; el endpoint
-debe ser idempotente por `eventId` y devolver `codigo: "0"`. Cada instalación
-puede reemplazar este endpoint para sincronizar su propio calendario externo.
+cada alta se envía además por `POST` como JSON con `action: event`; aceptar,
+marcar como tentativa o rechazar una invitación se envía con `action: reply`,
+`uid`, `sequence`, `attendee` y `status` (`ACCEPTED`, `TENTATIVE` o
+`DECLINED`). El endpoint debe ser idempotente por `eventId` y devolver
+`codigo: "0"`. Cada instalación puede reemplazarlo para sincronizar su propio
+calendario externo.
 Este contrato es independiente de `GATOR_MAIL_SMS_ENDPOINT`: no se deben
 combinar las URL ni los secretos. Si no se configura el endpoint de eventos,
 el calendario continúa funcionando únicamente con `db_gatormail`; si no se

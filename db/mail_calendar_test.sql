@@ -38,4 +38,39 @@ begin
 end;
 $$;
 
+do $$
+declare
+    attendee text;
+    event_id text := uuid_generate_v4()::text;
+    participant_id text := uuid_generate_v4()::text;
+    result jsonb;
+begin
+    select usuario_email_email into attendee
+      from app_usuario_email
+     where coalesce(usuario_email_estado, 0) >= 0
+     limit 1;
+    assert attendee is not null, 'No hay un usuario para la prueba';
+    result := mail_fn_invitacion_responder(json_build_object(
+            'eventId', event_id, 'participantId', participant_id, 'uid', 'calendar-test@example.com',
+            'sequence', 1, 'organizer', 'organizer@example.com', 'attendee', attendee,
+            'summary', 'Invitación de prueba', 'description', '', 'place', '',
+            'start', '2026-07-23 12:00:00', 'end', '2026-07-23 13:00:00',
+            'timezone', 'America/Mexico_City', 'status', 'ACCEPTED')::text)::jsonb;
+    assert result ->> 'codigo' = '0', result ->> 'mensaje';
+    assert exists (select 1 from app_eventos
+            where evento_id = event_id and evento_uid_ical = 'calendar-test@example.com'
+              and evento_estatus = 1), 'No se guardó la invitación';
+    assert exists (select 1 from app_evento_participante
+            where evento_part_id = participant_id and evento_part_estado = 'ACCEPTED'),
+            'No se guardó la respuesta';
+    result := mail_fn_invitacion_responder(json_build_object(
+            'eventId', event_id, 'participantId', participant_id, 'uid', 'calendar-test@example.com',
+            'sequence', 0, 'organizer', 'organizer@example.com', 'attendee', attendee,
+            'summary', 'Invitación anterior', 'description', '', 'place', '',
+            'start', '2026-07-23 12:00:00', 'end', '2026-07-23 13:00:00',
+            'timezone', 'America/Mexico_City', 'status', 'DECLINED')::text)::jsonb;
+    assert result ->> 'codigo' = '-1', 'Se aceptó una invitación desactualizada';
+end;
+$$;
+
 rollback;

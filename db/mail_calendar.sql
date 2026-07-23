@@ -51,6 +51,14 @@ create table if not exists app_evento_participante (
     evento_part_id text primary key default uuid_generate_v4()
 );
 
+alter table app_eventos add column if not exists evento_uid_ical text;
+alter table app_eventos add column if not exists evento_secuencia integer default 0;
+alter table app_evento_participante add column if not exists evento_part_estado text default 'NEEDS-ACTION';
+
+drop index if exists app_eventos_uid_ical_idx;
+create unique index app_eventos_uid_ical_idx
+    on app_eventos(evento_uid_ical, usuario_id) where evento_uid_ical is not null;
+
 create index if not exists app_eventos_calendar_idx
     on app_eventos(cuenta_id, bodega_id, evento_fecha_ini, evento_fecha_fin);
 create index if not exists app_grupo_evento_grupo_idx on app_grupo_evento(grupo_id, evento_id);
@@ -122,6 +130,83 @@ exception when others then
 end;
 $$;
 
+create or replace function mail_fn_invitacion_responder(v_json text)
+returns text language plpgsql security definer set search_path = public as $$
+declare
+    v jsonb := v_json::jsonb;
+    evento text := trim(v ->> 'eventId');
+    participante text := trim(v ->> 'participantId');
+    correo text := lower(trim(v ->> 'attendee'));
+    organizador text := lower(trim(v ->> 'organizer'));
+    uid text := trim(v ->> 'uid');
+    estado text := upper(trim(v ->> 'status'));
+    secuencia integer;
+    usuario text;
+    fecha_ini timestamp;
+    fecha_fin timestamp;
+begin
+    if evento !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+            or participante !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+            or length(uid) not between 1 and 512 or estado not in ('ACCEPTED','TENTATIVE','DECLINED')
+            or correo !~* '^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$'
+            or organizador !~* '^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$' then
+        return json_build_object('codigo', '-1', 'mensaje', 'Respuesta de invitación inválida')::text;
+    end if;
+    begin
+        fecha_ini := (v ->> 'start')::timestamp;
+        fecha_fin := (v ->> 'end')::timestamp;
+        secuencia := greatest(coalesce((v ->> 'sequence')::integer, 0), 0);
+    exception when others then
+        return json_build_object('codigo', '-1', 'mensaje', 'Fecha o secuencia inválida')::text;
+    end;
+    if fecha_fin < fecha_ini then
+        return json_build_object('codigo', '-1', 'mensaje', 'Fechas inválidas')::text;
+    end if;
+    select usuario_id into usuario from app_usuario_email
+     where lower(usuario_email_email) = correo and coalesce(usuario_email_estado, 0) >= 0
+     order by case when lower(usuario_id) = lower(split_part(correo, '@', 1)) then 0 else 1 end,
+              usuario_id limit 1;
+    if usuario is null then
+        return json_build_object('codigo', '-1', 'mensaje', 'El invitado no está registrado')::text;
+    end if;
+    if exists (select 1 from app_eventos
+            where evento_id = evento and coalesce(evento_secuencia, 0) > secuencia) then
+        return json_build_object('codigo', '-1', 'mensaje', 'La invitación está desactualizada')::text;
+    end if;
+
+    insert into app_eventos(rowid, evento_id, evento_uid_ical, evento_secuencia, evento_organizador,
+        evento_resumen, evento_descripcion, evento_lugar, evento_fecha_ini, evento_fecha_fin,
+        evento_estatus, evento_timezone, evento_pendiente, evento_reagendado,
+        cuenta_id, bodega_id, usuario_id)
+    values (nextval('mail_event_rowid_seq'), evento, uid, secuencia, organizador,
+        left(v ->> 'summary', 200), left(v ->> 'description', 5000), left(v ->> 'place', 500),
+        fecha_ini, fecha_fin, case estado when 'ACCEPTED' then 1 when 'TENTATIVE' then 2 else 3 end,
+        left(v ->> 'timezone', 80), 0, 0, 1, 1, usuario)
+    on conflict (evento_id) do update set
+        evento_uid_ical = excluded.evento_uid_ical,
+        evento_secuencia = excluded.evento_secuencia,
+        evento_organizador = excluded.evento_organizador,
+        evento_resumen = excluded.evento_resumen,
+        evento_descripcion = excluded.evento_descripcion,
+        evento_lugar = excluded.evento_lugar,
+        evento_fecha_ini = excluded.evento_fecha_ini,
+        evento_fecha_fin = excluded.evento_fecha_fin,
+        evento_estatus = excluded.evento_estatus,
+        evento_timezone = excluded.evento_timezone,
+        usuario_id = excluded.usuario_id
+      where excluded.evento_secuencia >= coalesce(app_eventos.evento_secuencia, 0);
+
+    insert into app_evento_participante(rowid, evento_id, evento_part_nombre, evento_part_email,
+        evento_part_estado, cuenta_id, bodega_id, evento_part_id)
+    values (nextval('mail_event_part_rowid_seq'), evento, correo, correo, estado, 1, 1, participante)
+    on conflict (evento_part_id) do update set evento_part_estado = excluded.evento_part_estado,
+        evento_part_email = excluded.evento_part_email;
+    return json_build_object('codigo', '0', 'eventoId', evento, 'estado', estado)::text;
+exception when others then
+    return json_build_object('codigo', '-1', 'mensaje', sqlerrm)::text;
+end;
+$$;
+
 create or replace function mail_fn_get_eventos(v_email text)
 returns text language plpgsql stable security definer set search_path = public as $$
 declare resultado json;
@@ -157,11 +242,17 @@ begin
                'place', coalesce(evento_lugar, ''),
                'start', to_char(evento_fecha_ini, 'DD/MM/YYYY HH24:MI'),
                'end', to_char(coalesce(evento_fecha_fin, evento_fecha_ini), 'DD/MM/YYYY HH24:MI'),
-               'status', case when evento_estatus = 4 then 'Terminado'
+               'status', case when evento_estatus = 1 then 'Aceptado'
+                              when evento_estatus = 2 then 'Tentativa'
+                              when evento_estatus = 3 then 'Rechazado'
+                              when evento_estatus = 4 then 'Terminado'
                               when evento_fecha_ini < current_timestamp then 'Retrasado'
                               when evento_fecha_ini < current_timestamp + interval '2 hours' then 'Próximo'
                               else 'A tiempo' end,
-               'statusClass', case when evento_estatus = 4 then 'is-done'
+               'statusClass', case when evento_estatus = 1 then 'is-on-time'
+                                   when evento_estatus = 2 then 'is-next'
+                                   when evento_estatus = 3 then 'is-delayed'
+                                   when evento_estatus = 4 then 'is-done'
                                    when evento_fecha_ini < current_timestamp then 'is-delayed'
                                    when evento_fecha_ini < current_timestamp + interval '2 hours' then 'is-next'
                                    else 'is-on-time' end
@@ -226,6 +317,7 @@ end;
 $$;
 
 revoke all on app_eventos, app_grupo_evento, app_evento_participante from public;
-revoke all on function mail_fn_get_eventos(text), mail_fn_get_calendario(text), mail_fn_evento_guardar(text) from public;
+revoke all on function mail_fn_get_eventos(text), mail_fn_get_calendario(text),
+    mail_fn_evento_guardar(text), mail_fn_invitacion_responder(text) from public;
 grant execute on function mail_fn_get_eventos(text), mail_fn_get_calendario(text),
-    mail_fn_evento_guardar(text) to w3apps;
+    mail_fn_evento_guardar(text), mail_fn_invitacion_responder(text) to w3apps;

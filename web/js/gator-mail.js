@@ -205,6 +205,23 @@
     });
 
     const editor = document.querySelector("#mail-compose-body");
+    const format = document.querySelector("#mail-compose-format");
+    const markdownFormat = document.querySelector("#mail-format-markdown");
+    const htmlFormat = document.querySelector("#mail-format-html");
+    const setFormat = () => {
+        if (!editor || !format) return;
+        const html = format.value === "html";
+        document.querySelectorAll("[data-md]").forEach(button => button.disabled = html);
+        markdownFormat?.classList.toggle("btn-primary", !html);
+        markdownFormat?.classList.toggle("btn-light", html);
+        htmlFormat?.classList.toggle("btn-primary", html);
+        htmlFormat?.classList.toggle("btn-light", !html);
+        editor.placeholder = html ? "Escribe HTML seguro…" : "Escribe tu mensaje con Markdown…";
+        editor.setAttribute("aria-label", html ? "Contenido HTML" : "Contenido Markdown");
+    };
+    markdownFormat?.addEventListener("click", () => { format.value = "markdown"; setFormat(); });
+    htmlFormat?.addEventListener("click", () => { format.value = "html"; setFormat(); });
+    setFormat();
     const markdown = {
         bold: ["**", "**"],
         italic: ["_", "_"],
@@ -213,7 +230,7 @@
         link: ["[", "](https://)"]
     };
     document.querySelectorAll("[data-md]").forEach(button => button.addEventListener("click", () => {
-        if (!editor) return;
+        if (!editor || format?.value === "html") return;
         const [before, after] = markdown[button.dataset.md];
         const start = editor.selectionStart;
         const end = editor.selectionEnd;

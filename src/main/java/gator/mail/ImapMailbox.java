@@ -64,8 +64,10 @@ final class ImapMailbox {
 
     record Mail(String from, String replyTo, String to, String cc, String subject, Instant sent, String body,
             String plain, boolean html,
-            List<Attachment> attachments) {
+            List<Attachment> attachments, ICalendar.Invite invitation, boolean invitationTrusted) {
     }
+
+    record InvitationResponse(ICalendar.Invite invitation, String status) { }
 
     private record InlineImage(String cid, String type, byte[] data) { }
 
@@ -74,6 +76,7 @@ final class ImapMailbox {
         String plain = "";
         final List<Attachment> attachments = new ArrayList<>();
         final List<InlineImage> images = new ArrayList<>();
+        ICalendar.Invite invitation;
     }
 
     private final String host = env("GATOR_MAIL_IMAP_HOST", "mail.soft-gator.com");
@@ -167,7 +170,8 @@ final class ImapMailbox {
                     addresses(message.getRecipients(Message.RecipientType.TO)),
                     addresses(message.getRecipients(Message.RecipientType.CC)), text(message.getSubject(), "(Sin asunto)"),
                     message.getSentDate() == null ? Instant.EPOCH : message.getSentDate().toInstant(),
-                    body, parsed.plain, !parsed.html.isBlank(), List.copyOf(parsed.attachments));
+                    body, parsed.plain, !parsed.html.isBlank(), List.copyOf(parsed.attachments), parsed.invitation,
+                    parsed.invitation != null && address(message.getFrom(), parsed.invitation.organizer()));
         }
     }
 
@@ -275,17 +279,7 @@ final class ImapMailbox {
 
     String send(String mailbox, String recipients, String cc, String bcc, String subject, String markdown,
             String html, List<Upload> uploads, String accessToken) throws Exception {
-        Properties properties = new Properties();
-        properties.setProperty("mail.transport.protocol", "smtp");
-        properties.setProperty("mail.smtp.host", smtpHost);
-        properties.setProperty("mail.smtp.port", String.valueOf(smtpPort));
-        properties.setProperty("mail.smtp.ssl.enable", "true");
-        properties.setProperty("mail.smtp.ssl.checkserveridentity", "true");
-        properties.setProperty("mail.smtp.auth", "false");
-        properties.setProperty("mail.smtp.connectiontimeout", "10000");
-        properties.setProperty("mail.smtp.timeout", "15000");
-        properties.setProperty("mail.smtp.writetimeout", "15000");
-        MimeMessage message = message(Session.getInstance(properties), mailbox, recipients, cc, bcc, subject,
+        MimeMessage message = message(Session.getInstance(smtpProperties()), mailbox, recipients, cc, bcc, subject,
                 markdown, html, uploads);
         Transport.send(message);
         try (Store store = connect(mailbox, accessToken)) {
@@ -297,6 +291,51 @@ final class ImapMailbox {
             LOG.log(Level.WARNING, "El mensaje se envió, pero no pudo guardarse en Enviados", error);
             return "INBOX";
         }
+    }
+
+    InvitationResponse replyInvitation(String mailbox, String folderName, long uid, String status,
+            String accessToken) throws Exception {
+        if (!List.of("ACCEPTED", "TENTATIVE", "DECLINED").contains(status))
+            throw new IllegalArgumentException("Respuesta de invitación inválida");
+        ICalendar.Invite invite;
+        try (Store store = connect(mailbox, accessToken); Folder folder = folder(store, folderName)) {
+            folder.open(Folder.READ_ONLY);
+            Message original = ((UIDFolder) folder).getMessageByUID(uid);
+            if (original == null) throw new IllegalArgumentException("Mensaje inexistente");
+            invite = parse(original).invitation;
+            if (invite == null || !invite.canReply(mailbox) || !address(original.getFrom(), invite.organizer()))
+                throw new IllegalArgumentException("La invitación no puede responderse de forma segura");
+        }
+
+        MimeMessage reply = new MimeMessage(Session.getInstance(smtpProperties()));
+        reply.setFrom(new InternetAddress(mailbox));
+        reply.setRecipient(Message.RecipientType.TO, new InternetAddress(invite.organizer()));
+        reply.setSubject("Respuesta: " + text(invite.summary(), "Invitación"), "UTF-8");
+        reply.setSentDate(new Date());
+        MimeBodyPart plain = new MimeBodyPart();
+        plain.setText(switch (status) {
+            case "ACCEPTED" -> "Acepté la invitación.";
+            case "TENTATIVE" -> "Respondí como tentativa.";
+            default -> "Rechacé la invitación.";
+        }, "UTF-8");
+        MimeBodyPart calendar = new MimeBodyPart();
+        calendar.setDataHandler(new jakarta.activation.DataHandler(new ByteArrayDataSource(
+                ICalendar.reply(invite, mailbox, status), "text/calendar; method=REPLY; charset=UTF-8")));
+        calendar.setHeader("Content-Class", "urn:content-classes:calendarmessage");
+        MimeMultipart content = new MimeMultipart("alternative");
+        content.addBodyPart(plain);
+        content.addBodyPart(calendar);
+        reply.setContent(content);
+        reply.saveChanges();
+        Transport.send(reply);
+        try (Store store = connect(mailbox, accessToken)) {
+            Folder sent = sent(store);
+            reply.setFlag(Flags.Flag.SEEN, true);
+            sent.appendMessages(new Message[]{reply});
+        } catch (Exception error) {
+            LOG.log(Level.WARNING, "La respuesta se envió, pero no pudo guardarse en Enviados", error);
+        }
+        return new InvitationResponse(invite, status);
     }
 
     private static MimeMessage message(Session session, String mailbox, String recipients, String cc, String bcc,
@@ -318,7 +357,6 @@ final class ImapMailbox {
         if (hiddenCopies.length > 0) message.setRecipients(Message.RecipientType.BCC, hiddenCopies);
         message.setSubject(subject.strip(), "UTF-8");
         message.setSentDate(new Date());
-        message.setHeader("X-Gator-Format", "markdown");
         MimeBodyPart plain = new MimeBodyPart();
         plain.setText(markdown, "UTF-8");
         List<Upload> files = uploads == null ? List.of() : uploads;
@@ -508,6 +546,13 @@ final class ImapMailbox {
                 parsed.images.add(new InlineImage(cid, type, data));
             return;
         }
+        if (part.isMimeType("text/calendar")) {
+            byte[] data = part.getInputStream().readNBytes(1_048_577);
+            if (parsed.invitation == null) parsed.invitation = ICalendar.parse(data);
+            if (jakarta.mail.Part.ATTACHMENT.equalsIgnoreCase(part.getDisposition()) || part.getFileName() != null)
+                parsed.attachments.add(new Attachment(path, fileName(part), "text/calendar", part.getSize()));
+            return;
+        }
         if (jakarta.mail.Part.ATTACHMENT.equalsIgnoreCase(part.getDisposition()) || part.getFileName() != null) {
             parsed.attachments.add(new Attachment(path, fileName(part), "application/octet-stream", part.getSize()));
             return;
@@ -577,6 +622,27 @@ final class ImapMailbox {
         for (Address address : addresses)
             values.add(address instanceof InternetAddress internet ? internet.toUnicodeString() : address.toString());
         return String.join(", ", values);
+    }
+
+    private static boolean address(Address[] addresses, String expected) {
+        if (addresses == null) return false;
+        for (Address value : addresses)
+            if (value instanceof InternetAddress internet && expected.equalsIgnoreCase(internet.getAddress())) return true;
+        return false;
+    }
+
+    private Properties smtpProperties() {
+        Properties properties = new Properties();
+        properties.setProperty("mail.transport.protocol", "smtp");
+        properties.setProperty("mail.smtp.host", smtpHost);
+        properties.setProperty("mail.smtp.port", String.valueOf(smtpPort));
+        properties.setProperty("mail.smtp.ssl.enable", "true");
+        properties.setProperty("mail.smtp.ssl.checkserveridentity", "true");
+        properties.setProperty("mail.smtp.auth", "false");
+        properties.setProperty("mail.smtp.connectiontimeout", "10000");
+        properties.setProperty("mail.smtp.timeout", "15000");
+        properties.setProperty("mail.smtp.writetimeout", "15000");
+        return properties;
     }
 
     private static String limited(String value) {

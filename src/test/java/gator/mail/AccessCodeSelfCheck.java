@@ -39,6 +39,23 @@ public final class AccessCodeSelfCheck {
         String safeImage = ImapMailbox.sanitizeHtml("<img src=\"cid:logo\" onerror=\"alert(1)\">");
         assert safeImage.contains("cid:logo");
         assert !safeImage.contains("onerror");
+        MailServlet.MessageBody htmlBody = MailServlet.messageBody(
+                "<h1>Hola</h1><p><strong>HTML</strong></p><script>alert(1)</script>", "html");
+        assert htmlBody.html().contains("<h1>Hola</h1>");
+        assert htmlBody.html().contains("<strong>HTML</strong>");
+        assert !htmlBody.html().contains("script");
+        assert htmlBody.plain().contains("Hola");
+        String calendarText = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nMETHOD:REQUEST\r\nBEGIN:VEVENT\r\n"
+                + "UID:demo@example.com\r\nSEQUENCE:2\r\nDTSTART:20260724T160000Z\r\n"
+                + "DTEND:20260724T170000Z\r\nORGANIZER:mailto:organizer@example.com\r\n"
+                + "ATTENDEE;RSVP=TRUE:mailto:user@example.com\r\nSUMMARY:Reunión\r\n"
+                + "LOCATION:Sala 1\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
+        ICalendar.Invite invite = ICalendar.parse(calendarText.getBytes());
+        assert invite != null;
+        assert invite.canReply("user@example.com");
+        assert "organizer@example.com".equals(invite.organizer());
+        assert new String(ICalendar.reply(invite, "user@example.com", "ACCEPTED"))
+                .contains("ATTENDEE;PARTSTAT=ACCEPTED;RSVP=FALSE:mailto:user@example.com");
         assert ImapMailbox.safeImage("image/png", Base64.getDecoder().decode(
                 "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="));
         assert !ImapMailbox.safeImage("image/svg+xml", "<svg/>".getBytes());
@@ -103,7 +120,10 @@ public final class AccessCodeSelfCheck {
         for (String key : new String[]{"challenge", "codeChallenge", "phoneCorrection", "composeView", "mailboxView", "messageView", "mailContent", "empty",
                 "hasMessages", "pending", "error", "loggedOut", "noticeVisible", "sendNotice", "mailHtml",
                 "configurationAvailable", "configurationUsersView", "configurationContactsView", "calendarView",
-                "dashboardView", "eventsAvailable", "eventFormView", "eventCreated", "eventSyncFailed"}) model.put(key, true);
+                "dashboardView", "eventsAvailable", "eventFormView", "eventCreated", "eventSyncFailed",
+                "invitationAvailable", "invitationCanReply", "invitationCancelled", "invitationReplyNotice",
+                "invitationSyncFailed"}) model.put(key, true);
+        model.put("invitationCannotReply", false);
         model.put("mailText", false);
         model.put("passwordReset", true);
         model.put("temporaryPassword", "Abcd_1234-Efgh_5678-Ijkl");
@@ -123,6 +143,14 @@ public final class AccessCodeSelfCheck {
         model.put("composeBcc", "");
         model.put("composeSubject", "");
         model.put("composeBody", "");
+        model.put("invitationTitle", "Reunión de proyecto");
+        model.put("invitationOrganizer", "organizer@example.com");
+        model.put("invitationLocation", "Sala 1");
+        model.put("invitationStart", "24/07/2026 10:00");
+        model.put("invitationEnd", "24/07/2026 11:00");
+        model.put("invitationFolder", "INBOX");
+        model.put("invitationUid", "1");
+        model.put("invitationReplyLabel", "Aceptaste esta invitación.");
         model.put("composeTitle", "Responder");
         model.put("composeCancelHref", "mail?folder=INBOX&uid=1");
         model.put("contactsAvailable", true);
@@ -176,9 +204,9 @@ public final class AccessCodeSelfCheck {
         try {
             String html = new GatorJsonView().renderResource("gator-mail/screens/mail.json", model);
             assert html.contains("Sesión cerrada");
-            assert html.contains("/gator-mail/css/gator-mail.css?v=28");
+            assert html.contains("/gator-mail/css/gator-mail.css?v=29");
             assert html.contains("/elib/js/sweetalert2.all.min.js");
-            assert html.contains("/gator-mail/js/gator-mail.js?v=9");
+            assert html.contains("/gator-mail/js/gator-mail.js?v=10");
             assert html.contains("href=\"/gator-mail/oauth/password\"");
             assert html.contains("fontawesome-free-5.13.0-web/css/all.min.css");
             assert html.contains("&lt;user@example.com&gt;");
@@ -187,12 +215,20 @@ public final class AccessCodeSelfCheck {
             assert html.contains("sandbox=\"\"");
             assert html.contains("srcdoc=\"&lt;script&gt;parent.alert(&#39;bad&#39;)&lt;/script&gt;\"");
             assert html.contains("mail-compose-body");
+            assert html.contains("name=\"format\"");
+            assert html.contains("id=\"mail-format-html\"");
+            assert html.contains(">HTML</button>");
             assert html.contains("class=\"mail-compose-form\" method=\"post\" action=\"/gator-mail/mail\"");
             assert html.contains("enctype=\"multipart/form-data\"");
             assert html.contains("name=\"attachments\"");
             assert html.contains("name=\"images\"");
             assert html.contains("documento.pdf");
             assert html.contains("title=\"Descargar documento.pdf\"");
+            assert html.contains("Reunión de proyecto");
+            assert html.contains("value=\"inviteReply\"");
+            assert html.contains("value=\"accepted\"");
+            assert html.contains("Aceptaste esta invitación.");
+            assert html.contains("Sesión cerrada correctamente");
             assert html.contains(">Responder a todos</span>");
             assert html.contains(">Reenviar</span>");
             assert html.contains("Guardar borrador");

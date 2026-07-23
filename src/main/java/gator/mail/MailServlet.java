@@ -102,6 +102,8 @@ public final class MailServlet extends HttpServlet {
                 return;
             } else if (deleteMessages(request, response, session, mailbox, OAuthServlet.accessToken(request))) {
                 return;
+            } else if (replyInvitation(request, response, session, mailbox, OAuthServlet.accessToken(request))) {
+                return;
             } else if (sendMessage(request, response, session, mailbox, OAuthServlet.accessToken(request))) {
                 return;
             } else if (saveDraft(request, response, session, mailbox, OAuthServlet.accessToken(request))) {
@@ -157,6 +159,14 @@ public final class MailServlet extends HttpServlet {
         model.put("composeBcc", "");
         model.put("composeSubject", "");
         model.put("composeBody", "");
+        model.put("composeMarkdownSelected", "selected");
+        model.put("composeHtmlSelected", "");
+        model.put("invitationAvailable", false);
+        model.put("invitationCanReply", false);
+        model.put("invitationCannotReply", false);
+        model.put("invitationCancelled", false);
+        model.put("invitationReplyNotice", false);
+        model.put("invitationSyncFailed", false);
         model.put("composeTitle", "Nuevo mensaje");
         model.put("composeCancelHref", request.getContextPath() + "/mail");
         model.put("contactsAvailable", false);
@@ -518,6 +528,11 @@ public final class MailServlet extends HttpServlet {
         model.put("layoutClass", "mail-workspace");
         model.put("contentClass", "mail-content");
         model.put("sendNotice", "1".equals(request.getParameter("sent")));
+        String invitationReply = request.getParameter("invite");
+        model.put("invitationReply", invitationReply == null ? ""
+                : invitationReply.substring(0, Math.min(invitationReply.length(), 20)));
+        model.put("invitationSyncFailed", "0".equals(request.getParameter("sync"))
+                && request.getParameter("invite") != null);
 
         String action = request.getParameter("action");
         if ("compose".equals(action) || "reply".equals(action) || "replyAll".equals(action)
@@ -564,6 +579,7 @@ public final class MailServlet extends HttpServlet {
                             + "&part=" + url(attachment.part())));
             model.put("attachments", attachments);
             model.put("attachmentsAvailable", !attachments.isEmpty());
+            invitationModel(model, mail, mailbox, folderName, uid);
             String source = "&folder=" + url(folderName) + "&uid=" + uid;
             model.put("replyHref", "mail?action=reply" + source);
             model.put("replyAllHref", "mail?action=replyAll" + source);
@@ -678,10 +694,9 @@ public final class MailServlet extends HttpServlet {
             return true;
         }
         try {
-            String markdown = request.getParameter("body");
-            String html = ImapMailbox.sanitizeHtml(MARKDOWN_HTML.render(MARKDOWN.parse(markdown == null ? "" : markdown)));
+            MessageBody body = messageBody(request.getParameter("body"), request.getParameter("format"));
             String drafts = imap.saveDraft(mailbox, request.getParameter("to"), request.getParameter("cc"),
-                    request.getParameter("bcc"), request.getParameter("subject"), markdown, html,
+                    request.getParameter("bcc"), request.getParameter("subject"), body.plain(), body.html(),
                     uploads(request), accessToken);
             response.sendRedirect("mail?folder=" + url(drafts));
         } catch (IllegalArgumentException error) {
@@ -697,13 +712,121 @@ public final class MailServlet extends HttpServlet {
             response.sendError(HttpServletResponse.SC_FORBIDDEN);
             return true;
         }
-        String markdown = request.getParameter("body");
-        String html = ImapMailbox.sanitizeHtml(MARKDOWN_HTML.render(MARKDOWN.parse(markdown == null ? "" : markdown)));
+        MessageBody body = messageBody(request.getParameter("body"), request.getParameter("format"));
         String folder = imap.send(mailbox, request.getParameter("to"), request.getParameter("cc"),
-                request.getParameter("bcc"), request.getParameter("subject"), markdown, html,
+                request.getParameter("bcc"), request.getParameter("subject"), body.plain(), body.html(),
                 uploads(request), accessToken);
         response.sendRedirect("mail?folder=" + url(folder) + "&sent=1");
         return true;
+    }
+
+    private boolean replyInvitation(HttpServletRequest request, HttpServletResponse response, HttpSession session,
+            String mailbox, String accessToken) throws Exception {
+        if (!"inviteReply".equals(request.getParameter("action"))) return false;
+        if (!"POST".equals(request.getMethod()) || !csrf(session).equals(request.getParameter("csrf"))) {
+            response.sendError(HttpServletResponse.SC_FORBIDDEN);
+            return true;
+        }
+        String folder = request.getParameter("folder");
+        String uidValue = request.getParameter("uid");
+        if (uidValue == null || !uidValue.matches("[0-9]+")) throw new IllegalArgumentException("Mensaje inválido");
+        String status = switch (String.valueOf(request.getParameter("status"))) {
+            case "accepted" -> "ACCEPTED";
+            case "tentative" -> "TENTATIVE";
+            case "declined" -> "DECLINED";
+            default -> throw new IllegalArgumentException("Respuesta de invitación inválida");
+        };
+        ImapMailbox.InvitationResponse result = imap.replyInvitation(
+                mailbox, folder, Long.parseLong(uidValue), status, accessToken);
+        JsonObject value = invitationJson(result.invitation(), mailbox, status);
+        boolean synced = true;
+        try {
+            checked(mailDbCall("mail_fn_invitacion_responder", gson.toJson(value)));
+            synced = syncEvent(value, "reply");
+        } catch (Exception error) {
+            synced = false;
+            getServletContext().log("La invitación se respondió, pero no pudo sincronizarse", error);
+        }
+        response.sendRedirect("mail?folder=" + url(folder) + "&uid=" + uidValue + "&invite="
+                + status.toLowerCase(Locale.ROOT) + (synced ? "" : "&sync=0"));
+        return true;
+    }
+
+    private static JsonObject invitationJson(ICalendar.Invite invite, String mailbox, String status) {
+        ZoneId zone = zone(invite.timezone());
+        JsonObject value = new JsonObject();
+        value.addProperty("eventId", UUID.nameUUIDFromBytes(("ical:" + invite.uid() + ":" + mailbox)
+                .getBytes(StandardCharsets.UTF_8)).toString());
+        value.addProperty("participantId", UUID.nameUUIDFromBytes(("ical:" + invite.uid() + ":" + mailbox)
+                .getBytes(StandardCharsets.UTF_8)).toString());
+        value.addProperty("uid", invite.uid());
+        value.addProperty("sequence", invite.sequence());
+        value.addProperty("organizer", invite.organizer());
+        value.addProperty("attendee", mailbox);
+        value.addProperty("summary", invite.summary());
+        value.addProperty("description", invite.description());
+        value.addProperty("place", invite.location());
+        value.addProperty("start", LocalDateTime.ofInstant(invite.start(), zone).format(
+                DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")));
+        value.addProperty("end", LocalDateTime.ofInstant(invite.end(), zone).format(
+                DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")));
+        value.addProperty("timezone", zone.getId());
+        value.addProperty("status", status);
+        return value;
+    }
+
+    private static void invitationModel(Map<String, Object> model, ImapMailbox.Mail mail, String mailbox,
+            String folder, String uid) {
+        ICalendar.Invite invite = mail.invitation();
+        if (invite == null) return;
+        ZoneId zone = zone(invite.timezone());
+        DateTimeFormatter date = invite.allDay() ? DateTimeFormatter.ofPattern("dd/MM/yyyy")
+                : DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
+        model.put("invitationAvailable", true);
+        model.put("invitationCanReply", mail.invitationTrusted() && invite.canReply(mailbox));
+        model.put("invitationCancelled", "CANCEL".equals(invite.method()));
+        model.put("invitationCannotReply", !"CANCEL".equals(invite.method())
+                && (!mail.invitationTrusted() || !invite.canReply(mailbox)));
+        model.put("invitationTitle", invite.summary().isBlank() ? "(Invitación sin título)" : invite.summary());
+        model.put("invitationOrganizer", invite.organizer());
+        model.put("invitationLocation", invite.location().isBlank() ? "Sin ubicación" : invite.location());
+        model.put("invitationStart", date.format(invite.start().atZone(zone)));
+        model.put("invitationEnd", date.format(invite.end().atZone(zone)));
+        model.put("invitationFolder", folder);
+        model.put("invitationUid", uid);
+        String replied = String.valueOf(model.getOrDefault("invitationReply", ""));
+        model.put("invitationReplyNotice", !replied.isBlank());
+        model.put("invitationReplyLabel", switch (replied.toUpperCase(Locale.ROOT)) {
+            case "ACCEPTED" -> "Aceptaste esta invitación.";
+            case "TENTATIVE" -> "Marcaste tu asistencia como tentativa.";
+            case "DECLINED" -> "Rechazaste esta invitación.";
+            default -> "";
+        });
+    }
+
+    record MessageBody(String plain, String html) { }
+
+    static MessageBody messageBody(String body, String format) {
+        String value = body == null ? "" : body;
+        if (value.isBlank() || value.length() > 200_000)
+            throw new IllegalArgumentException("El contenido no es válido");
+        if ("html".equals(format)) {
+            String html = ImapMailbox.sanitizeHtml(value);
+            if (html.isBlank()) throw new IllegalArgumentException("El contenido HTML no es válido");
+            String plain = html.replaceAll("(?i)<br\\s*/?>", "\n").replaceAll("(?i)</p\\s*>", "\n")
+                    .replaceAll("<[^>]+>", "").replace("&nbsp;", " ").replace("&amp;", "&")
+                    .replace("&lt;", "<").replace("&gt;", ">").strip();
+            return new MessageBody(plain.isBlank() ? "Mensaje HTML" : plain, html);
+        }
+        if (format != null && !format.isBlank() && !"markdown".equals(format))
+            throw new IllegalArgumentException("Formato de mensaje inválido");
+        return new MessageBody(value,
+                ImapMailbox.sanitizeHtml(MARKDOWN_HTML.render(MARKDOWN.parse(value))));
+    }
+
+    private static ZoneId zone(String value) {
+        try { return ZoneId.of(value); }
+        catch (RuntimeException error) { return ZoneId.systemDefault(); }
     }
 
     private boolean downloadAttachment(HttpServletRequest request, HttpServletResponse response, String mailbox,
@@ -1124,11 +1247,15 @@ public final class MailServlet extends HttpServlet {
     }
 
     private boolean syncEvent(JsonObject value) {
+        return syncEvent(value, "event");
+    }
+
+    private boolean syncEvent(JsonObject value, String action) {
         if (EVENT_ENDPOINT == null || EVENT_ENDPOINT.isBlank() || EVENT_SECRET == null || EVENT_SECRET.isBlank())
             return true;
         try {
             JsonObject request = value.deepCopy();
-            request.addProperty("action", "event");
+            request.addProperty("action", action);
             checked(endpoint(EVENT_ENDPOINT, EVENT_SECRET, request, "de eventos"));
             return true;
         } catch (Exception error) {

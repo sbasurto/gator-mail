@@ -174,6 +174,51 @@ a { color: var(--gator-blue-dark); }
     font-weight: 700;
 }
 
+.gm-logout { text-align: center; }
+
+.gm-logout-icon {
+    display: grid;
+    place-items: center;
+    width: 4rem;
+    height: 4rem;
+    margin: 0 auto 1.1rem;
+    border-radius: 18px;
+    background: #e7f5fa;
+    color: var(--gator-blue);
+    font-size: 1.65rem;
+    font-weight: 800;
+    transform: rotate(-3deg);
+}
+
+.gm-logout .instruction {
+    margin-bottom: .45rem !important;
+    color: var(--gator-ink) !important;
+    font-size: 1rem !important;
+    font-weight: 700;
+}
+
+.gm-logout-help {
+    margin: 0 0 1.35rem;
+    color: var(--gator-muted);
+    font-size: .86rem;
+    line-height: 1.5;
+}
+
+.gm-logout-login {
+    display: inline-flex !important;
+    justify-content: center;
+    align-items: center;
+    min-height: 48px;
+    width: 100%;
+    border-radius: 10px;
+    background: var(--gator-blue);
+    color: #fff !important;
+    text-decoration: none;
+}
+
+.gm-logout-login:hover,
+.gm-logout-login:focus { background: var(--gator-blue-dark); }
+
 .gm-password-help {
     margin: 0 0 1.25rem;
     color: var(--gator-muted);

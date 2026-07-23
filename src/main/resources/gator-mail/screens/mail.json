@@ -14,9 +14,9 @@
           { "tag": "link", "attrs": { "rel": "stylesheet", "href": "/elib/css2/fontawesome-free-5.13.0-web/css/all.min.css" } },
           { "tag": "link", "attrs": { "rel": "stylesheet", "href": "/elib/css/colors.css" } },
           { "tag": "link", "attrs": { "rel": "stylesheet", "href": "/elib/css2/sweetalert2.min.css?v=11.23.0" } },
-          { "tag": "link", "attrs": { "rel": "stylesheet", "href": "${contextPath}/css/gator-mail.css?v=28" } },
+          { "tag": "link", "attrs": { "rel": "stylesheet", "href": "${contextPath}/css/gator-mail.css?v=29" } },
           { "tag": "script", "attrs": { "src": "/elib/js/sweetalert2.all.min.js", "defer": "true" } },
-          { "tag": "script", "attrs": { "src": "${contextPath}/js/gator-mail.js?v=9", "defer": "true" } }
+          { "tag": "script", "attrs": { "src": "${contextPath}/js/gator-mail.js?v=10", "defer": "true" } }
         ]
       },
       {
@@ -493,8 +493,11 @@
                           { "tag": "button", "attrs": { "class": "btn btn-sm btn-light", "type": "button", "data-md": "heading", "title": "Encabezado" }, "text": "H" },
                           { "tag": "button", "attrs": { "class": "btn btn-sm btn-light", "type": "button", "data-md": "list", "title": "Lista" }, "children": [{ "tag": "span", "attrs": { "class": "fas fa-list", "aria-hidden": "true" } }] },
                           { "tag": "button", "attrs": { "class": "btn btn-sm btn-light", "type": "button", "data-md": "link", "title": "Enlace" }, "children": [{ "tag": "span", "attrs": { "class": "fas fa-link", "aria-hidden": "true" } }] },
-                          { "tag": "span", "attrs": { "class": "mail-md-label" }, "children": [
-                            { "tag": "span", "attrs": { "class": "fab fa-markdown", "aria-hidden": "true" } }, { "tag": "span", "text": "Markdown" }
+                          { "tag": "div", "attrs": { "class": "mail-md-label", "aria-label": "Formato del mensaje" }, "children": [
+                            { "tag": "span", "text": "Formato" },
+                            { "tag": "input", "attrs": { "type": "hidden", "id": "mail-compose-format", "name": "format", "value": "markdown" } },
+                            { "tag": "button", "attrs": { "class": "btn btn-sm btn-primary", "id": "mail-format-markdown", "type": "button" }, "text": "Markdown" },
+                            { "tag": "button", "attrs": { "class": "btn btn-sm btn-light", "id": "mail-format-html", "type": "button" }, "text": "HTML" }
                           ] }
                         ] },
                         { "tag": "label", "attrs": { "class": "visually-hidden", "for": "mail-compose-body" }, "text": "Contenido" },
@@ -632,6 +635,33 @@
                               { "tag": "span", "attrs": { "class": "fas fa-share", "aria-hidden": "true" } }, { "tag": "span", "text": "Reenviar" }
                             ] }
                           ] },
+                          { "tag": "section", "if": "invitationAvailable", "attrs": { "class": "mail-invitation", "aria-label": "Invitación de calendario" }, "children": [
+                            { "tag": "div", "attrs": { "class": "mail-invitation-date", "aria-hidden": "true" }, "children": [
+                              { "tag": "span", "attrs": { "class": "fas fa-calendar-check" } }
+                            ] },
+                            { "tag": "div", "attrs": { "class": "mail-invitation-copy" }, "children": [
+                              { "tag": "p", "attrs": { "class": "mail-eyebrow" }, "text": "Invitación de calendario" },
+                              { "tag": "h2", "attrs": { "id": "mail-invitation-title" }, "text": "${invitationTitle}" },
+                              { "tag": "dl", "children": [
+                                { "tag": "dt", "text": "Cuándo" }, { "tag": "dd", "text": "${invitationStart} — ${invitationEnd}" },
+                                { "tag": "dt", "text": "Dónde" }, { "tag": "dd", "text": "${invitationLocation}" },
+                                { "tag": "dt", "text": "Organiza" }, { "tag": "dd", "text": "${invitationOrganizer}" }
+                              ] },
+                              { "tag": "p", "if": "invitationCancelled", "attrs": { "class": "mail-invitation-alert" }, "text": "El organizador canceló este evento." },
+                              { "tag": "p", "if": "invitationCannotReply", "attrs": { "class": "mail-invitation-alert" }, "text": "No se habilitó la respuesta automática porque no pudimos verificar al organizador o esta cuenta no aparece como invitada." },
+                              { "tag": "p", "if": "invitationReplyNotice", "attrs": { "class": "mail-invitation-status" }, "text": "${invitationReplyLabel}" },
+                              { "tag": "p", "if": "invitationSyncFailed", "attrs": { "class": "mail-invitation-alert" }, "text": "La respuesta fue enviada, pero no pudo sincronizarse con el calendario externo." },
+                              { "tag": "form", "if": "invitationCanReply", "attrs": { "class": "mail-invitation-actions", "method": "post", "action": "${contextPath}/mail" }, "children": [
+                                { "tag": "input", "attrs": { "type": "hidden", "name": "csrf", "value": "${csrf}" } },
+                                { "tag": "input", "attrs": { "type": "hidden", "name": "action", "value": "inviteReply" } },
+                                { "tag": "input", "attrs": { "type": "hidden", "name": "folder", "value": "${invitationFolder}" } },
+                                { "tag": "input", "attrs": { "type": "hidden", "name": "uid", "value": "${invitationUid}" } },
+                                { "tag": "button", "attrs": { "class": "btn btn-success btn-sm", "type": "submit", "name": "status", "value": "accepted" }, "text": "Aceptar" },
+                                { "tag": "button", "attrs": { "class": "btn btn-outline-secondary btn-sm", "type": "submit", "name": "status", "value": "tentative" }, "text": "Tal vez" },
+                                { "tag": "button", "attrs": { "class": "btn btn-outline-danger btn-sm", "type": "submit", "name": "status", "value": "declined" }, "text": "Rechazar" }
+                              ] }
+                            ] }
+                          ] },
                           { "tag": "section", "if": "attachmentsAvailable", "attrs": { "class": "mail-attachments", "aria-label": "Archivos adjuntos" }, "children": [
                             { "tag": "strong", "text": "Archivos adjuntos" },
                             { "tag": "a", "each": "attachments", "as": "attachment", "attrs": { "class": "mail-attachment", "href": "${attachment.href}", "title": "Descargar ${attachment.name}" }, "children": [
@@ -674,13 +704,24 @@
                   {
                     "tag": "section",
                     "if": "loggedOut",
-                    "attrs": { "class": "card mail-state-card" },
+                    "attrs": { "class": "card mail-state-card mail-logout-card" },
                     "children": [
-                      { "tag": "div", "attrs": { "class": "card-body p-4" }, "children": [
-                        { "tag": "span", "attrs": { "class": "mail-state-icon" }, "text": "✓" },
-                        { "tag": "h1", "attrs": { "class": "h4 mt-3" }, "text": "Sesión cerrada" },
-                        { "tag": "p", "attrs": { "class": "text-muted" }, "text": "Cerraste tu sesión de Gator Mail de forma segura." },
-                        { "tag": "a", "attrs": { "class": "btn btn-primary", "href": "${contextPath}/oauth/login" }, "text": "Volver a entrar" }
+                      { "tag": "div", "attrs": { "class": "card-body" }, "children": [
+                        { "tag": "div", "attrs": { "class": "mail-logout-mark", "aria-hidden": "true" }, "children": [
+                          { "tag": "span", "attrs": { "class": "fas fa-shield-alt" } },
+                          { "tag": "span", "attrs": { "class": "fas fa-check mail-logout-check" } }
+                        ] },
+                        { "tag": "p", "attrs": { "class": "mail-eyebrow" }, "text": "Cuenta protegida" },
+                        { "tag": "h1", "attrs": { "class": "mail-state-title" }, "text": "Sesión cerrada correctamente" },
+                        { "tag": "p", "attrs": { "class": "mail-state-copy" }, "text": "Tu sesión de Gator Mail terminó de forma segura. Puedes cerrar esta ventana o volver a ingresar." },
+                        { "tag": "a", "attrs": { "class": "btn btn-primary mail-primary-action", "href": "${contextPath}/oauth/login" }, "children": [
+                          { "tag": "span", "attrs": { "class": "fas fa-sign-in-alt", "aria-hidden": "true" } },
+                          { "tag": "span", "text": "Ingresar nuevamente" }
+                        ] },
+                        { "tag": "p", "attrs": { "class": "mail-logout-note" }, "children": [
+                          { "tag": "span", "attrs": { "class": "fas fa-lock", "aria-hidden": "true" } },
+                          { "tag": "span", "text": "No quedó ninguna sesión activa en este navegador." }
+                        ] }
                       ] }
                     ]
                   }
