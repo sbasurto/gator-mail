@@ -198,3 +198,4 @@ $$;
 revoke all on function mail_fn_es_admin(text), mail_fn_admin_access(text), mail_fn_admin_usuarios(text),
     mail_fn_admin_usuario_guardar(text), mail_fn_admin_usuario_reset(text), mail_fn_admin_contactos(text),
     mail_fn_admin_contacto_guardar(text), mail_fn_admin_contacto_eliminar(text) from public;
+grant execute on function mail_fn_admin_usuario_reset(text) to w3apps;
