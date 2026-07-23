@@ -99,7 +99,7 @@ public final class AccessCodeSelfCheck {
         for (String key : new String[]{"challenge", "codeChallenge", "phoneCorrection", "composeView", "mailboxView", "messageView", "mailContent", "empty",
                 "hasMessages", "pending", "error", "loggedOut", "noticeVisible", "sendNotice", "mailHtml",
                 "configurationAvailable", "configurationUsersView", "configurationContactsView", "calendarView",
-                "dashboardView", "eventsAvailable", "eventFormView", "eventCreated"}) model.put(key, true);
+                "dashboardView", "eventsAvailable", "eventFormView", "eventCreated", "eventSyncFailed"}) model.put(key, true);
         model.put("mailText", false);
         model.put("passwordReset", true);
         model.put("temporaryPassword", "Abcd_1234-Efgh_5678-Ijkl");
@@ -206,8 +206,10 @@ public final class AccessCodeSelfCheck {
             assert html.contains(">Total de correos</small>");
             assert html.contains(">Julio 2026</h1>");
             assert html.contains("value=\"eventSave\"");
+            assert html.contains("class=\"mail-event-form\" method=\"post\" action=\"/gator-mail/mail\"");
             assert html.contains("name=\"guests\"");
             assert html.contains("event.ics");
+            assert html.contains("no pudo sincronizarse con el calendario externo");
             assert html.contains("class=\"mail-agenda-day is-today\"");
             assert html.contains("value=\"userSave\"");
             assert html.contains("value=\"userReset\"");

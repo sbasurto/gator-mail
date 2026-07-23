@@ -227,3 +227,5 @@ $$;
 
 revoke all on app_eventos, app_grupo_evento, app_evento_participante from public;
 revoke all on function mail_fn_get_eventos(text), mail_fn_get_calendario(text), mail_fn_evento_guardar(text) from public;
+grant execute on function mail_fn_get_eventos(text), mail_fn_get_calendario(text),
+    mail_fn_evento_guardar(text) to w3apps;

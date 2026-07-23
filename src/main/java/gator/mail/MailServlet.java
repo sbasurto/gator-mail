@@ -50,6 +50,8 @@ public final class MailServlet extends HttpServlet {
     private static final int MAX_ATTEMPTS = 5;
     private static final String SMS_ENDPOINT = System.getenv("GATOR_MAIL_SMS_ENDPOINT");
     private static final String SMS_SECRET = System.getenv("GATOR_MAIL_SMS_SECRET");
+    private static final String EVENT_ENDPOINT = System.getenv("GATOR_MAIL_EVENT_ENDPOINT");
+    private static final String EVENT_SECRET = System.getenv("GATOR_MAIL_EVENT_SECRET");
     private static final HttpClient HTTP = HttpClient.newHttpClient();
     private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")
             .withZone(ZoneId.systemDefault());
@@ -166,6 +168,7 @@ public final class MailServlet extends HttpServlet {
         model.put("configurationContactsClass", "");
         model.put("calendarView", false);
         model.put("eventFormView", false);
+        model.put("eventSyncFailed", false);
         model.put("dashboardView", false);
         model.put("calendarClass", "");
         model.put("eventsAvailable", false);
@@ -317,6 +320,7 @@ public final class MailServlet extends HttpServlet {
         JsonObject value = event.json(eventId);
         JsonObject saved = checked(mailDbCall("mail_fn_evento_guardar", gson.toJson(value)));
         eventId = saved.get("eventoId").getAsString();
+        boolean synced = syncEvent(value);
         if (!event.guests().isEmpty()) {
             byte[] calendar = event.ics(eventId);
             String body = "Has sido invitado al evento **" + event.summary() + "**.\n\n"
@@ -327,7 +331,8 @@ public final class MailServlet extends HttpServlet {
                     body, html, List.of(new ImapMailbox.Upload("event.ics",
                             "text/calendar; method=REQUEST; charset=UTF-8", calendar, false)), accessToken);
         }
-        response.sendRedirect("mail?action=calendar&month=" + YearMonth.from(event.start()) + "&created=1");
+        response.sendRedirect("mail?action=calendar&month=" + YearMonth.from(event.start()) + "&created=1"
+                + (synced ? "" : "&sync=0"));
     }
 
     private record EventDraft(String organizer, String summary, String description, String place,
@@ -472,7 +477,9 @@ public final class MailServlet extends HttpServlet {
         model.put("calendarPrevious", "mail?action=calendar&month=" + month.minusMonths(1));
         model.put("calendarNext", "mail?action=calendar&month=" + month.plusMonths(1));
         model.put("calendarDays", days);
-        model.put("eventCreated", "1".equals(request.getParameter("created")));
+        boolean syncFailed = "0".equals(request.getParameter("sync"));
+        model.put("eventCreated", "1".equals(request.getParameter("created")) && !syncFailed);
+        model.put("eventSyncFailed", syncFailed);
     }
 
     private void challengeModel(Map<String, Object> model, HttpSession session, String notice) {
@@ -1109,16 +1116,35 @@ public final class MailServlet extends HttpServlet {
     }
 
     private JsonObject sms(JsonObject value) {
+        return endpoint(SMS_ENDPOINT, SMS_SECRET, value, "SMS");
+    }
+
+    private boolean syncEvent(JsonObject value) {
+        if (EVENT_ENDPOINT == null || EVENT_ENDPOINT.isBlank() || EVENT_SECRET == null || EVENT_SECRET.isBlank())
+            return true;
         try {
-            HttpRequest request = HttpRequest.newBuilder(URI.create(SMS_ENDPOINT))
-                    .header("Authorization", "Bearer " + SMS_SECRET)
+            JsonObject request = value.deepCopy();
+            request.addProperty("action", "event");
+            checked(endpoint(EVENT_ENDPOINT, EVENT_SECRET, request, "de eventos"));
+            return true;
+        } catch (Exception error) {
+            getServletContext().log("El evento quedó guardado, pero no fue posible sincronizarlo", error);
+            return false;
+        }
+    }
+
+    private JsonObject endpoint(String url, String secret, JsonObject value, String service) {
+        try {
+            HttpRequest request = HttpRequest.newBuilder(URI.create(url))
+                    .header("Authorization", "Bearer " + secret)
                     .header("Content-Type", "application/json")
                     .POST(HttpRequest.BodyPublishers.ofString(gson.toJson(value))).build();
             HttpResponse<String> response = HTTP.send(request, HttpResponse.BodyHandlers.ofString());
-            if (response.statusCode() != 200) throw new IllegalStateException("El servicio SMS respondió " + response.statusCode());
+            if (response.statusCode() != 200)
+                throw new IllegalStateException("El servicio " + service + " respondió " + response.statusCode());
             return JsonParser.parseString(response.body()).getAsJsonObject();
         } catch (Exception error) {
-            throw new IllegalStateException("No fue posible consultar el servicio SMS", error);
+            throw new IllegalStateException("No fue posible consultar el servicio " + service, error);
         }
     }
 

@@ -42,6 +42,8 @@ El proceso de Tomcat puede recibir estas variables de entorno:
   no se define)
 - `GATOR_MAIL_SMS_ENDPOINT` (opcional; URL HTTPS del proveedor de desafíos)
 - `GATOR_MAIL_SMS_SECRET` (secreto Bearer compartido con ese proveedor)
+- `GATOR_MAIL_EVENT_ENDPOINT` (opcional; URL HTTPS para sincronizar eventos)
+- `GATOR_MAIL_EVENT_SECRET` (secreto Bearer compartido con ese endpoint)
 
 El cliente público `gator-mail` debe habilitar Authorization Code con PKCE S256
 y registrar exactamente los URI de retorno usados por cada entorno.
@@ -57,6 +59,14 @@ quedan autorizadas inicialmente y pueden ampliarse desde la tabla
 `mail_administradores`.
 El calendario autónomo se instala con `db/mail_calendar.sql` y administra sus
 eventos, grupos y participantes directamente en `db_gatormail`.
+Cuando `GATOR_MAIL_EVENT_ENDPOINT` y `GATOR_MAIL_EVENT_SECRET` están definidos,
+cada alta se envía además por `POST` como JSON con `action: event`; el endpoint
+debe ser idempotente por `eventId` y devolver `codigo: "0"`. Cada instalación
+puede reemplazar este endpoint para sincronizar su propio calendario externo.
+Este contrato es independiente de `GATOR_MAIL_SMS_ENDPOINT`: no se deben
+combinar las URL ni los secretos. Si no se configura el endpoint de eventos,
+el calendario continúa funcionando únicamente con `db_gatormail`; si no se
+configura el endpoint SMS, no se solicita la clave temporal.
 
 ## Compilar y probar
 

@@ -220,6 +220,7 @@
                         ] }
                       ] },
                       { "tag": "span", "if": "eventCreated", "attrs": { "class": "d-none mail-swal mail-swal-success", "title": "Evento creado" }, "text": "El evento se guardó y las invitaciones fueron enviadas." },
+                      { "tag": "span", "if": "eventSyncFailed", "attrs": { "class": "d-none mail-swal mail-swal-error", "title": "Evento guardado" }, "text": "El evento se guardó en Gator Mail, pero no pudo sincronizarse con el calendario externo." },
                       { "tag": "div", "attrs": { "class": "mail-agenda-scroll" }, "children": [
                         { "tag": "div", "attrs": { "class": "mail-agenda-weekdays" }, "children": [
                           { "tag": "strong", "text": "Dom" }, { "tag": "strong", "text": "Lun" },
@@ -248,7 +249,7 @@
                         ] },
                         { "tag": "a", "attrs": { "class": "btn btn-outline-secondary btn-sm", "href": "${contextPath}/mail?action=calendar" }, "text": "Cancelar" }
                       ] },
-                      { "tag": "form", "attrs": { "class": "mail-event-form", "method": "post" }, "children": [
+                      { "tag": "form", "attrs": { "class": "mail-event-form", "method": "post", "action": "${contextPath}/mail" }, "children": [
                         { "tag": "input", "attrs": { "type": "hidden", "name": "action", "value": "eventSave" } },
                         { "tag": "input", "attrs": { "type": "hidden", "name": "csrf", "value": "${csrf}" } },
                         { "tag": "label", "attrs": { "class": "mail-event-field mail-event-wide" }, "children": [
