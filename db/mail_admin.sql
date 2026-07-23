@@ -76,6 +76,28 @@ exception when others then
 end;
 $$;
 
+create or replace function mail_fn_admin_usuario_reset(v_json text)
+returns text language plpgsql security definer set search_path = public as $$
+declare
+    v jsonb := v_json::jsonb;
+    actor text := trim(v ->> 'actor');
+    password text := v ->> 'password';
+    usuario text := trim(v ->> 'user');
+begin
+    if not mail_fn_es_admin(actor) then raise exception 'Acceso administrativo denegado'; end if;
+    if usuario is null or usuario = '' or password is null or password !~ '^[A-Za-z0-9_-]{24}$' then
+        raise exception 'Solicitud de restablecimiento inválida';
+    end if;
+    update app_usuarios
+       set usuario_password = password, usuario_hash_auth = 'UPDATE_PASSWORD'
+     where usuario_id = usuario;
+    if not found then raise exception 'Usuario inexistente'; end if;
+    return json_build_object('codigo', '0')::text;
+exception when others then
+    return json_build_object('codigo', '-1', 'mensaje', sqlerrm)::text;
+end;
+$$;
+
 create or replace function mail_fn_admin_contactos(v_email text)
 returns text language plpgsql stable security definer set search_path = public as $$
 declare resultado json;
@@ -174,5 +196,5 @@ end;
 $$;
 
 revoke all on function mail_fn_es_admin(text), mail_fn_admin_access(text), mail_fn_admin_usuarios(text),
-    mail_fn_admin_usuario_guardar(text), mail_fn_admin_contactos(text),
+    mail_fn_admin_usuario_guardar(text), mail_fn_admin_usuario_reset(text), mail_fn_admin_contactos(text),
     mail_fn_admin_contacto_guardar(text), mail_fn_admin_contacto_eliminar(text) from public;

@@ -24,6 +24,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.security.SecureRandom;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
@@ -32,6 +33,7 @@ import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -53,6 +55,7 @@ public final class MailServlet extends HttpServlet {
             .withZone(ZoneId.systemDefault());
     private static final Parser MARKDOWN = Parser.builder().build();
     private static final HtmlRenderer MARKDOWN_HTML = HtmlRenderer.builder().build();
+    private static final SecureRandom RANDOM = new SecureRandom();
     private final Gson gson = new Gson();
     private final GatorJsonView view = new GatorJsonView();
     private final ImapMailbox imap = new ImapMailbox();
@@ -177,6 +180,8 @@ public final class MailServlet extends HttpServlet {
         model.put("loggedOut", false);
         model.put("noticeVisible", false);
         model.put("sendNotice", false);
+        model.put("passwordReset", false);
+        model.put("temporaryPassword", "");
         model.put("layoutClass", "container-fluid");
         model.put("contentClass", "container py-4");
         model.put("sessionActive", true);
@@ -812,6 +817,7 @@ public final class MailServlet extends HttpServlet {
         model.put("configurationAvailable", admin);
         String action = request.getParameter("action");
         boolean requested = "settings".equals(action) || "userSave".equals(action) || "userToggle".equals(action)
+                || "userReset".equals(action)
                 || "contactSave".equals(action) || "contactDelete".equals(action);
         if (!requested) return false;
         if (!admin) {
@@ -827,10 +833,17 @@ public final class MailServlet extends HttpServlet {
             value.addProperty("actor", mailbox);
             if (action.startsWith("user")) {
                 value.addProperty("user", request.getParameter("user"));
-                value.addProperty("name", request.getParameter("name"));
-                boolean enabled = Boolean.parseBoolean(request.getParameter("enabled"));
-                value.addProperty("enabled", "userToggle".equals(action) ? !enabled : enabled);
-                checked(mailDbCall("mail_fn_admin_usuario_guardar", gson.toJson(value)));
+                if ("userReset".equals(action)) {
+                    String password = temporaryPassword();
+                    value.addProperty("password", password);
+                    checked(mailDbCall("mail_fn_admin_usuario_reset", gson.toJson(value)));
+                    session.setAttribute("mail.password.reset", password);
+                } else {
+                    value.addProperty("name", request.getParameter("name"));
+                    boolean enabled = Boolean.parseBoolean(request.getParameter("enabled"));
+                    value.addProperty("enabled", "userToggle".equals(action) ? !enabled : enabled);
+                    checked(mailDbCall("mail_fn_admin_usuario_guardar", gson.toJson(value)));
+                }
                 response.sendRedirect("mail?action=settings&section=users");
             } else {
                 value.addProperty("id", request.getParameter("id"));
@@ -864,6 +877,10 @@ public final class MailServlet extends HttpServlet {
         model.put("configurationContactsView", "contacts".equals(section));
         model.put("configurationUsersClass", "users".equals(section) ? "active" : "");
         model.put("configurationContactsClass", "contacts".equals(section) ? "active" : "");
+        Object password = session.getAttribute("mail.password.reset");
+        model.put("passwordReset", password != null);
+        model.put("temporaryPassword", password == null ? "" : password);
+        session.removeAttribute("mail.password.reset");
         if ("users".equals(section)) {
             JsonObject result = checked(mailDbCall("mail_fn_admin_usuarios", String.valueOf(model.get("mailbox"))));
             List<Map<String, Object>> users = new ArrayList<>();
@@ -1054,6 +1071,12 @@ public final class MailServlet extends HttpServlet {
         if (!phone.matches("\\+[1-9][0-9]{7,14}"))
             throw new IllegalArgumentException("Captura el teléfono con código de país, por ejemplo +5215512345678");
         return phone;
+    }
+
+    static String temporaryPassword() {
+        byte[] value = new byte[18];
+        RANDOM.nextBytes(value);
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(value);
     }
 
     private static boolean smsConfigured() {

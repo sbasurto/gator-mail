@@ -5,6 +5,19 @@
         text: alert.textContent
     }));
 
+    document.querySelectorAll(".mail-password-reset").forEach(button => button.addEventListener("click", async event => {
+        event.preventDefault();
+        const result = await Swal.fire({
+            title: "¿Restablecer contraseña?",
+            text: "Se generará una contraseña temporal y el usuario deberá cambiarla al ingresar.",
+            icon: "warning",
+            showCancelButton: true,
+            confirmButtonText: "Restablecer",
+            cancelButtonText: "Cancelar"
+        });
+        if (result.isConfirmed) button.form.requestSubmit(button);
+    }));
+
     const post = (action, values, csrf) => {
         const form = document.createElement("form");
         form.method = "post";

@@ -10,12 +10,20 @@ insert into mail_administradores(usuario_id) values ('mail-admin-test');
 do $$
 declare resultado json;
 declare contacto text;
+declare password_anterior text;
 begin
     resultado := mail_fn_admin_usuario_guardar('{"actor":"mail-admin-test@soft-gator.com",'
         '"user":"mail-user-test","name":"Usuario actualizado","enabled":false}')::json;
     assert resultado ->> 'codigo' = '0', 'No se actualizó el usuario';
     assert (select usuario_nombre = 'Usuario actualizado' and usuario_estado = '0'
               from app_usuarios where usuario_id = 'mail-user-test'), 'Cambio de usuario incorrecto';
+
+    select usuario_password into password_anterior from app_usuarios where usuario_id = 'mail-user-test';
+    resultado := mail_fn_admin_usuario_reset('{"actor":"mail-admin-test@soft-gator.com",'
+        '"user":"mail-user-test","password":"Abcd_1234-Efgh_5678-Ijkl"}')::json;
+    assert resultado ->> 'codigo' = '0', 'No se restableció la contraseña';
+    assert (select usuario_password <> password_anterior and usuario_hash_auth = 'UPDATE_PASSWORD'
+              from app_usuarios where usuario_id = 'mail-user-test'), 'Restablecimiento incorrecto';
 
     resultado := mail_fn_admin_contacto_guardar('{"actor":"mail-admin-test@soft-gator.com",'
         '"name":"Contacto de prueba","email":"contacto-admin-test@example.com",'

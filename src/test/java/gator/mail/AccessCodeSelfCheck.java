@@ -55,6 +55,9 @@ public final class AccessCodeSelfCheck {
         try { MailServlet.phone("5511186677"); }
         catch (IllegalArgumentException expected) { rejectedPhone = true; }
         assert rejectedPhone;
+        String temporaryPassword = MailServlet.temporaryPassword();
+        assert temporaryPassword.matches("[A-Za-z0-9_-]{24}");
+        assert !temporaryPassword.equals(MailServlet.temporaryPassword());
         assert Arrays.equals(new long[]{1, 42}, MailServlet.uids(new String[]{"1", "42"}));
         assert "asunto urgente".equals(MailServlet.searchQuery("  asunto urgente  "));
         assert MailServlet.page(null) == 1;
@@ -91,6 +94,8 @@ public final class AccessCodeSelfCheck {
                 "configurationAvailable", "configurationUsersView", "configurationContactsView", "calendarView",
                 "dashboardView", "eventsAvailable", "eventFormView", "eventCreated"}) model.put(key, true);
         model.put("mailText", false);
+        model.put("passwordReset", true);
+        model.put("temporaryPassword", "Abcd_1234-Efgh_5678-Ijkl");
         model.put("body", "<script>parent.alert('bad')</script>");
         model.put("contextPath", "/gator-mail");
         model.put("layoutClass", "mail-workspace");
@@ -161,7 +166,7 @@ public final class AccessCodeSelfCheck {
             assert html.contains("Sesión cerrada");
             assert html.contains("/gator-mail/css/gator-mail.css?v=28");
             assert html.contains("/elib/js/sweetalert2.all.min.js");
-            assert html.contains("/gator-mail/js/gator-mail.js?v=8");
+            assert html.contains("/gator-mail/js/gator-mail.js?v=9");
             assert html.contains("href=\"/gator-mail/oauth/password\"");
             assert html.contains("fontawesome-free-5.13.0-web/css/all.min.css");
             assert html.contains("&lt;user@example.com&gt;");
@@ -195,6 +200,8 @@ public final class AccessCodeSelfCheck {
             assert html.contains("event.ics");
             assert html.contains("class=\"mail-agenda-day is-today\"");
             assert html.contains("value=\"userSave\"");
+            assert html.contains("value=\"userReset\"");
+            assert html.contains("Contraseña temporal: Abcd_1234-Efgh_5678-Ijkl");
             assert html.contains("value=\"contactSave\"");
             assert html.contains("data-message-uid=\"1\"");
             assert html.contains(">No leído</span>");
