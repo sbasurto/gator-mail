@@ -87,6 +87,7 @@ public final class MailServlet extends HttpServlet {
                 response.sendError(HttpServletResponse.SC_FORBIDDEN);
                 return;
             }
+            session.setMaxInactiveInterval(sessionTimeoutSeconds(access));
             String mailbox = access.get("email").getAsString();
             model.put("mailbox", mailbox);
             String notice = challenge(request, session, user);
@@ -982,6 +983,7 @@ public final class MailServlet extends HttpServlet {
                     value.addProperty("name", request.getParameter("name"));
                     boolean enabled = Boolean.parseBoolean(request.getParameter("enabled"));
                     value.addProperty("enabled", "userToggle".equals(action) ? !enabled : enabled);
+                    value.addProperty("sessionTimeoutMinutes", request.getParameter("sessionTimeoutMinutes"));
                     String number = null;
                     if (!"userToggle".equals(action) && smsConfigured()) {
                         String requestedPhone = request.getParameter("phone");
@@ -1065,6 +1067,7 @@ public final class MailServlet extends HttpServlet {
                 users.add(Map.of("id", user.get("id").getAsString(), "name", user.get("name").getAsString(),
                         "email", user.get("email").getAsString(), "enabled", enabled,
                         "phone", user.get("phone").getAsString(), "safeListed", safeListed,
+                        "sessionTimeoutMinutes", user.get("sessionTimeoutMinutes").getAsInt(),
                         "status", enabled ? "Activo" : "Inactivo", "toggleLabel", enabled ? "Desactivar" : "Activar"));
             }
             model.put("configurationUsers", users);
@@ -1273,6 +1276,11 @@ public final class MailServlet extends HttpServlet {
         byte[] value = new byte[18];
         RANDOM.nextBytes(value);
         return Base64.getUrlEncoder().withoutPadding().encodeToString(value);
+    }
+
+    static int sessionTimeoutSeconds(JsonObject access) {
+        int milliseconds = access.has("sessionTimeout") ? access.get("sessionTimeout").getAsInt() : 10_800_000;
+        return milliseconds > 0 ? Math.max(1, milliseconds / 1000) : 10_800;
     }
 
     private static boolean smsConfigured() {

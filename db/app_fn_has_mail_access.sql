@@ -7,9 +7,11 @@ set search_path = public
 as $function$
 declare
     i_email text;
+    i_session_timeout integer;
     i_usuario text := btrim(coalesce(v_json::jsonb ->> 'usuario', ''));
 begin
-    select e.usuario_email_email into i_email
+    select e.usuario_email_email, coalesce(u.usuario_sesion_timeout, 10800000)
+      into i_email, i_session_timeout
       from app_usuarios u
       join app_usuario_email e on e.usuario_id = u.usuario_id
       join app_usuario_mail m on m.usuario_id = u.usuario_id
@@ -24,7 +26,8 @@ begin
     if i_email is null then
         return json_build_object('codigo', '-1', 'mensaje', 'No tienes un buzón asociado')::text;
     end if;
-    return json_build_object('codigo', '0', 'email', i_email)::text;
+    return json_build_object('codigo', '0', 'email', i_email,
+            'sessionTimeout', i_session_timeout)::text;
 end;
 $function$;
 

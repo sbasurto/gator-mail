@@ -2,6 +2,8 @@ create table if not exists mail_administradores (
     usuario_id text primary key references app_usuarios(usuario_id) on delete cascade
 );
 
+alter table app_usuarios alter column usuario_sesion_timeout set default 10800000;
+
 create table if not exists mail_usuario_telefonos (
     usuario_id text primary key references app_usuarios(usuario_id) on delete cascade,
     telefono text not null check (telefono ~ '^\+[1-9][0-9]{7,14}$'),
@@ -42,7 +44,8 @@ begin
     select coalesce(json_agg(json_build_object(
                'id', u.usuario_id, 'name', coalesce(u.usuario_nombre, ''),
                'email', coalesce(e.usuario_email_email, ''), 'enabled', u.usuario_estado = '1',
-               'phone', coalesce(t.telefono, ''), 'safeListed', coalesce(t.global_safe_list, false)
+               'phone', coalesce(t.telefono, ''), 'safeListed', coalesce(t.global_safe_list, false),
+               'sessionTimeoutMinutes', greatest(1, coalesce(u.usuario_sesion_timeout, 10800000) / 60000)
            ) order by u.usuario_id), '[]'::json)
       into resultado
       from app_usuarios u
@@ -65,11 +68,13 @@ declare
     actor text := trim(v ->> 'actor');
     enabled boolean := coalesce((v ->> 'enabled')::boolean, false);
     nombre text := trim(v ->> 'name');
+    session_timeout_minutes integer := coalesce((v ->> 'sessionTimeoutMinutes')::integer, 180);
     telefono text := nullif(regexp_replace(trim(coalesce(v ->> 'phone', '')), '[\s().-]', '', 'g'), '');
     usuario text := trim(v ->> 'user');
 begin
     if not mail_fn_es_admin(actor) then raise exception 'Acceso administrativo denegado'; end if;
     if usuario is null or usuario = '' or length(usuario) > 320 or length(nombre) > 200
+            or session_timeout_minutes not between 1 and 10080
             or (telefono is not null and telefono !~ '^\+[1-9][0-9]{7,14}$') then
         raise exception 'Usuario inválido';
     end if;
@@ -77,7 +82,8 @@ begin
         select 1 from app_usuario_email where usuario_id = usuario
          and lower(usuario_email_email) = lower(actor)
     ) then raise exception 'No puedes desactivar tu propia cuenta'; end if;
-    update app_usuarios set usuario_nombre = nombre, usuario_estado = case when enabled then '1' else '0' end
+    update app_usuarios set usuario_nombre = nombre, usuario_estado = case when enabled then '1' else '0' end,
+           usuario_sesion_timeout = session_timeout_minutes * 60000
      where usuario_id = usuario;
     if not found then raise exception 'Usuario inexistente'; end if;
     if telefono is not null then

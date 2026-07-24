@@ -1,5 +1,7 @@
 package gator.mail;
 
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import gator.lib.web.gui.GatorJsonView;
 import java.util.Arrays;
 import java.util.Base64;
@@ -79,6 +81,8 @@ public final class AccessCodeSelfCheck {
         String temporaryPassword = MailServlet.temporaryPassword();
         assert temporaryPassword.matches("[A-Za-z0-9_-]{24}");
         assert !temporaryPassword.equals(MailServlet.temporaryPassword());
+        assert MailServlet.sessionTimeoutSeconds(JsonParser.parseString("{\"sessionTimeout\":10800000}").getAsJsonObject()) == 10800;
+        assert MailServlet.sessionTimeoutSeconds(new JsonObject()) == 10800;
         assert Arrays.equals(new long[]{1, 42}, MailServlet.uids(new String[]{"1", "42"}));
         assert "asunto urgente".equals(MailServlet.searchQuery("  asunto urgente  "));
         assert MailServlet.page(null) == 1;
@@ -183,7 +187,8 @@ public final class AccessCodeSelfCheck {
                 "status", "A tiempo", "statusClass", "is-on-time")));
         model.put("configurationUsers", List.of(Map.of("id", "usuario", "name", "Usuario Uno",
                 "email", "usuario@example.com", "enabled", true, "phone", "+525512345678",
-                "safeListed", true, "status", "Activo", "toggleLabel", "Desactivar")));
+                "safeListed", true, "sessionTimeoutMinutes", 180,
+                "status", "Activo", "toggleLabel", "Desactivar")));
         model.put("configurationContacts", List.of(Map.of("id", "contacto", "name", "Contacto Uno",
                 "email", "uno@example.com", "owner", "usuario", "group", "2")));
         model.put("attachmentsAvailable", true);
@@ -206,7 +211,7 @@ public final class AccessCodeSelfCheck {
         try {
             String html = new GatorJsonView().renderResource("gator-mail/screens/mail.json", model);
             assert html.contains("Sesión cerrada");
-            assert html.contains("/gator-mail/css/gator-mail.css?v=30");
+            assert html.contains("/gator-mail/css/gator-mail.css?v=31");
             assert html.contains("/elib/js/sweetalert2.all.min.js");
             assert html.contains("/gator-mail/js/gator-mail.js?v=10");
             assert html.contains("href=\"/gator-mail/oauth/password\"");
@@ -259,6 +264,7 @@ public final class AccessCodeSelfCheck {
             assert html.contains("value=\"userSave\"");
             assert html.contains("value=\"userReset\"");
             assert html.contains("name=\"phone\"");
+            assert html.contains("name=\"sessionTimeoutMinutes\"");
             assert html.contains("value=\"+525512345678\"");
             assert html.contains("value=\"userSafeList\"");
             assert html.contains(">En Global Safe List</span>");
@@ -279,6 +285,7 @@ public final class AccessCodeSelfCheck {
             assert html.contains("form=\"mail-bulk-form\"");
             assert html.contains("Página 1 de 1");
             assert html.contains("Administrar contraseña");
+            assert html.indexOf("title=\"Redactar correo\"") < html.indexOf("title=\"Administrar contraseña\"");
             assert !html.contains("mail-layout");
             assert !html.contains("mail-main");
             model.put("smsAdminAvailable", false);

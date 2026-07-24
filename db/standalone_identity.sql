@@ -44,7 +44,7 @@ create table if not exists app_usuarios (
     usuario_hash_loops text default ((random() * 20000)::integer),
     usuario_password_corto text,
     usuario_recover_hash text default uuid_generate_v4(),
-    usuario_sesion_timeout integer default 3600000,
+    usuario_sesion_timeout integer default 10800000,
     usuario_publico integer default 0,
     usuario_hash_auth text
 );

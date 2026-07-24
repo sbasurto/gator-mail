@@ -231,7 +231,7 @@ body { min-height: 100vh; margin: 0; color: var(--gator-ink); background: var(--
     .mail-topbar { min-height: 60px; padding: .4rem .65rem; }
     .mail-logo { width: 36px; height: 36px; }
     .mail-account-address { display: none; }
-    .mail-password-label { display: none; }
+    .mail-password-label, .mail-compose-label { display: none; }
     .mail-signout { padding: .4rem .65rem; font-size: .72rem; }
     .mail-workspace { flex-direction: column; min-height: calc(100vh - 60px); }
     .mail-sidebar { display: block; flex: 0 0 auto; max-height: 40vh; overflow: auto; padding: .65rem; }
