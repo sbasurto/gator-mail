@@ -226,6 +226,9 @@ public final class AccessCodeSelfCheck {
                 Map.of("value", "FROM", "label", "Remitente", "selected", true));
         List<Map<String, Object>> filterOperators = List.of(
                 Map.of("value", "CONTAINS", "label", "Contiene", "selected", true));
+        List<Map<String, Object>> filterHeaders = List.of(
+                Map.of("value", "X-Spam-Flag", "label", "X-Spam-Flag", "selected", true),
+                Map.of("value", "Authentication-Results", "label", "Authentication-Results", "selected", false));
         List<Map<String, Object>> filterDestinations = List.of(
                 Map.of("value", "Archivo", "label", "Archivo", "selected", true));
         model.put("filterDestinationAvailable", true);
@@ -234,14 +237,15 @@ public final class AccessCodeSelfCheck {
         model.put("filterErrorAvailable", false);
         model.put("filterFields", filterFields);
         model.put("filterOperators", filterOperators);
+        model.put("filterHeaders", filterHeaders);
         model.put("filterDestinations", filterDestinations);
         model.put("filterStatus", "IDLE");
         model.put("filterLastUid", 42);
         model.put("filterHeartbeat", "2026-07-24 10:00:00");
         model.put("filterRetries", 0);
         model.put("filterRules", List.of(Map.of("id", 1, "name", "Facturas", "priority", 100,
-                "enabled", true, "header", "", "value", "factura", "fields", filterFields,
-                "operators", filterOperators, "destinations", filterDestinations)));
+                "enabled", true, "value", "factura", "fields", filterFields,
+                "operators", filterOperators, "headers", filterHeaders, "destinations", filterDestinations)));
         model.put("filterAudit", List.of(Map.of("uid", 42, "rule", "Facturas", "destination", "Archivo",
                 "status", "MOVIDO", "attempt", 1, "date", "2026-07-24 10:00:00", "detail", "")));
         model.put("configurationFoldersEmpty", false);
@@ -308,6 +312,8 @@ public final class AccessCodeSelfCheck {
             assert html.contains(">Filtros</span>");
             assert html.contains(">Carpetas</span>");
             assert html.contains("value=\"filterSave\"");
+            assert html.contains("value=\"X-Spam-Flag\" selected");
+            assert html.contains("value=\"Authentication-Results\"");
             assert html.contains("Facturas");
             assert html.contains("Último UID: 42");
             assert html.contains("value=\"folderCreate\"");

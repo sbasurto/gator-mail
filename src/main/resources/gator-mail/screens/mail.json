@@ -285,7 +285,9 @@
                         { "tag": "label", "children": [{ "tag": "small", "text": "Operador" }, { "tag": "select", "attrs": { "class": "form-select", "name": "operator" }, "children": [
                           { "tag": "option", "each": "filterOperators", "as": "choice", "attrs": { "value": "${choice.value}" }, "text": "${choice.label}" }
                         ] }] },
-                        { "tag": "label", "children": [{ "tag": "small", "text": "Encabezado (sólo campo Encabezado)" }, { "tag": "input", "attrs": { "class": "form-control", "name": "header", "maxlength": "100", "placeholder": "X-Spam-Flag" } }] },
+                        { "tag": "label", "children": [{ "tag": "small", "text": "Encabezado (sólo campo Encabezado)" }, { "tag": "select", "attrs": { "class": "form-select", "name": "header" }, "children": [
+                          { "tag": "option", "each": "filterHeaders", "as": "choice", "attrs": { "value": "${choice.value}", "selected": "${choice.selected}" }, "text": "${choice.label}" }
+                        ] }] },
                         { "tag": "label", "children": [{ "tag": "small", "text": "Valor" }, { "tag": "input", "attrs": { "class": "form-control", "name": "value", "maxlength": "500", "required": "true" } }] },
                         { "tag": "label", "children": [{ "tag": "small", "text": "Mover a" }, { "tag": "select", "attrs": { "class": "form-select", "name": "destination" }, "children": [
                           { "tag": "option", "each": "filterDestinations", "as": "folder", "attrs": { "value": "${folder.value}" }, "text": "${folder.label}" }
@@ -307,7 +309,9 @@
                           { "tag": "label", "children": [{ "tag": "small", "text": "Operador" }, { "tag": "select", "attrs": { "class": "form-select", "name": "operator" }, "children": [
                             { "tag": "option", "each": "rule.operators", "as": "choice", "attrs": { "value": "${choice.value}", "selected": "${choice.selected}" }, "text": "${choice.label}" }
                           ] }] },
-                          { "tag": "label", "children": [{ "tag": "small", "text": "Encabezado" }, { "tag": "input", "attrs": { "class": "form-control", "name": "header", "value": "${rule.header}", "maxlength": "100" } }] },
+                          { "tag": "label", "children": [{ "tag": "small", "text": "Encabezado" }, { "tag": "select", "attrs": { "class": "form-select", "name": "header" }, "children": [
+                            { "tag": "option", "each": "rule.headers", "as": "choice", "attrs": { "value": "${choice.value}", "selected": "${choice.selected}" }, "text": "${choice.label}" }
+                          ] }] },
                           { "tag": "label", "children": [{ "tag": "small", "text": "Valor" }, { "tag": "input", "attrs": { "class": "form-control", "name": "value", "value": "${rule.value}", "maxlength": "500", "required": "true" } }] },
                           { "tag": "label", "children": [{ "tag": "small", "text": "Mover a" }, { "tag": "select", "attrs": { "class": "form-select", "name": "destination" }, "children": [
                             { "tag": "option", "each": "rule.destinations", "as": "folder", "attrs": { "value": "${folder.value}", "selected": "${folder.selected}" }, "text": "${folder.label}" }

@@ -58,6 +58,10 @@ public final class MailServlet extends HttpServlet {
     private static final Parser MARKDOWN = Parser.builder().build();
     private static final HtmlRenderer MARKDOWN_HTML = HtmlRenderer.builder().build();
     private static final SecureRandom RANDOM = new SecureRandom();
+    private static final List<String> FILTER_HEADERS = List.of(
+            "X-Spam-Flag", "X-Spam-Status", "Authentication-Results", "Received-SPF",
+            "DKIM-Signature", "List-Id", "List-Unsubscribe", "Auto-Submitted",
+            "Precedence", "Reply-To", "Return-Path", "Message-ID", "Content-Type");
     private final Gson gson = new Gson();
     private final GatorJsonView view = new GatorJsonView();
     private final ImapMailbox imap = new ImapMailbox();
@@ -1078,9 +1082,13 @@ public final class MailServlet extends HttpServlet {
                     value.addProperty("name", request.getParameter("name"));
                     value.addProperty("priority", request.getParameter("priority"));
                     value.addProperty("enabled", request.getParameter("enabled") != null);
-                    value.addProperty("field", request.getParameter("field"));
+                    String field = request.getParameter("field");
+                    String header = request.getParameter("header");
+                    if ("HEADER".equals(field) && !FILTER_HEADERS.contains(header))
+                        throw new IllegalArgumentException("Selecciona un encabezado válido");
+                    value.addProperty("field", field);
                     value.addProperty("operator", request.getParameter("operator"));
-                    value.addProperty("header", request.getParameter("header"));
+                    value.addProperty("header", "HEADER".equals(field) ? header : "");
                     value.addProperty("value", request.getParameter("value"));
                     value.addProperty("destination", destination);
                     checked(mailDbCall("mail_fn_filtro_guardar", gson.toJson(value)));
@@ -1225,6 +1233,7 @@ public final class MailServlet extends HttpServlet {
         model.put("filterDestinationAvailable", !destinations.isEmpty());
         model.put("filterFields", filterFields(""));
         model.put("filterOperators", filterOperators(""));
+        model.put("filterHeaders", filterHeaders(""));
         JsonObject result = checked(mailDbCall("mail_fn_filtros", mailbox));
         List<Map<String, Object>> rules = new ArrayList<>();
         for (JsonElement element : result.getAsJsonArray("reglas")) {
@@ -1234,10 +1243,10 @@ public final class MailServlet extends HttpServlet {
             item.put("name", rule.get("name").getAsString());
             item.put("priority", rule.get("priority").getAsInt());
             item.put("enabled", rule.get("enabled").getAsBoolean());
-            item.put("header", rule.get("header").getAsString());
             item.put("value", rule.get("value").getAsString());
             item.put("fields", filterFields(rule.get("field").getAsString()));
             item.put("operators", filterOperators(rule.get("operator").getAsString()));
+            item.put("headers", filterHeaders(rule.get("header").getAsString()));
             item.put("destinations", filterDestinations(destinations, rule.get("destination").getAsString()));
             rules.add(item);
         }
@@ -1274,6 +1283,13 @@ public final class MailServlet extends HttpServlet {
                 Map.entry("CONTAINS", "Contiene"), Map.entry("EQUALS", "Es igual"),
                 Map.entry("STARTS_WITH", "Comienza con"), Map.entry("ENDS_WITH", "Termina con"),
                 Map.entry("GT", "Mayor que"), Map.entry("LT", "Menor que")), selected);
+    }
+
+    private static List<Map<String, Object>> filterHeaders(String selected) {
+        List<Map.Entry<String, String>> values = new ArrayList<>();
+        values.add(Map.entry("", "Selecciona un encabezado"));
+        FILTER_HEADERS.forEach(value -> values.add(Map.entry(value, value)));
+        return choices(values, selected);
     }
 
     private static List<Map<String, Object>> choices(List<Map.Entry<String, String>> values, String selected) {
