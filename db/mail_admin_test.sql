@@ -13,10 +13,24 @@ declare contacto text;
 declare password_anterior text;
 begin
     resultado := mail_fn_admin_usuario_guardar('{"actor":"mail-admin-test@soft-gator.com",'
-        '"user":"mail-user-test","name":"Usuario actualizado","enabled":false}')::json;
+        '"user":"mail-user-test","name":"Usuario actualizado","enabled":false,'
+        '"phone":"+525512345678"}')::json;
     assert resultado ->> 'codigo' = '0', 'No se actualizó el usuario';
     assert (select usuario_nombre = 'Usuario actualizado' and usuario_estado = '0'
               from app_usuarios where usuario_id = 'mail-user-test'), 'Cambio de usuario incorrecto';
+    assert (select telefono = '+525512345678' and not global_safe_list
+              from mail_usuario_telefonos where usuario_id = 'mail-user-test'), 'Teléfono incorrecto';
+    resultado := mail_fn_admin_usuario_safe_list('{"actor":"mail-admin-test@soft-gator.com",'
+        '"user":"mail-user-test","phone":"+525512345678"}')::json;
+    assert resultado ->> 'codigo' = '0', 'No se registró Global Safe List';
+    assert (select global_safe_list from mail_usuario_telefonos
+              where usuario_id = 'mail-user-test'), 'Estado de Global Safe List incorrecto';
+    resultado := mail_fn_admin_usuario_guardar('{"actor":"mail-admin-test@soft-gator.com",'
+        '"user":"mail-user-test","name":"Usuario actualizado","enabled":false,'
+        '"phone":"+525587654321"}')::json;
+    assert resultado ->> 'codigo' = '0', 'No se cambió el teléfono';
+    assert (select telefono = '+525587654321' and not global_safe_list
+              from mail_usuario_telefonos where usuario_id = 'mail-user-test'), 'No se reinició Global Safe List';
 
     select usuario_password into password_anterior from app_usuarios where usuario_id = 'mail-user-test';
     resultado := mail_fn_admin_usuario_reset('{"actor":"mail-admin-test@soft-gator.com",'

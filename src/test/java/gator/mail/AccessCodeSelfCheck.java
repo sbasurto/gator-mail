@@ -122,11 +122,12 @@ public final class AccessCodeSelfCheck {
                 "configurationAvailable", "configurationUsersView", "configurationContactsView", "calendarView",
                 "dashboardView", "eventsAvailable", "eventFormView", "eventCreated", "eventSyncFailed",
                 "invitationAvailable", "invitationCanReply", "invitationCancelled", "invitationReplyNotice",
-                "invitationSyncFailed"}) model.put(key, true);
+                "invitationSyncFailed", "smsAdminAvailable", "userAdminNotice"}) model.put(key, true);
         model.put("invitationCannotReply", false);
         model.put("mailText", false);
         model.put("passwordReset", true);
         model.put("temporaryPassword", "Abcd_1234-Efgh_5678-Ijkl");
+        model.put("userAdminMessage", "Teléfono agregado");
         model.put("body", "<script>parent.alert('bad')</script>");
         model.put("contextPath", "/gator-mail");
         model.put("layoutClass", "mail-workspace");
@@ -181,7 +182,8 @@ public final class AccessCodeSelfCheck {
                 "place", "Oficina", "start", "21/07/2026 10:00", "end", "21/07/2026 11:00",
                 "status", "A tiempo", "statusClass", "is-on-time")));
         model.put("configurationUsers", List.of(Map.of("id", "usuario", "name", "Usuario Uno",
-                "email", "usuario@example.com", "enabled", true, "status", "Activo", "toggleLabel", "Desactivar")));
+                "email", "usuario@example.com", "enabled", true, "phone", "+525512345678",
+                "safeListed", true, "status", "Activo", "toggleLabel", "Desactivar")));
         model.put("configurationContacts", List.of(Map.of("id", "contacto", "name", "Contacto Uno",
                 "email", "uno@example.com", "owner", "usuario", "group", "2")));
         model.put("attachmentsAvailable", true);
@@ -204,7 +206,7 @@ public final class AccessCodeSelfCheck {
         try {
             String html = new GatorJsonView().renderResource("gator-mail/screens/mail.json", model);
             assert html.contains("Sesión cerrada");
-            assert html.contains("/gator-mail/css/gator-mail.css?v=29");
+            assert html.contains("/gator-mail/css/gator-mail.css?v=30");
             assert html.contains("/elib/js/sweetalert2.all.min.js");
             assert html.contains("/gator-mail/js/gator-mail.js?v=10");
             assert html.contains("href=\"/gator-mail/oauth/password\"");
@@ -256,6 +258,10 @@ public final class AccessCodeSelfCheck {
             assert html.contains("class=\"mail-agenda-day is-today\"");
             assert html.contains("value=\"userSave\"");
             assert html.contains("value=\"userReset\"");
+            assert html.contains("name=\"phone\"");
+            assert html.contains("value=\"+525512345678\"");
+            assert html.contains("value=\"userSafeList\"");
+            assert html.contains(">En Global Safe List</span>");
             assert html.contains("class=\"mail-admin-row mail-admin-user\" method=\"post\" action=\"/gator-mail/mail\"");
             assert html.contains("Contraseña temporal: Abcd_1234-Efgh_5678-Ijkl");
             assert html.contains("value=\"contactSave\"");
@@ -275,6 +281,10 @@ public final class AccessCodeSelfCheck {
             assert html.contains("Administrar contraseña");
             assert !html.contains("mail-layout");
             assert !html.contains("mail-main");
+            model.put("smsAdminAvailable", false);
+            String withoutSms = new GatorJsonView().renderResource("gator-mail/screens/mail.json", model);
+            assert !withoutSms.contains("value=\"userSafeList\"");
+            assert !withoutSms.contains("value=\"+525512345678\"");
         } catch (Exception error) {
             throw new AssertionError(error);
         }

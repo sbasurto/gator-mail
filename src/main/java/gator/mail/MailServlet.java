@@ -177,6 +177,9 @@ public final class MailServlet extends HttpServlet {
         model.put("configurationOpen", false);
         model.put("configurationUsersClass", "");
         model.put("configurationContactsClass", "");
+        model.put("smsAdminAvailable", false);
+        model.put("userAdminNotice", false);
+        model.put("userAdminMessage", "");
         model.put("calendarView", false);
         model.put("eventFormView", false);
         model.put("eventSyncFailed", false);
@@ -954,7 +957,7 @@ public final class MailServlet extends HttpServlet {
         model.put("configurationAvailable", admin);
         String action = request.getParameter("action");
         boolean requested = "settings".equals(action) || "userSave".equals(action) || "userToggle".equals(action)
-                || "userReset".equals(action)
+                || "userReset".equals(action) || "userSafeList".equals(action)
                 || "contactSave".equals(action) || "contactDelete".equals(action);
         if (!requested) return false;
         if (!admin) {
@@ -979,7 +982,34 @@ public final class MailServlet extends HttpServlet {
                     value.addProperty("name", request.getParameter("name"));
                     boolean enabled = Boolean.parseBoolean(request.getParameter("enabled"));
                     value.addProperty("enabled", "userToggle".equals(action) ? !enabled : enabled);
+                    String number = null;
+                    if (!"userToggle".equals(action) && smsConfigured()) {
+                        String requestedPhone = request.getParameter("phone");
+                        if (requestedPhone != null && !requestedPhone.isBlank()) {
+                            number = phone(requestedPhone);
+                            value.addProperty("phone", number);
+                        }
+                    }
+                    if ("userSafeList".equals(action) && (number == null || !smsConfigured()))
+                        throw new IllegalArgumentException("Configura un teléfono y el endpoint SMS");
                     checked(mailDbCall("mail_fn_admin_usuario_guardar", gson.toJson(value)));
+                    if (number != null) {
+                        JsonObject sync = json("action", "sync");
+                        sync.addProperty("usuario", request.getParameter("user"));
+                        sync.addProperty("email", request.getParameter("email"));
+                        sync.addProperty("name", request.getParameter("name"));
+                        sync.addProperty("telefono", number);
+                        checked(sms(sync));
+                    }
+                    if ("userSafeList".equals(action)) {
+                        JsonObject safeList = json("action", "safeList");
+                        safeList.addProperty("usuario", request.getParameter("user"));
+                        safeList.addProperty("telefono", number);
+                        checked(sms(safeList));
+                        checked(mailDbCall("mail_fn_admin_usuario_safe_list", gson.toJson(value)));
+                        session.setAttribute("mail.user.admin.notice",
+                                "El teléfono quedó registrado en Global Safe List");
+                    }
                 }
                 response.sendRedirect("mail?action=settings&section=users");
             } else {
@@ -1016,18 +1046,25 @@ public final class MailServlet extends HttpServlet {
         model.put("configurationContactsView", "contacts".equals(section));
         model.put("configurationUsersClass", "users".equals(section) ? "active" : "");
         model.put("configurationContactsClass", "contacts".equals(section) ? "active" : "");
+        model.put("smsAdminAvailable", smsConfigured());
         Object password = session.getAttribute("mail.password.reset");
         model.put("passwordReset", password != null);
         model.put("temporaryPassword", password == null ? "" : password);
         session.removeAttribute("mail.password.reset");
+        Object userNotice = session.getAttribute("mail.user.admin.notice");
+        model.put("userAdminNotice", userNotice != null);
+        model.put("userAdminMessage", userNotice == null ? "" : userNotice);
+        session.removeAttribute("mail.user.admin.notice");
         if ("users".equals(section)) {
             JsonObject result = checked(mailDbCall("mail_fn_admin_usuarios", String.valueOf(model.get("mailbox"))));
             List<Map<String, Object>> users = new ArrayList<>();
             for (JsonElement element : result.getAsJsonArray("usuarios")) {
                 JsonObject user = element.getAsJsonObject();
                 boolean enabled = user.get("enabled").getAsBoolean();
+                boolean safeListed = user.get("safeListed").getAsBoolean();
                 users.add(Map.of("id", user.get("id").getAsString(), "name", user.get("name").getAsString(),
                         "email", user.get("email").getAsString(), "enabled", enabled,
+                        "phone", user.get("phone").getAsString(), "safeListed", safeListed,
                         "status", enabled ? "Activo" : "Inactivo", "toggleLabel", enabled ? "Desactivar" : "Activar"));
             }
             model.put("configurationUsers", users);

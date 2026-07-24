@@ -52,11 +52,13 @@ body { min-height: 100vh; margin: 0; color: var(--gator-ink); background: var(--
 .mail-admin-row label { display: grid; min-width: 0; gap: .25rem; margin: 0; }
 .mail-admin-row label > small { color: var(--gator-muted); font-size: .7rem; font-weight: 700; }
 .mail-admin-row label > strong { overflow: hidden; padding: .55rem 0; text-overflow: ellipsis; white-space: nowrap; }
-.mail-admin-user { grid-template-columns: minmax(120px, 1fr) minmax(180px, 2fr) minmax(210px, 2fr) auto auto; }
+.mail-admin-user { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
 .mail-admin-contact { grid-template-columns: repeat(4, minmax(140px, 1fr)) auto; }
 .mail-admin-new { margin: 1rem; background: #f7fbfd; }
 .mail-admin-status { align-self: center; padding: .35rem .55rem; border-radius: 999px; background: #eef5f8; color: var(--gator-blue-dark); font-size: .72rem; white-space: nowrap; }
-.mail-admin-actions { display: flex; align-items: center; gap: .4rem; }
+.mail-admin-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; }
+.mail-admin-user .mail-admin-actions { grid-column: 1 / -1; justify-content: flex-end; }
+.mail-safe-list-status { background: #e9f7ee; color: #257244; }
 
 .mail-dashboard-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
 .mail-event-list { display: grid; gap: .6rem; padding: 1rem; }

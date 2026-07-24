@@ -14,7 +14,7 @@
           { "tag": "link", "attrs": { "rel": "stylesheet", "href": "/elib/css2/fontawesome-free-5.13.0-web/css/all.min.css" } },
           { "tag": "link", "attrs": { "rel": "stylesheet", "href": "/elib/css/colors.css" } },
           { "tag": "link", "attrs": { "rel": "stylesheet", "href": "/elib/css2/sweetalert2.min.css?v=11.23.0" } },
-          { "tag": "link", "attrs": { "rel": "stylesheet", "href": "${contextPath}/css/gator-mail.css?v=29" } },
+          { "tag": "link", "attrs": { "rel": "stylesheet", "href": "${contextPath}/css/gator-mail.css?v=30" } },
           { "tag": "script", "attrs": { "src": "/elib/js/sweetalert2.all.min.js", "defer": "true" } },
           { "tag": "script", "attrs": { "src": "${contextPath}/js/gator-mail.js?v=10", "defer": "true" } }
         ]
@@ -373,18 +373,23 @@
                       ] },
                       { "tag": "div", "attrs": { "class": "mail-admin-list" }, "children": [
                         { "tag": "span", "if": "passwordReset", "attrs": { "class": "d-none mail-swal mail-swal-success", "title": "Contraseña restablecida" }, "text": "Contraseña temporal: ${temporaryPassword}. El usuario deberá cambiarla al ingresar." },
+                        { "tag": "span", "if": "userAdminNotice", "attrs": { "class": "d-none mail-swal mail-swal-success", "title": "Usuario actualizado" }, "text": "${userAdminMessage}" },
                         { "tag": "form", "each": "configurationUsers", "as": "user", "attrs": { "class": "mail-admin-row mail-admin-user", "method": "post", "action": "${contextPath}/mail" }, "children": [
                           { "tag": "input", "attrs": { "type": "hidden", "name": "csrf", "value": "${csrf}" } },
                           { "tag": "input", "attrs": { "type": "hidden", "name": "user", "value": "${user.id}" } },
+                          { "tag": "input", "attrs": { "type": "hidden", "name": "email", "value": "${user.email}" } },
                           { "tag": "input", "attrs": { "type": "hidden", "name": "enabled", "value": "${user.enabled}" } },
                           { "tag": "label", "children": [{ "tag": "small", "text": "Usuario" }, { "tag": "strong", "text": "${user.id}" }] },
                           { "tag": "label", "children": [{ "tag": "small", "text": "Nombre" }, { "tag": "input", "attrs": { "class": "form-control", "name": "name", "value": "${user.name}", "maxlength": "200" } }] },
                           { "tag": "label", "children": [{ "tag": "small", "text": "Correo" }, { "tag": "strong", "text": "${user.email}" }] },
+                          { "tag": "label", "if": "smsAdminAvailable", "children": [{ "tag": "small", "text": "Teléfono" }, { "tag": "input", "attrs": { "class": "form-control", "name": "phone", "type": "tel", "inputmode": "tel", "autocomplete": "tel", "value": "${user.phone}", "placeholder": "+525512345678", "pattern": "\\+[1-9][0-9]{7,14}", "maxlength": "16" } }] },
                           { "tag": "span", "attrs": { "class": "mail-admin-status" }, "text": "${user.status}" },
                           { "tag": "div", "attrs": { "class": "mail-admin-actions" }, "children": [
                             { "tag": "button", "attrs": { "class": "btn btn-primary btn-sm", "type": "submit", "name": "action", "value": "userSave" }, "text": "Guardar" },
                             { "tag": "button", "attrs": { "class": "btn btn-outline-secondary btn-sm", "type": "submit", "name": "action", "value": "userToggle" }, "text": "${user.toggleLabel}" },
-                            { "tag": "button", "attrs": { "class": "btn btn-outline-warning btn-sm mail-password-reset", "type": "submit", "name": "action", "value": "userReset" }, "text": "Restablecer contraseña" }
+                            { "tag": "button", "attrs": { "class": "btn btn-outline-warning btn-sm mail-password-reset", "type": "submit", "name": "action", "value": "userReset" }, "text": "Restablecer contraseña" },
+                            { "tag": "button", "if": "smsAdminAvailable", "attrs": { "class": "btn btn-outline-success btn-sm", "type": "submit", "name": "action", "value": "userSafeList" }, "text": "Agregar a Global Safe List" },
+                            { "tag": "span", "if": "user.safeListed", "attrs": { "class": "mail-admin-status mail-safe-list-status" }, "text": "En Global Safe List" }
                           ] }
                         ] }
                       ] }

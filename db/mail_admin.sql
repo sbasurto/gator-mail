@@ -2,6 +2,12 @@ create table if not exists mail_administradores (
     usuario_id text primary key references app_usuarios(usuario_id) on delete cascade
 );
 
+create table if not exists mail_usuario_telefonos (
+    usuario_id text primary key references app_usuarios(usuario_id) on delete cascade,
+    telefono text not null check (telefono ~ '^\+[1-9][0-9]{7,14}$'),
+    global_safe_list boolean not null default false
+);
+
 insert into mail_administradores(usuario_id)
 select distinct u.usuario_id
   from app_usuarios u
@@ -10,7 +16,7 @@ select distinct u.usuario_id
     or lower(e.usuario_email_email) = 'sbasurto@soft-gator.com'
 on conflict do nothing;
 
-revoke all on mail_administradores from public;
+revoke all on mail_administradores, mail_usuario_telefonos from public;
 
 create or replace function mail_fn_es_admin(v_email text)
 returns boolean language sql stable security definer set search_path = public as $$
@@ -35,7 +41,8 @@ begin
     if not mail_fn_es_admin(v_email) then raise exception 'Acceso administrativo denegado'; end if;
     select coalesce(json_agg(json_build_object(
                'id', u.usuario_id, 'name', coalesce(u.usuario_nombre, ''),
-               'email', coalesce(e.usuario_email_email, ''), 'enabled', u.usuario_estado = '1'
+               'email', coalesce(e.usuario_email_email, ''), 'enabled', u.usuario_estado = '1',
+               'phone', coalesce(t.telefono, ''), 'safeListed', coalesce(t.global_safe_list, false)
            ) order by u.usuario_id), '[]'::json)
       into resultado
       from app_usuarios u
@@ -43,7 +50,8 @@ begin
           select usuario_email_email from app_usuario_email
            where usuario_id = u.usuario_id and coalesce(usuario_email_estado, 0) >= 0
            order by usuario_email_por_defecto desc nulls last, rowid limit 1
-      ) e on true;
+      ) e on true
+      left join mail_usuario_telefonos t on t.usuario_id = u.usuario_id;
     return json_build_object('codigo', '0', 'usuarios', resultado)::text;
 exception when others then
     return json_build_object('codigo', '-1', 'mensaje', sqlerrm)::text;
@@ -57,10 +65,12 @@ declare
     actor text := trim(v ->> 'actor');
     enabled boolean := coalesce((v ->> 'enabled')::boolean, false);
     nombre text := trim(v ->> 'name');
+    telefono text := nullif(regexp_replace(trim(coalesce(v ->> 'phone', '')), '[\s().-]', '', 'g'), '');
     usuario text := trim(v ->> 'user');
 begin
     if not mail_fn_es_admin(actor) then raise exception 'Acceso administrativo denegado'; end if;
-    if usuario is null or usuario = '' or length(usuario) > 320 or length(nombre) > 200 then
+    if usuario is null or usuario = '' or length(usuario) > 320 or length(nombre) > 200
+            or (telefono is not null and telefono !~ '^\+[1-9][0-9]{7,14}$') then
         raise exception 'Usuario inválido';
     end if;
     if not enabled and exists (
@@ -70,6 +80,32 @@ begin
     update app_usuarios set usuario_nombre = nombre, usuario_estado = case when enabled then '1' else '0' end
      where usuario_id = usuario;
     if not found then raise exception 'Usuario inexistente'; end if;
+    if telefono is not null then
+        insert into mail_usuario_telefonos(usuario_id, telefono)
+        values (usuario, telefono)
+        on conflict (usuario_id) do update
+          set telefono = excluded.telefono,
+              global_safe_list = mail_usuario_telefonos.global_safe_list
+                    and mail_usuario_telefonos.telefono = excluded.telefono;
+    end if;
+    return json_build_object('codigo', '0')::text;
+exception when others then
+    return json_build_object('codigo', '-1', 'mensaje', sqlerrm)::text;
+end;
+$$;
+
+create or replace function mail_fn_admin_usuario_safe_list(v_json text)
+returns text language plpgsql security definer set search_path = public as $$
+declare
+    v jsonb := v_json::jsonb;
+    actor text := trim(v ->> 'actor');
+    v_telefono text := trim(v ->> 'phone');
+    usuario text := trim(v ->> 'user');
+begin
+    if not mail_fn_es_admin(actor) then raise exception 'Acceso administrativo denegado'; end if;
+    update mail_usuario_telefonos set global_safe_list = true
+     where usuario_id = usuario and telefono = v_telefono;
+    if not found then raise exception 'El teléfono registrado no coincide'; end if;
     return json_build_object('codigo', '0')::text;
 exception when others then
     return json_build_object('codigo', '-1', 'mensaje', sqlerrm)::text;
@@ -196,6 +232,7 @@ end;
 $$;
 
 revoke all on function mail_fn_es_admin(text), mail_fn_admin_access(text), mail_fn_admin_usuarios(text),
-    mail_fn_admin_usuario_guardar(text), mail_fn_admin_usuario_reset(text), mail_fn_admin_contactos(text),
+    mail_fn_admin_usuario_guardar(text), mail_fn_admin_usuario_safe_list(text),
+    mail_fn_admin_usuario_reset(text), mail_fn_admin_contactos(text),
     mail_fn_admin_contacto_guardar(text), mail_fn_admin_contacto_eliminar(text) from public;
 grant execute on function mail_fn_admin_usuario_reset(text) to w3apps;

@@ -93,6 +93,13 @@ con autenticación `Bearer`: `action` (`send` o `correct`), `usuario`,
 `codigo`, `phoneSent`, `challengeHash`, `expiresAt` y, en errores de envío,
 `mensaje` y `phoneCorrectionAllowed`. Cada instalación puede reemplazarlo por
 su propio proveedor; sin endpoint, el correo abre sin solicitar clave.
+La administración de usuarios muestra el teléfono y la acción **Agregar a
+Global Safe List** sólo cuando ese endpoint y su secreto están configurados.
+Para actualizar un teléfono envía `action: sync`, `usuario`, `email`, `name` y
+`telefono`; para autorizar el número envía `action: safeList`, `usuario` y
+`telefono`. El proveedor debe validar que el teléfono corresponda al usuario.
+Una instalación sin soporte de lista segura puede omitir el endpoint completo;
+Gator Mail no incluye credenciales ni dependencias de Twilio.
 
 La sesión HTTP se conserva durante reinicios controlados de Gator Mail para no
 repetir el segundo factor mientras la misma sesión continúe activa. Cerrar
