@@ -1,0 +1,16 @@
+#!/sbin/openrc-run
+
+name="Gator Mail IMAP filter"
+description="Applies db_gatormail rules using IMAP IDLE and UID MOVE"
+command="/opt/gator-mail-filter/current/bin/gator-mail-filter"
+command_user="gator-mail-filter:gator-mail-filter"
+command_background=true
+pidfile="/run/${RC_SVCNAME}.pid"
+output_log="/var/log/gator-mail-filter/gator-mail-filter.log"
+error_log="/var/log/gator-mail-filter/gator-mail-filter.log"
+start_stop_daemon_args="--env-file /etc/gator-mail-filter.conf"
+
+depend() {
+    need net
+    after dovecot postgresql
+}

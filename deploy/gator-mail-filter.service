@@ -1,0 +1,27 @@
+[Unit]
+Description=Gator Mail IMAP filter
+After=network-online.target dovecot.service postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=gator-mail-filter
+Group=gator-mail-filter
+EnvironmentFile=/etc/gator-mail-filter.conf
+ExecStart=/opt/gator-mail-filter/current/bin/gator-mail-filter
+Restart=on-failure
+RestartSec=5s
+SuccessExitStatus=143
+TimeoutStopSec=20s
+SyslogIdentifier=gator-mail-filter
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ProtectControlGroups=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+RestrictSUIDSGID=true
+
+[Install]
+WantedBy=multi-user.target

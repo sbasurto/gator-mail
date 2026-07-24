@@ -124,16 +124,28 @@
                         { "tag": "span", "text": "Configuración" }
                       ] }
                     ] },
-                    { "tag": "a", "attrs": { "class": "mail-folder mail-folder-child ${configurationUsersClass}", "href": "${contextPath}/mail?action=settings&section=users" }, "children": [
+                    { "tag": "a", "if": "configurationAdminAvailable", "attrs": { "class": "mail-folder mail-folder-child ${configurationUsersClass}", "href": "${contextPath}/mail?action=settings&section=users" }, "children": [
                       { "tag": "strong", "children": [
                         { "tag": "span", "attrs": { "class": "mail-folder-icon fas fa-users", "aria-hidden": "true" } },
                         { "tag": "span", "text": "Usuarios" }
                       ] }
                     ] },
-                    { "tag": "a", "attrs": { "class": "mail-folder mail-folder-child ${configurationContactsClass}", "href": "${contextPath}/mail?action=settings&section=contacts" }, "children": [
+                    { "tag": "a", "if": "configurationAdminAvailable", "attrs": { "class": "mail-folder mail-folder-child ${configurationContactsClass}", "href": "${contextPath}/mail?action=settings&section=contacts" }, "children": [
                       { "tag": "strong", "children": [
                         { "tag": "span", "attrs": { "class": "mail-folder-icon fas fa-address-book", "aria-hidden": "true" } },
                         { "tag": "span", "text": "Contactos" }
+                      ] }
+                    ] },
+                    { "tag": "a", "attrs": { "class": "mail-folder mail-folder-child ${configurationFiltersClass}", "href": "${contextPath}/mail?action=settings&section=filters" }, "children": [
+                      { "tag": "strong", "children": [
+                        { "tag": "span", "attrs": { "class": "mail-folder-icon fas fa-filter", "aria-hidden": "true" } },
+                        { "tag": "span", "text": "Filtros" }
+                      ] }
+                    ] },
+                    { "tag": "a", "attrs": { "class": "mail-folder mail-folder-child ${configurationFoldersClass}", "href": "${contextPath}/mail?action=settings&section=folders" }, "children": [
+                      { "tag": "strong", "children": [
+                        { "tag": "span", "attrs": { "class": "mail-folder-icon fas fa-folder-open", "aria-hidden": "true" } },
+                        { "tag": "span", "text": "Carpetas" }
                       ] }
                     ] }
                   ] },
@@ -196,6 +208,136 @@
                           { "tag": "div", "attrs": { "class": "mail-stat is-read" }, "children": [
                             { "tag": "span", "attrs": { "class": "fas fa-envelope-open", "aria-hidden": "true" } },
                             { "tag": "strong", "text": "${mailRead}" }, { "tag": "small", "text": "Leídos" }
+                          ] }
+                        ] }
+                      ] }
+                    ]
+                  },
+                  {
+                    "tag": "section",
+                    "if": "configurationFoldersView",
+                    "attrs": { "class": "card mail-panel" },
+                    "children": [
+                      { "tag": "header", "attrs": { "class": "card-header mail-panel-header" }, "children": [
+                        { "tag": "div", "children": [
+                          { "tag": "small", "attrs": { "class": "mail-eyebrow" }, "text": "Configuración" },
+                          { "tag": "h1", "attrs": { "class": "mail-panel-title" }, "text": "Carpetas" }
+                        ] },
+                        { "tag": "a", "attrs": { "class": "btn btn-outline-secondary btn-sm", "href": "${contextPath}/mail" }, "text": "Volver al correo" }
+                      ] },
+                      { "tag": "form", "attrs": { "class": "mail-folder-admin-new", "method": "post", "action": "${contextPath}/mail" }, "children": [
+                        { "tag": "input", "attrs": { "type": "hidden", "name": "csrf", "value": "${csrf}" } },
+                        { "tag": "input", "attrs": { "type": "hidden", "name": "return", "value": "settings" } },
+                        { "tag": "label", "children": [
+                          { "tag": "small", "text": "Nueva carpeta personal" },
+                          { "tag": "input", "attrs": { "class": "form-control", "name": "name", "maxlength": "100", "required": "true", "placeholder": "Clientes" } }
+                        ] },
+                        { "tag": "button", "attrs": { "class": "btn btn-primary", "type": "submit", "name": "action", "value": "folderCreate" }, "text": "Crear carpeta" }
+                      ] },
+                      { "tag": "p", "if": "configurationFoldersEmpty", "attrs": { "class": "mail-empty text-muted" }, "text": "No hay carpetas personales." },
+                      { "tag": "div", "attrs": { "class": "mail-admin-list" }, "children": [
+                        { "tag": "form", "each": "configurationFolders", "as": "folder", "attrs": { "class": "mail-folder-admin-row", "method": "post", "action": "${contextPath}/mail" }, "children": [
+                          { "tag": "input", "attrs": { "type": "hidden", "name": "csrf", "value": "${csrf}" } },
+                          { "tag": "input", "attrs": { "type": "hidden", "name": "return", "value": "settings" } },
+                          { "tag": "input", "attrs": { "type": "hidden", "name": "folder", "value": "${folder.name}" } },
+                          { "tag": "label", "children": [
+                            { "tag": "small", "text": "Nombre" },
+                            { "tag": "input", "attrs": { "class": "form-control", "name": "name", "value": "${folder.label}", "maxlength": "100", "required": "true" } }
+                          ] },
+                          { "tag": "span", "attrs": { "class": "mail-admin-status" }, "text": "${folder.messages} mensajes" },
+                          { "tag": "div", "attrs": { "class": "mail-admin-actions" }, "children": [
+                            { "tag": "button", "attrs": { "class": "btn btn-primary btn-sm", "type": "submit", "name": "action", "value": "folderRename" }, "text": "Renombrar" },
+                            { "tag": "button", "attrs": { "class": "btn btn-outline-danger btn-sm", "type": "submit", "name": "action", "value": "folderDelete" }, "text": "Eliminar" }
+                          ] }
+                        ] }
+                      ] }
+                    ]
+                  },
+                  {
+                    "tag": "section",
+                    "if": "configurationFiltersView",
+                    "attrs": { "class": "card mail-panel" },
+                    "children": [
+                      { "tag": "header", "attrs": { "class": "card-header mail-panel-header" }, "children": [
+                        { "tag": "div", "children": [
+                          { "tag": "small", "attrs": { "class": "mail-eyebrow" }, "text": "Configuración" },
+                          { "tag": "h1", "attrs": { "class": "mail-panel-title" }, "text": "Filtros de correo" }
+                        ] },
+                        { "tag": "a", "attrs": { "class": "btn btn-outline-secondary btn-sm", "href": "${contextPath}/mail" }, "text": "Volver al correo" }
+                      ] },
+                      { "tag": "div", "attrs": { "class": "mail-filter-status" }, "children": [
+                        { "tag": "span", "attrs": { "class": "mail-admin-status" }, "text": "${filterStatus}" },
+                        { "tag": "span", "text": "Último UID: ${filterLastUid}" },
+                        { "tag": "span", "text": "Heartbeat: ${filterHeartbeat}" },
+                        { "tag": "span", "text": "Reintentos: ${filterRetries}" },
+                        { "tag": "strong", "if": "filterErrorAvailable", "attrs": { "class": "text-danger" }, "text": "${filterError}" }
+                      ] },
+                      { "tag": "p", "if": "filterRulesEmpty", "attrs": { "class": "mail-empty text-muted" }, "text": "No hay filtros. El primer filtro comenzará a observar sólo los mensajes nuevos." },
+                      { "tag": "p", "if": "filterDestinationAvailable", "attrs": { "class": "mail-filter-note" }, "text": "Las reglas se evalúan por prioridad; la primera coincidencia mueve el mensaje." },
+                      { "tag": "form", "if": "filterDestinationAvailable", "attrs": { "class": "mail-filter-form mail-admin-new", "method": "post", "action": "${contextPath}/mail" }, "children": [
+                        { "tag": "input", "attrs": { "type": "hidden", "name": "csrf", "value": "${csrf}" } },
+                        { "tag": "input", "attrs": { "type": "hidden", "name": "id", "value": "" } },
+                        { "tag": "label", "children": [{ "tag": "small", "text": "Nombre" }, { "tag": "input", "attrs": { "class": "form-control", "name": "name", "maxlength": "100", "required": "true" } }] },
+                        { "tag": "label", "children": [{ "tag": "small", "text": "Prioridad" }, { "tag": "input", "attrs": { "class": "form-control", "name": "priority", "type": "number", "value": "100", "required": "true" } }] },
+                        { "tag": "label", "children": [{ "tag": "small", "text": "Campo" }, { "tag": "select", "attrs": { "class": "form-select", "name": "field" }, "children": [
+                          { "tag": "option", "each": "filterFields", "as": "choice", "attrs": { "value": "${choice.value}" }, "text": "${choice.label}" }
+                        ] }] },
+                        { "tag": "label", "children": [{ "tag": "small", "text": "Operador" }, { "tag": "select", "attrs": { "class": "form-select", "name": "operator" }, "children": [
+                          { "tag": "option", "each": "filterOperators", "as": "choice", "attrs": { "value": "${choice.value}" }, "text": "${choice.label}" }
+                        ] }] },
+                        { "tag": "label", "children": [{ "tag": "small", "text": "Encabezado (sólo campo Encabezado)" }, { "tag": "input", "attrs": { "class": "form-control", "name": "header", "maxlength": "100", "placeholder": "X-Spam-Flag" } }] },
+                        { "tag": "label", "children": [{ "tag": "small", "text": "Valor" }, { "tag": "input", "attrs": { "class": "form-control", "name": "value", "maxlength": "500", "required": "true" } }] },
+                        { "tag": "label", "children": [{ "tag": "small", "text": "Mover a" }, { "tag": "select", "attrs": { "class": "form-select", "name": "destination" }, "children": [
+                          { "tag": "option", "each": "filterDestinations", "as": "folder", "attrs": { "value": "${folder.value}" }, "text": "${folder.label}" }
+                        ] }] },
+                        { "tag": "label", "attrs": { "class": "mail-filter-enabled" }, "children": [
+                          { "tag": "input", "attrs": { "name": "enabled", "type": "checkbox", "checked": "true" } }, { "tag": "span", "text": "Activo" }
+                        ] },
+                        { "tag": "button", "attrs": { "class": "btn btn-primary", "type": "submit", "name": "action", "value": "filterSave" }, "text": "Agregar filtro" }
+                      ] },
+                      { "tag": "div", "attrs": { "class": "mail-admin-list" }, "children": [
+                        { "tag": "form", "each": "filterRules", "as": "rule", "attrs": { "class": "mail-filter-form", "method": "post", "action": "${contextPath}/mail" }, "children": [
+                          { "tag": "input", "attrs": { "type": "hidden", "name": "csrf", "value": "${csrf}" } },
+                          { "tag": "input", "attrs": { "type": "hidden", "name": "id", "value": "${rule.id}" } },
+                          { "tag": "label", "children": [{ "tag": "small", "text": "Nombre" }, { "tag": "input", "attrs": { "class": "form-control", "name": "name", "value": "${rule.name}", "maxlength": "100", "required": "true" } }] },
+                          { "tag": "label", "children": [{ "tag": "small", "text": "Prioridad" }, { "tag": "input", "attrs": { "class": "form-control", "name": "priority", "type": "number", "value": "${rule.priority}", "required": "true" } }] },
+                          { "tag": "label", "children": [{ "tag": "small", "text": "Campo" }, { "tag": "select", "attrs": { "class": "form-select", "name": "field" }, "children": [
+                            { "tag": "option", "each": "rule.fields", "as": "choice", "attrs": { "value": "${choice.value}", "selected": "${choice.selected}" }, "text": "${choice.label}" }
+                          ] }] },
+                          { "tag": "label", "children": [{ "tag": "small", "text": "Operador" }, { "tag": "select", "attrs": { "class": "form-select", "name": "operator" }, "children": [
+                            { "tag": "option", "each": "rule.operators", "as": "choice", "attrs": { "value": "${choice.value}", "selected": "${choice.selected}" }, "text": "${choice.label}" }
+                          ] }] },
+                          { "tag": "label", "children": [{ "tag": "small", "text": "Encabezado" }, { "tag": "input", "attrs": { "class": "form-control", "name": "header", "value": "${rule.header}", "maxlength": "100" } }] },
+                          { "tag": "label", "children": [{ "tag": "small", "text": "Valor" }, { "tag": "input", "attrs": { "class": "form-control", "name": "value", "value": "${rule.value}", "maxlength": "500", "required": "true" } }] },
+                          { "tag": "label", "children": [{ "tag": "small", "text": "Mover a" }, { "tag": "select", "attrs": { "class": "form-select", "name": "destination" }, "children": [
+                            { "tag": "option", "each": "rule.destinations", "as": "folder", "attrs": { "value": "${folder.value}", "selected": "${folder.selected}" }, "text": "${folder.label}" }
+                          ] }] },
+                          { "tag": "label", "attrs": { "class": "mail-filter-enabled" }, "children": [
+                            { "tag": "input", "attrs": { "name": "enabled", "type": "checkbox", "checked": "${rule.enabled}" } }, { "tag": "span", "text": "Activo" }
+                          ] },
+                          { "tag": "div", "attrs": { "class": "mail-admin-actions" }, "children": [
+                            { "tag": "button", "attrs": { "class": "btn btn-primary btn-sm", "type": "submit", "name": "action", "value": "filterSave" }, "text": "Guardar" },
+                            { "tag": "button", "attrs": { "class": "btn btn-outline-danger btn-sm", "type": "submit", "name": "action", "value": "filterDelete" }, "text": "Eliminar" }
+                          ] }
+                        ] }
+                      ] },
+                      { "tag": "h2", "attrs": { "class": "mail-filter-audit-title" }, "text": "Actividad reciente" },
+                      { "tag": "p", "if": "filterAuditEmpty", "attrs": { "class": "mail-empty text-muted" }, "text": "Todavía no hay mensajes procesados." },
+                      { "tag": "div", "attrs": { "class": "table-responsive" }, "children": [
+                        { "tag": "table", "attrs": { "class": "table table-sm mail-filter-audit" }, "children": [
+                          { "tag": "thead", "children": [{ "tag": "tr", "children": [
+                            { "tag": "th", "text": "Fecha" }, { "tag": "th", "text": "UID" },
+                            { "tag": "th", "text": "Regla" }, { "tag": "th", "text": "Destino" },
+                            { "tag": "th", "text": "Estado" }, { "tag": "th", "text": "Intento" },
+                            { "tag": "th", "text": "Detalle" }
+                          ] }] },
+                          { "tag": "tbody", "children": [
+                            { "tag": "tr", "each": "filterAudit", "as": "row", "children": [
+                              { "tag": "td", "text": "${row.date}" }, { "tag": "td", "text": "${row.uid}" },
+                              { "tag": "td", "text": "${row.rule}" }, { "tag": "td", "text": "${row.destination}" },
+                              { "tag": "td", "text": "${row.status}" }, { "tag": "td", "text": "${row.attempt}" },
+                              { "tag": "td", "text": "${row.detail}" }
+                            ] }
                           ] }
                         ] }
                       ] }
@@ -777,8 +919,8 @@
                           { "tag": "span", "attrs": { "class": "fas fa-check mail-logout-check" } }
                         ] },
                         { "tag": "p", "attrs": { "class": "mail-eyebrow" }, "text": "Cuenta protegida" },
-                        { "tag": "h1", "attrs": { "class": "mail-state-title" }, "text": "Sesión cerrada correctamente" },
-                        { "tag": "p", "attrs": { "class": "mail-state-copy" }, "text": "Tu sesión de Gator Mail terminó de forma segura. Puedes cerrar esta ventana o volver a ingresar." },
+                        { "tag": "h1", "attrs": { "class": "mail-state-title" }, "text": "${logoutTitle}" },
+                        { "tag": "p", "attrs": { "class": "mail-state-copy" }, "text": "${logoutCopy}" },
                         { "tag": "a", "attrs": { "class": "btn btn-primary mail-primary-action", "href": "${contextPath}/oauth/login" }, "children": [
                           { "tag": "span", "attrs": { "class": "fas fa-sign-in-alt", "aria-hidden": "true" } },
                           { "tag": "span", "text": "Ingresar nuevamente" }

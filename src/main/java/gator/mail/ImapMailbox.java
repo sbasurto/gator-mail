@@ -201,6 +201,18 @@ final class ImapMailbox {
         }
     }
 
+    String create(String mailbox, String name, String accessToken) throws Exception {
+        try (Store store = connect(mailbox, accessToken)) {
+            Folder root = store.getDefaultFolder();
+            String destination = destination("", "", name, root.getSeparator());
+            Folder folder = store.getFolder(destination);
+            if (folder.exists()) throw new IllegalArgumentException("Ya existe una carpeta con ese nombre");
+            if (!folder.create(Folder.HOLDS_MESSAGES))
+                throw new IllegalStateException("El servidor IMAP rechazó la creación");
+            return destination;
+        }
+    }
+
     String move(String mailbox, String folderName, String parentName, String accessToken) throws Exception {
         try (Store store = connect(mailbox, accessToken)) {
             Folder source = mutableFolder(store, folderName);

@@ -36,6 +36,10 @@ public final class OAuthServlet extends HttpServlet {
         Map<String, Object> model = MailServlet.baseModel(req, "");
         model.put("loggedOut", true);
         model.put("sessionActive", false);
+        if ("true".equals(req.getParameter("expired"))) {
+            model.put("logoutTitle", "Tu sesión expiró");
+            model.put("logoutCopy", "Por seguridad terminamos la sesión. Ingresa nuevamente para continuar.");
+        }
         res.getWriter().print(new GatorJsonView().renderResource("gator-mail/screens/mail.json", model));
     }
     private void login(HttpServletRequest req, HttpServletResponse res, String action) throws IOException {
@@ -64,9 +68,18 @@ public final class OAuthServlet extends HttpServlet {
         } catch (Exception e) { res.sendError(503, "No fue posible completar el acceso OAuth"); }
     }
     static String accessToken(HttpServletRequest req) throws Exception {
-        HttpSession s = req.getSession(false); if (s == null) throw new IllegalStateException();
-        if (System.currentTimeMillis() >= ((Number)s.getAttribute("oidc.expires")).longValue() - 30_000) {
-            save(s, token("grant_type=refresh_token&client_id=gator-mail&refresh_token=" + enc(String.valueOf(s.getAttribute("oidc.refresh")))));
+        HttpSession s = req.getSession(false);
+        if (s == null || !(s.getAttribute("oidc.expires") instanceof Number expires)
+                || s.getAttribute("oidc.access") == null) throw new ReauthenticationRequired();
+        if (System.currentTimeMillis() >= expires.longValue() - 30_000) {
+            Object refresh = s.getAttribute("oidc.refresh");
+            if (refresh == null) throw new ReauthenticationRequired();
+            try {
+                save(s, token("grant_type=refresh_token&client_id=gator-mail&refresh_token="
+                        + enc(String.valueOf(refresh))));
+            } catch (Exception error) {
+                throw new ReauthenticationRequired();
+            }
         }
         return String.valueOf(s.getAttribute("oidc.access"));
     }
@@ -123,4 +136,6 @@ public final class OAuthServlet extends HttpServlet {
     private static boolean constant(String a,String b){return b!=null&&MessageDigest.isEqual(a.getBytes(StandardCharsets.UTF_8),b.getBytes(StandardCharsets.UTF_8));}
     private static String enc(String v){return URLEncoder.encode(v,StandardCharsets.UTF_8);}
     private static String env(String n,String d){String v=System.getenv(n);return v==null||v.isBlank()?d:v;}
+
+    static final class ReauthenticationRequired extends Exception { }
 }

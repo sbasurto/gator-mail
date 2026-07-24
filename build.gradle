@@ -1,5 +1,6 @@
 plugins {
     id 'war'
+    id 'application'
 }
 
 group = 'gator.apps'
@@ -17,9 +18,15 @@ dependencies {
     implementation 'gator.lib:gator-lib:1.0.0-SNAPSHOT'
     implementation 'gator.lib:gator-lib-web-gui:1.0.0-SNAPSHOT'
     implementation 'org.eclipse.angus:angus-mail:2.0.4'
+    implementation 'org.postgresql:postgresql:42.7.10'
     implementation 'com.googlecode.owasp-java-html-sanitizer:owasp-java-html-sanitizer:20260313.1'
     implementation 'org.commonmark:commonmark:0.28.0'
     providedCompile 'jakarta.servlet:jakarta.servlet-api:6.1.0'
+}
+
+application {
+    mainClass = 'gator.mail.filter.MailFilterService'
+    applicationName = 'gator-mail-filter'
 }
 
 tasks.withType(JavaCompile).configureEach { options.encoding = 'UTF-8' }
@@ -37,6 +44,13 @@ tasks.register('selfTest', JavaExec) {
     enableAssertions = true
 }
 
+tasks.register('filterSelfTest', JavaExec) {
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'gator.mail.filter.MailFilterSelfCheck'
+    enableAssertions = true
+}
+
 tasks.named('test') { failOnNoDiscoveredTests = false }
-tasks.named('check') { dependsOn selfTest }
+tasks.named('check') { dependsOn selfTest, filterSelfTest }
 tasks.named('clean') { delete 'dist' }

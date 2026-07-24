@@ -59,6 +59,20 @@ body { min-height: 100vh; margin: 0; color: var(--gator-ink); background: var(--
 .mail-admin-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; }
 .mail-admin-user .mail-admin-actions { grid-column: 1 / -1; justify-content: flex-end; }
 .mail-safe-list-status { background: #e9f7ee; color: #257244; }
+.mail-filter-status { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; padding: 1rem; border-bottom: 1px solid var(--gator-line); background: #f7fbfd; font-size: .78rem; }
+.mail-filter-note { margin: 0; padding: 1rem 1rem 0; color: var(--gator-muted); font-size: .8rem; }
+.mail-filter-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)); align-items: end; gap: .65rem; padding: .85rem; border: 1px solid var(--gator-line); border-radius: 10px; background: #fff; }
+.mail-filter-form label { display: grid; gap: .25rem; margin: 0; }
+.mail-filter-form label > small { color: var(--gator-muted); font-size: .7rem; font-weight: 700; }
+.mail-filter-form.mail-admin-new { margin: 1rem; background: #f7fbfd; }
+.mail-filter-enabled { align-self: center; grid-template-columns: auto 1fr; align-items: center; }
+.mail-filter-audit-title { margin: 1.2rem 1rem .5rem; font-size: 1rem; }
+.mail-filter-audit { margin: 0; font-size: .76rem; }
+.mail-folder-admin-new, .mail-folder-admin-row { display: grid; grid-template-columns: minmax(220px, 1fr) auto; align-items: end; gap: .75rem; }
+.mail-folder-admin-new { margin: 1rem; padding: 1rem; border: 1px solid var(--gator-line); border-radius: 10px; background: #f7fbfd; }
+.mail-folder-admin-row { grid-template-columns: minmax(220px, 1fr) auto auto; padding: .85rem; border: 1px solid var(--gator-line); border-radius: 10px; }
+.mail-folder-admin-new label, .mail-folder-admin-row label { display: grid; gap: .25rem; margin: 0; }
+.mail-folder-admin-new small, .mail-folder-admin-row small { color: var(--gator-muted); font-size: .7rem; font-weight: 700; }
 
 .mail-dashboard-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
 .mail-event-list { display: grid; gap: .6rem; padding: 1rem; }

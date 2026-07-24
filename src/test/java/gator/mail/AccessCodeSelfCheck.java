@@ -127,7 +127,8 @@ public final class AccessCodeSelfCheck {
         Map<String, Object> model = new HashMap<>();
         for (String key : new String[]{"challenge", "codeChallenge", "phoneCorrection", "composeView", "mailboxView", "messageView", "mailContent", "empty",
                 "hasMessages", "pending", "error", "loggedOut", "noticeVisible", "sendNotice", "mailHtml",
-                "configurationAvailable", "configurationUsersView", "configurationContactsView", "calendarView",
+                "configurationAvailable", "configurationAdminAvailable", "configurationUsersView",
+                "configurationContactsView", "configurationFiltersView", "configurationFoldersView", "calendarView",
                 "dashboardView", "eventsAvailable", "eventFormView", "eventCreated", "eventUpdated", "eventSyncFailed",
                 "invitationAvailable", "invitationCanReply", "invitationCancelled", "invitationReplyNotice",
                 "invitationSyncFailed", "smsAdminAvailable", "userAdminNotice"}) model.put(key, true);
@@ -141,6 +142,8 @@ public final class AccessCodeSelfCheck {
         model.put("layoutClass", "mail-workspace");
         model.put("contentClass", "mail-content");
         model.put("sessionActive", true);
+        model.put("logoutTitle", "Sesión cerrada correctamente");
+        model.put("logoutCopy", "Tu sesión de Gator Mail terminó de forma segura.");
         model.put("mailbox", "<user@example.com>");
         model.put("accountHref", "/gator-mail/oauth/password");
         model.put("folderMenus", folderMenus);
@@ -182,6 +185,8 @@ public final class AccessCodeSelfCheck {
         model.put("mailNavigationOnly", true);
         model.put("configurationUsersClass", "active");
         model.put("configurationContactsClass", "");
+        model.put("configurationFiltersClass", "");
+        model.put("configurationFoldersClass", "");
         model.put("calendarClass", "active");
         model.put("eventsEmpty", false);
         model.put("mailTotal", 12);
@@ -217,6 +222,30 @@ public final class AccessCodeSelfCheck {
                 "status", "Activo", "toggleLabel", "Desactivar")));
         model.put("configurationContacts", List.of(Map.of("id", "contacto", "name", "Contacto Uno",
                 "email", "uno@example.com", "owner", "usuario", "group", "2")));
+        List<Map<String, Object>> filterFields = List.of(
+                Map.of("value", "FROM", "label", "Remitente", "selected", true));
+        List<Map<String, Object>> filterOperators = List.of(
+                Map.of("value", "CONTAINS", "label", "Contiene", "selected", true));
+        List<Map<String, Object>> filterDestinations = List.of(
+                Map.of("value", "Archivo", "label", "Archivo", "selected", true));
+        model.put("filterDestinationAvailable", true);
+        model.put("filterRulesEmpty", false);
+        model.put("filterAuditEmpty", false);
+        model.put("filterErrorAvailable", false);
+        model.put("filterFields", filterFields);
+        model.put("filterOperators", filterOperators);
+        model.put("filterDestinations", filterDestinations);
+        model.put("filterStatus", "IDLE");
+        model.put("filterLastUid", 42);
+        model.put("filterHeartbeat", "2026-07-24 10:00:00");
+        model.put("filterRetries", 0);
+        model.put("filterRules", List.of(Map.of("id", 1, "name", "Facturas", "priority", 100,
+                "enabled", true, "header", "", "value", "factura", "fields", filterFields,
+                "operators", filterOperators, "destinations", filterDestinations)));
+        model.put("filterAudit", List.of(Map.of("uid", 42, "rule", "Facturas", "destination", "Archivo",
+                "status", "MOVIDO", "attempt", 1, "date", "2026-07-24 10:00:00", "detail", "")));
+        model.put("configurationFoldersEmpty", false);
+        model.put("configurationFolders", List.of(Map.of("name", "Archivo", "label", "Archivo", "messages", 3)));
         model.put("attachmentsAvailable", true);
         model.put("attachments", List.of(Map.of("name", "documento.pdf", "size", "10 KB", "href", "mail?action=attachment")));
         model.put("cc", "copia@example.com");
@@ -276,6 +305,13 @@ public final class AccessCodeSelfCheck {
             assert html.contains("No hay contactos disponibles. Agrégalos en Configuración &gt; Contactos.");
             assert html.contains(">Contactos</span>");
             assert html.contains(">Configuración</span>");
+            assert html.contains(">Filtros</span>");
+            assert html.contains(">Carpetas</span>");
+            assert html.contains("value=\"filterSave\"");
+            assert html.contains("Facturas");
+            assert html.contains("Último UID: 42");
+            assert html.contains("value=\"folderCreate\"");
+            assert html.contains("3 mensajes");
             assert html.contains(">Correo</span>");
             assert html.contains(">Carpetas personales</span>");
             assert html.contains("class=\"mail-folder mail-folder-parent\" href=\"/gator-mail/mail\"");
@@ -329,6 +365,11 @@ public final class AccessCodeSelfCheck {
             String withoutSms = new GatorJsonView().renderResource("gator-mail/screens/mail.json", model);
             assert !withoutSms.contains("value=\"userSafeList\"");
             assert !withoutSms.contains("value=\"+525512345678\"");
+            model.put("logoutTitle", "Tu sesión expiró");
+            model.put("logoutCopy", "Por seguridad terminamos la sesión.");
+            String expired = new GatorJsonView().renderResource("gator-mail/screens/mail.json", model);
+            assert expired.contains("Tu sesión expiró");
+            assert expired.contains("Por seguridad terminamos la sesión.");
         } catch (Exception error) {
             throw new AssertionError(error);
         }

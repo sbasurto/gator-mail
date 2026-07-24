@@ -101,6 +101,28 @@ Para actualizar un teléfono envía `action: sync`, `usuario`, `email`, `name` y
 Una instalación sin soporte de lista segura puede omitir el endpoint completo;
 Gator Mail no incluye credenciales ni dependencias de Twilio.
 
+## Filtros IMAP
+
+Los filtros no dependen de Sieve ni se ejecutan dentro de Tomcat. El servicio
+independiente `gator-mail-filter` obtiene las reglas de `db_gatormail`, espera
+correo nuevo mediante IMAP IDLE y mueve la primera coincidencia con UID MOVE.
+El checkpoint `(mailbox, UIDVALIDITY, UID)`, los reintentos y las últimas 50
+decisiones se consultan en **Configuración > Filtros**. El primer arranque de
+cada buzón toma como línea base su UID actual: no reorganiza correo histórico.
+
+Instale primero `db/mail_filters.sql` y después el servicio. En servidores
+systemd use `deploy/gator-mail-filter.service`; para Gentoo/OpenRC se incluye
+`deploy/gator-mail-filter.openrc`. `deploy/install-filter.sh` crea un usuario
+de sistema, un usuario maestro Dovecot y un rol PostgreSQL restringido sin
+imprimir sus secretos. Los eventos estructurados se consultan con:
+
+```bash
+journalctl -u gator-mail-filter -f -o cat
+```
+
+Cada registro incluye buzón, UIDVALIDITY, UID, regla, carpeta, intento,
+resultado y detalle. Nunca contiene cuerpos ni contraseñas.
+
 La sesión HTTP se conserva durante reinicios controlados de Gator Mail para no
 repetir el segundo factor mientras la misma sesión continúe activa. Cerrar
 sesión o dejarla expirar elimina esa verificación.
