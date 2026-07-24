@@ -73,15 +73,17 @@ returns text language plpgsql security definer set search_path = public as $$
 declare
     v jsonb := v_json::jsonb;
     correo text := lower(trim(v ->> 'organizer'));
-    evento_id text := v ->> 'eventId';
+    v_evento_id text := v ->> 'eventId';
     usuario text;
     fecha_ini timestamp;
     fecha_fin timestamp;
     invitados jsonb := coalesce(v -> 'guests', '[]'::jsonb);
     invitado jsonb;
+    existente boolean;
+    secuencia integer;
 begin
     if correo is null or length(correo) > 320 or position('@' in correo) < 2
-            or evento_id is null or evento_id !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+            or v_evento_id is null or v_evento_id !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
             or length(trim(coalesce(v ->> 'summary', ''))) not between 1 and 200 then
         return json_build_object('codigo', '-1', 'mensaje', 'Datos del evento inválidos')::text;
     end if;
@@ -112,19 +114,90 @@ begin
         end if;
     end loop;
 
-    insert into app_eventos(rowid, evento_id, evento_organizador, evento_resumen, evento_descripcion,
-        evento_lugar, evento_fecha_ini, evento_fecha_fin, evento_estatus, evento_tags, evento_link,
-        evento_timezone, evento_pendiente, evento_reagendado, cuenta_id, bodega_id, usuario_id)
-    values (nextval('mail_event_rowid_seq'), evento_id, correo, v ->> 'summary', v ->> 'description',
-        v ->> 'place', fecha_ini, fecha_fin, 0, v ->> 'tags', v ->> 'link', v ->> 'timezone',
-        1, 0, 1, 1, usuario);
+    select exists(select 1 from app_eventos where app_eventos.evento_id = v_evento_id) into existente;
+    if existente and not exists (select 1 from app_eventos
+            where app_eventos.evento_id = v_evento_id and lower(evento_organizador) = correo) then
+        return json_build_object('codigo', '-1', 'mensaje', 'Solo el organizador puede actualizar el evento')::text;
+    end if;
+    if existente then
+        update app_eventos set
+            evento_resumen = v ->> 'summary', evento_descripcion = v ->> 'description',
+            evento_lugar = v ->> 'place', evento_fecha_ini = fecha_ini, evento_fecha_fin = fecha_fin,
+            evento_tags = v ->> 'tags', evento_link = v ->> 'link', evento_timezone = v ->> 'timezone',
+            evento_secuencia = coalesce(evento_secuencia, 0) + 1
+        where app_eventos.evento_id = v_evento_id;
+        delete from app_evento_participante where app_evento_participante.evento_id = v_evento_id;
+    else
+        insert into app_eventos(rowid, evento_id, evento_organizador, evento_resumen, evento_descripcion,
+            evento_lugar, evento_fecha_ini, evento_fecha_fin, evento_estatus, evento_tags, evento_link,
+            evento_timezone, evento_pendiente, evento_reagendado, evento_secuencia,
+            cuenta_id, bodega_id, usuario_id)
+        values (nextval('mail_event_rowid_seq'), v_evento_id, correo, v ->> 'summary', v ->> 'description',
+            v ->> 'place', fecha_ini, fecha_fin, 0, v ->> 'tags', v ->> 'link', v ->> 'timezone',
+            1, 0, 0, 1, 1, usuario);
+    end if;
     for invitado in select value from jsonb_array_elements(invitados) loop
         insert into app_evento_participante(rowid, evento_id, evento_part_nombre, evento_part_email,
             cuenta_id, bodega_id, evento_part_id)
-        values (nextval('mail_event_part_rowid_seq'), evento_id, invitado ->> 'email', invitado ->> 'email',
+        values (nextval('mail_event_part_rowid_seq'), v_evento_id, invitado ->> 'email', invitado ->> 'email',
             1, 1, invitado ->> 'id');
     end loop;
-    return json_build_object('codigo', '0', 'eventoId', evento_id)::text;
+    select coalesce(evento_secuencia, 0) into secuencia
+      from app_eventos where app_eventos.evento_id = v_evento_id;
+    return json_build_object('codigo', '0', 'eventoId', v_evento_id,
+        'sequence', secuencia, 'updated', existente)::text;
+exception when others then
+    return json_build_object('codigo', '-1', 'mensaje', sqlerrm)::text;
+end;
+$$;
+
+create or replace function mail_fn_get_evento(v_json text)
+returns text language plpgsql stable security definer set search_path = public as $$
+declare
+    v jsonb := v_json::jsonb;
+    correo text := lower(trim(v ->> 'email'));
+    id text := trim(v ->> 'eventId');
+    resultado json;
+begin
+    if correo is null or position('@' in correo) < 2
+            or id !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$' then
+        return json_build_object('codigo', '-1', 'mensaje', 'Evento inválido')::text;
+    end if;
+    with usuarios as (
+        select distinct usuario_id from app_usuario_email
+         where lower(usuario_email_email) = correo and coalesce(usuario_email_estado, 0) >= 0
+    )
+    select json_build_object(
+        'id', e.evento_id, 'organizer', coalesce(e.evento_organizador, ''),
+        'summary', coalesce(e.evento_resumen, ''),
+        'description', coalesce(e.evento_descripcion, ''), 'place', coalesce(e.evento_lugar, ''),
+        'start', to_char(e.evento_fecha_ini, 'YYYY-MM-DD"T"HH24:MI'),
+        'end', to_char(coalesce(e.evento_fecha_fin, e.evento_fecha_ini), 'YYYY-MM-DD"T"HH24:MI'),
+        'timezone', coalesce(nullif(e.evento_timezone, ''), 'America/Mexico_City'),
+        'tags', coalesce(e.evento_tags, ''), 'link', coalesce(e.evento_link, ''),
+        'editable', lower(coalesce(e.evento_organizador, '')) = correo,
+        'guests', coalesce((select string_agg(ep.evento_part_email, ', ' order by ep.evento_part_email)
+                             from app_evento_participante ep where ep.evento_id = e.evento_id), '')
+    ) into resultado
+      from app_eventos e
+     where e.evento_id = id and (
+        mail_fn_es_admin(correo)
+        or lower(coalesce(e.evento_organizador, '')) = correo
+        or e.usuario_id in (select usuario_id from usuarios)
+        or exists (select 1 from app_evento_participante ep
+                    where ep.evento_id = e.evento_id
+                      and lower(coalesce(ep.evento_part_email, '')) = correo)
+        or exists (select 1 from app_grupo_evento ge
+                    join broker_usuario_grupo ug on ug.grupo_id = ge.grupo_id
+                   where ge.evento_id = e.evento_id and ug.usuario_id in (select usuario_id from usuarios))
+        or exists (select 1 from app_evento_participante ep
+                    join app_contactos c on c.contacto_id = ep.contacto_id
+                   where ep.evento_id = e.evento_id and c.usuario_id in (select usuario_id from usuarios))
+     );
+    if resultado is null then
+        return json_build_object('codigo', '-1', 'mensaje', 'Evento no encontrado o sin permiso para verlo')::text;
+    end if;
+    return json_build_object('codigo', '0', 'evento', resultado)::text;
 exception when others then
     return json_build_object('codigo', '-1', 'mensaje', sqlerrm)::text;
 end;
@@ -231,7 +304,10 @@ begin
                            where ge.evento_id = e.evento_id and ug.usuario_id in (select usuario_id from usuarios))
                 or exists (select 1 from app_evento_participante ep
                             join app_contactos c on c.contacto_id = ep.contacto_id
-                           where ep.evento_id = e.evento_id and c.usuario_id in (select usuario_id from usuarios)))
+                           where ep.evento_id = e.evento_id and c.usuario_id in (select usuario_id from usuarios))
+                or exists (select 1 from app_evento_participante ep
+                            where ep.evento_id = e.evento_id
+                              and lower(coalesce(ep.evento_part_email, '')) = lower(trim(v_email))))
          order by e.evento_fecha_ini desc
          limit 100
     )
@@ -297,13 +373,18 @@ begin
                            where ge.evento_id = e.evento_id and ug.usuario_id in (select usuario_id from usuarios))
                 or exists (select 1 from app_evento_participante ep
                             join app_contactos c on c.contacto_id = ep.contacto_id
-                           where ep.evento_id = e.evento_id and c.usuario_id in (select usuario_id from usuarios)))
+                           where ep.evento_id = e.evento_id and c.usuario_id in (select usuario_id from usuarios))
+                or exists (select 1 from app_evento_participante ep
+                            where ep.evento_id = e.evento_id
+                              and lower(coalesce(ep.evento_part_email, '')) = lower(correo)))
     )
     select coalesce(json_agg(json_build_object(
+               'id', evento_id,
                'summary', coalesce(nullif(evento_resumen, ''), '(Sin título)'),
                'description', coalesce(evento_descripcion, ''),
                'date', to_char(evento_fecha_ini, 'YYYY-MM-DD'),
                'time', to_char(evento_fecha_ini, 'HH24:MI'),
+               'editable', lower(coalesce(evento_organizador, '')) = lower(correo),
                'statusClass', case when evento_estatus = 4 then 'is-done'
                                    when evento_fecha_ini < current_timestamp then 'is-delayed'
                                    when evento_fecha_ini < current_timestamp + interval '2 hours' then 'is-next'
@@ -317,7 +398,7 @@ end;
 $$;
 
 revoke all on app_eventos, app_grupo_evento, app_evento_participante from public;
-revoke all on function mail_fn_get_eventos(text), mail_fn_get_calendario(text),
+revoke all on function mail_fn_get_eventos(text), mail_fn_get_evento(text), mail_fn_get_calendario(text),
     mail_fn_evento_guardar(text), mail_fn_invitacion_responder(text) from public;
-grant execute on function mail_fn_get_eventos(text), mail_fn_get_calendario(text),
+grant execute on function mail_fn_get_eventos(text), mail_fn_get_evento(text), mail_fn_get_calendario(text),
     mail_fn_evento_guardar(text), mail_fn_invitacion_responder(text) to w3apps;

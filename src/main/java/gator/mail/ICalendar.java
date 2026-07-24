@@ -1,5 +1,6 @@
 package gator.mail;
 
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.time.*;
 import java.time.format.DateTimeFormatter;
@@ -11,7 +12,7 @@ final class ICalendar {
 
     record Invite(String uid, int sequence, String method, String summary, String description, String location,
             String organizer, List<String> attendees, Instant start, Instant end, boolean allDay, String timezone,
-            String startLine, String endLine) {
+            String status, String link, String startLine, String endLine) {
         boolean canReply(String mailbox) {
             return "REQUEST".equals(method) && attendees.stream().anyMatch(mailbox::equalsIgnoreCase);
         }
@@ -55,7 +56,8 @@ final class ICalendar {
         return new Invite(uid, sequence, method, clean(value(values, "SUMMARY"), 200),
                 clean(value(values, "DESCRIPTION"), 5_000), clean(value(values, "LOCATION"), 500),
                 organizer, List.copyOf(attendees), start.instant(), end.instant(), start.allDay(), start.timezone(),
-                start.line(), end.line());
+                clean(value(values, "STATUS"), 40).toUpperCase(Locale.ROOT),
+                link(clean(value(values, "URL"), 1_000)), start.line(), end.line());
     }
 
     static byte[] reply(Invite invite, String attendee, String status) {
@@ -140,6 +142,15 @@ final class ICalendar {
     private static String clean(String value, int max) {
         String result = unescape(value).replaceAll("[\\p{Cntrl}&&[^\n\t]]", "").strip();
         return result.substring(0, Math.min(result.length(), max));
+    }
+
+    private static String link(String value) {
+        try {
+            URI uri = URI.create(value);
+            return "http".equalsIgnoreCase(uri.getScheme()) || "https".equalsIgnoreCase(uri.getScheme()) ? value : "";
+        } catch (RuntimeException error) {
+            return "";
+        }
     }
 
     private static String unescape(String value) {

@@ -101,6 +101,10 @@ body { min-height: 100vh; margin: 0; color: var(--gator-ink); background: var(--
 .mail-event-wide { grid-column: 1 / -1; }
 .mail-event-actions { display: flex; justify-content: flex-end; gap: .6rem; padding-top: .25rem; }
 .mail-event-actions .btn { display: inline-flex; align-items: center; gap: .45rem; }
+.mail-event-detail { display: grid; grid-template-columns: minmax(8rem, auto) minmax(0, 1fr); gap: .55rem 1rem; margin: 0; padding: 1.25rem; }
+.mail-event-detail dt { color: var(--gator-muted); font-size: .75rem; }
+.mail-event-detail dd { margin: 0; overflow-wrap: anywhere; font-weight: 600; }
+.mail-event-description, .mail-invitation-description { white-space: pre-wrap; }
 
 .mail-content { flex: 1 1 auto; min-width: 0; padding: 1rem 1rem 6rem; }
 .mail-panel { overflow: hidden; width: 100%; border: 1px solid #e2e8ec; border-radius: 14px; background: var(--gator-surface); box-shadow: 0 10px 30px #173c540c; }
@@ -160,6 +164,8 @@ body { min-height: 100vh; margin: 0; color: var(--gator-ink); background: var(--
 .mail-invitation-alert, .mail-invitation-status { margin: .75rem 0 0; padding: .6rem .75rem; border-radius: 8px; font-size: .8rem; }
 .mail-invitation-alert { background: #fff3cd; color: #664d03; }
 .mail-invitation-status { background: #dff4e7; color: #246b3f; }
+.mail-invitation-description { margin: .75rem 0; color: var(--gator-ink); font-size: .85rem; }
+.mail-invitation-link { display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mail-attachments { display: flex; flex-wrap: wrap; align-items: center; gap: .45rem; margin: 1rem 0; }
 .mail-attachments > strong { width: 100%; font-size: .8rem; }
 .mail-attachment { display: inline-flex; align-items: center; gap: .4rem; padding: .45rem .65rem; border: 1px solid var(--gator-line); border-radius: 8px; color: var(--gator-blue-dark); text-decoration: none; }
@@ -265,4 +271,6 @@ body { min-height: 100vh; margin: 0; color: var(--gator-ink); background: var(--
     .mail-stats { grid-template-columns: 1fr; }
     .mail-event-form { grid-template-columns: 1fr; padding: 1rem; }
     .mail-event-wide { grid-column: auto; }
+    .mail-event-detail { grid-template-columns: 1fr; }
+    .mail-event-detail dt { margin-top: .35rem; }
 }

@@ -51,11 +51,15 @@ public final class AccessCodeSelfCheck {
                 + "UID:demo@example.com\r\nSEQUENCE:2\r\nDTSTART:20260724T160000Z\r\n"
                 + "DTEND:20260724T170000Z\r\nORGANIZER:mailto:organizer@example.com\r\n"
                 + "ATTENDEE;RSVP=TRUE:mailto:user@example.com\r\nSUMMARY:Reunión\r\n"
-                + "LOCATION:Sala 1\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
+                + "DESCRIPTION:Agenda completa\\nSegundo punto\r\nLOCATION:Sala 1\r\n"
+                + "URL:https://example.com/reunion\r\nSTATUS:CONFIRMED\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n";
         ICalendar.Invite invite = ICalendar.parse(calendarText.getBytes());
         assert invite != null;
         assert invite.canReply("user@example.com");
         assert "organizer@example.com".equals(invite.organizer());
+        assert "Agenda completa\nSegundo punto".equals(invite.description());
+        assert "https://example.com/reunion".equals(invite.link());
+        assert "CONFIRMED".equals(invite.status());
         assert new String(ICalendar.reply(invite, "user@example.com", "ACCEPTED"))
                 .contains("ATTENDEE;PARTSTAT=ACCEPTED;RSVP=FALSE:mailto:user@example.com");
         assert ImapMailbox.safeImage("image/png", Base64.getDecoder().decode(
@@ -124,7 +128,7 @@ public final class AccessCodeSelfCheck {
         for (String key : new String[]{"challenge", "codeChallenge", "phoneCorrection", "composeView", "mailboxView", "messageView", "mailContent", "empty",
                 "hasMessages", "pending", "error", "loggedOut", "noticeVisible", "sendNotice", "mailHtml",
                 "configurationAvailable", "configurationUsersView", "configurationContactsView", "calendarView",
-                "dashboardView", "eventsAvailable", "eventFormView", "eventCreated", "eventSyncFailed",
+                "dashboardView", "eventsAvailable", "eventFormView", "eventCreated", "eventUpdated", "eventSyncFailed",
                 "invitationAvailable", "invitationCanReply", "invitationCancelled", "invitationReplyNotice",
                 "invitationSyncFailed", "smsAdminAvailable", "userAdminNotice"}) model.put(key, true);
         model.put("invitationCannotReply", false);
@@ -151,6 +155,17 @@ public final class AccessCodeSelfCheck {
         model.put("invitationTitle", "Reunión de proyecto");
         model.put("invitationOrganizer", "organizer@example.com");
         model.put("invitationLocation", "Sala 1");
+        model.put("invitationDescription", "Agenda completa");
+        model.put("invitationDescriptionAvailable", true);
+        model.put("invitationAttendees", "user@example.com");
+        model.put("invitationAttendeesAvailable", true);
+        model.put("invitationTimezone", "UTC");
+        model.put("invitationStatus", "CONFIRMED");
+        model.put("invitationLink", "https://example.com/reunion");
+        model.put("invitationLinkAvailable", true);
+        model.put("invitationMethod", "REQUEST");
+        model.put("invitationSequence", 2);
+        model.put("invitationEventUid", "demo@example.com");
         model.put("invitationStart", "24/07/2026 10:00");
         model.put("invitationEnd", "24/07/2026 11:00");
         model.put("invitationFolder", "INBOX");
@@ -176,6 +191,17 @@ public final class AccessCodeSelfCheck {
         model.put("calendarPrevious", "mail?action=calendar&month=2026-06");
         model.put("calendarNext", "mail?action=calendar&month=2026-08");
         model.put("eventOrganizer", "usuario@example.com");
+        model.put("eventFormTitle", "Actualizar evento");
+        model.put("eventSubmitLabel", "Guardar cambios");
+        model.put("eventId", "7dc5dfc8-756b-4d35-b6db-dba287f46d71");
+        model.put("eventSummary", "Evento Uno");
+        model.put("eventDescription", "Descripción");
+        model.put("eventPlace", "Oficina");
+        model.put("eventGuests", "uno@example.com");
+        model.put("eventTags", "seguimiento");
+        model.put("eventLink", "https://example.com/evento");
+        model.put("eventLinkAvailable", true);
+        model.put("eventReadOnlyView", false);
         model.put("eventStart", "2026-07-21T10:00");
         model.put("eventEnd", "2026-07-21T11:00");
         model.put("eventTimezone", "America/Mexico_City");
@@ -211,7 +237,7 @@ public final class AccessCodeSelfCheck {
         try {
             String html = new GatorJsonView().renderResource("gator-mail/screens/mail.json", model);
             assert html.contains("Sesión cerrada");
-            assert html.contains("/gator-mail/css/gator-mail.css?v=31");
+            assert html.contains("/gator-mail/css/gator-mail.css?v=32");
             assert html.contains("/elib/js/sweetalert2.all.min.js");
             assert html.contains("/gator-mail/js/gator-mail.js?v=10");
             assert html.contains("href=\"/gator-mail/oauth/password\"");
@@ -232,6 +258,9 @@ public final class AccessCodeSelfCheck {
             assert html.contains("documento.pdf");
             assert html.contains("title=\"Descargar documento.pdf\"");
             assert html.contains("Reunión de proyecto");
+            assert html.contains("Agenda completa");
+            assert html.contains("https://example.com/reunion");
+            assert html.contains("demo@example.com");
             assert html.contains("value=\"inviteReply\"");
             assert html.contains("value=\"accepted\"");
             assert html.contains("Aceptaste esta invitación.");
@@ -258,6 +287,8 @@ public final class AccessCodeSelfCheck {
             assert html.contains("value=\"eventSave\"");
             assert html.contains("class=\"mail-event-form\" method=\"post\" action=\"/gator-mail/mail\"");
             assert html.contains("name=\"guests\"");
+            assert html.contains("data-contact-target=\"mail-event-guests\"");
+            assert html.contains("value=\"7dc5dfc8-756b-4d35-b6db-dba287f46d71\"");
             assert html.contains("event.ics");
             assert html.contains("no pudo sincronizarse con el calendario externo");
             assert html.contains("class=\"mail-agenda-day is-today\"");
@@ -288,6 +319,12 @@ public final class AccessCodeSelfCheck {
             assert html.indexOf("title=\"Redactar correo\"") < html.indexOf("title=\"Administrar contraseña\"");
             assert !html.contains("mail-layout");
             assert !html.contains("mail-main");
+            model.put("eventFormView", false);
+            model.put("eventReadOnlyView", true);
+            String readOnlyEvent = new GatorJsonView().renderResource("gator-mail/screens/mail.json", model);
+            assert readOnlyEvent.contains("Calendario · Solo lectura");
+            assert readOnlyEvent.contains(">Invitados</dt>");
+            assert !readOnlyEvent.contains("value=\"eventSave\"");
             model.put("smsAdminAvailable", false);
             String withoutSms = new GatorJsonView().renderResource("gator-mail/screens/mail.json", model);
             assert !withoutSms.contains("value=\"userSafeList\"");

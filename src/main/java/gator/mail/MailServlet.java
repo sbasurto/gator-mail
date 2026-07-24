@@ -183,6 +183,9 @@ public final class MailServlet extends HttpServlet {
         model.put("userAdminMessage", "");
         model.put("calendarView", false);
         model.put("eventFormView", false);
+        model.put("eventReadOnlyView", false);
+        model.put("eventCreated", false);
+        model.put("eventUpdated", false);
         model.put("eventSyncFailed", false);
         model.put("dashboardView", false);
         model.put("calendarClass", "");
@@ -281,10 +284,12 @@ public final class MailServlet extends HttpServlet {
         String action = request.getParameter("action");
         boolean calendar = "calendar".equals(action);
         boolean eventNew = "eventNew".equals(action);
+        boolean eventEdit = "eventEdit".equals(action);
+        boolean eventOpen = "eventOpen".equals(action);
         boolean eventSave = "eventSave".equals(action);
         boolean dashboard = (action == null || action.isBlank() || "verify".equals(action))
                 && request.getParameter("folder") == null;
-        if (!calendar && !dashboard && !eventNew && !eventSave) return false;
+        if (!calendar && !dashboard && !eventNew && !eventEdit && !eventOpen && !eventSave) return false;
         if (eventSave) {
             saveEvent(request, response, session, mailbox, accessToken);
             return true;
@@ -309,19 +314,40 @@ public final class MailServlet extends HttpServlet {
         model.put("mailUnread", unread);
         model.put("mailRead", Math.max(0, total - unread));
 
-        if (eventNew) eventFormModel(model, mailbox);
+        if (eventNew || eventEdit || eventOpen)
+            eventFormModel(model, mailbox, eventNew ? "" : request.getParameter("id"));
         else if (calendar) calendarModel(request, model, mailbox);
         else dashboardModel(model, mailbox);
         return true;
     }
 
-    private void eventFormModel(Map<String, Object> model, String mailbox) {
+    private void eventFormModel(Map<String, Object> model, String mailbox, String eventId) {
         LocalDateTime start = LocalDateTime.now().plusHours(1).withMinute(0).withSecond(0).withNano(0);
-        model.put("eventFormView", true);
-        model.put("eventOrganizer", mailbox);
-        model.put("eventStart", start.toString());
-        model.put("eventEnd", start.plusHours(1).toString());
-        model.put("eventTimezone", "America/Mexico_City");
+        JsonObject event = new JsonObject();
+        if (eventId != null && !eventId.isBlank()) {
+            JsonObject value = json("email", mailbox);
+            value.addProperty("eventId", eventId);
+            event = checked(mailDbCall("mail_fn_get_evento", gson.toJson(value))).getAsJsonObject("evento");
+        }
+        boolean editable = event.size() == 0 || event.get("editable").getAsBoolean();
+        model.put("eventFormView", editable);
+        model.put("eventReadOnlyView", !editable);
+        model.put("eventFormTitle", event.size() == 0 ? "Agregar evento"
+                : editable ? "Actualizar evento" : "Detalle del evento");
+        model.put("eventSubmitLabel", event.size() == 0 ? "Guardar y enviar invitaciones" : "Guardar cambios");
+        model.put("eventId", event.size() == 0 ? "" : event.get("id").getAsString());
+        model.put("eventOrganizer", event.size() == 0 ? mailbox : string(event, "organizer"));
+        model.put("eventSummary", string(event, "summary"));
+        model.put("eventDescription", string(event, "description"));
+        model.put("eventPlace", string(event, "place"));
+        model.put("eventStart", event.size() == 0 ? start.toString() : event.get("start").getAsString());
+        model.put("eventEnd", event.size() == 0 ? start.plusHours(1).toString() : event.get("end").getAsString());
+        model.put("eventTimezone", event.size() == 0 ? "America/Mexico_City" : event.get("timezone").getAsString());
+        model.put("eventGuests", string(event, "guests"));
+        model.put("eventTags", string(event, "tags"));
+        model.put("eventLink", webLink(string(event, "link")));
+        model.put("eventLinkAvailable", !string(event, "link").isBlank());
+        if (editable) contactsModel(model, mailbox);
     }
 
     private void saveEvent(HttpServletRequest request, HttpServletResponse response, HttpSession session,
@@ -331,22 +357,30 @@ public final class MailServlet extends HttpServlet {
             return;
         }
         EventDraft event = EventDraft.from(request, mailbox);
-        String eventId = UUID.randomUUID().toString();
+        String requestedId = request.getParameter("eventId");
+        String eventId = requestedId == null || requestedId.isBlank()
+                ? UUID.randomUUID().toString() : UUID.fromString(requestedId).toString();
         JsonObject value = event.json(eventId);
         JsonObject saved = checked(mailDbCall("mail_fn_evento_guardar", gson.toJson(value)));
         eventId = saved.get("eventoId").getAsString();
+        int sequence = saved.get("sequence").getAsInt();
+        boolean updated = saved.get("updated").getAsBoolean();
+        value.addProperty("sequence", sequence);
         boolean synced = syncEvent(value);
         if (!event.guests().isEmpty()) {
-            byte[] calendar = event.ics(eventId);
-            String body = "Has sido invitado al evento **" + event.summary() + "**.\n\n"
+            byte[] calendar = event.ics(eventId, sequence);
+            String body = (updated ? "Se actualizó" : "Has sido invitado a") + " el evento **"
+                    + event.summary() + "**.\n\n"
                     + "Inicia: " + event.start().format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm"))
                     + "\n\nSe adjunta event.ics para incorporarlo a tu calendario.";
             String html = ImapMailbox.sanitizeHtml(MARKDOWN_HTML.render(MARKDOWN.parse(body)));
-            imap.send(mailbox, String.join(",", event.guests()), "", "", "Invitacion: " + event.summary(),
+            imap.send(mailbox, String.join(",", event.guests()), "", "",
+                    (updated ? "Actualización: " : "Invitación: ") + event.summary(),
                     body, html, List.of(new ImapMailbox.Upload("event.ics",
                             "text/calendar; method=REQUEST; charset=UTF-8", calendar, false)), accessToken);
         }
-        response.sendRedirect("mail?action=calendar&month=" + YearMonth.from(event.start()) + "&created=1"
+        response.sendRedirect("mail?action=calendar&month=" + YearMonth.from(event.start())
+                + (updated ? "&updated=1" : "&created=1")
                 + (synced ? "" : "&sync=0"));
     }
 
@@ -373,7 +407,7 @@ public final class MailServlet extends HttpServlet {
             if (guests.size() > 100) throw new IllegalArgumentException("Máximo 100 invitados");
             return new EventDraft(mailbox, summary, text(request.getParameter("description"), 5000),
                     text(request.getParameter("place"), 500), start, end, timezone,
-                    text(request.getParameter("tags"), 500), text(request.getParameter("link"), 1000),
+                    text(request.getParameter("tags"), 500), webLink(text(request.getParameter("link"), 1000)),
                     List.copyOf(guests));
         }
 
@@ -400,7 +434,7 @@ public final class MailServlet extends HttpServlet {
             return value;
         }
 
-        byte[] ics(String id) {
+        byte[] ics(String id, int sequence) {
             DateTimeFormatter utc = DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss'Z'");
             StringBuilder value = new StringBuilder("BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//SoftGator//Gator Mail//ES\r\nCALSCALE:GREGORIAN\r\nMETHOD:REQUEST\r\nBEGIN:VEVENT\r\n");
             value.append("UID:").append(escapeIcs(id + "@soft-gator.com")).append("\r\n")
@@ -413,7 +447,8 @@ public final class MailServlet extends HttpServlet {
                     .append("DESCRIPTION:").append(escapeIcs(description)).append("\r\n")
                     .append("LOCATION:").append(escapeIcs(place)).append("\r\n")
                     .append("URL:").append(escapeIcs(link)).append("\r\n")
-                    .append("STATUS:CONFIRMED\r\nSEQUENCE:0\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n");
+                    .append("STATUS:CONFIRMED\r\nSEQUENCE:").append(sequence)
+                    .append("\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n");
             return value.toString().getBytes(StandardCharsets.UTF_8);
         }
 
@@ -438,6 +473,19 @@ public final class MailServlet extends HttpServlet {
             if (result.length() > max) throw new IllegalArgumentException("Un campo excede la longitud permitida");
             return result;
         }
+    }
+
+    private static String string(JsonObject value, String name) {
+        return value.has(name) && !value.get(name).isJsonNull() ? value.get(name).getAsString() : "";
+    }
+
+    private static String webLink(String value) {
+        if (value == null || value.isBlank()) return "";
+        try {
+            URI uri = URI.create(value);
+            if ("http".equalsIgnoreCase(uri.getScheme()) || "https".equalsIgnoreCase(uri.getScheme())) return value;
+        } catch (RuntimeException ignored) { }
+        throw new IllegalArgumentException("El enlace del evento debe iniciar con http:// o https://");
     }
 
     private void dashboardModel(Map<String, Object> model, String mailbox) {
@@ -468,10 +516,14 @@ public final class MailServlet extends HttpServlet {
         Map<String, List<Map<String, Object>>> byDay = new HashMap<>();
         for (JsonElement element : result.getAsJsonArray("eventos")) {
             JsonObject event = element.getAsJsonObject();
+            boolean editable = event.get("editable").getAsBoolean();
             byDay.computeIfAbsent(event.get("date").getAsString(), ignored -> new ArrayList<>()).add(Map.of(
                     "summary", event.get("summary").getAsString(),
                     "description", event.get("description").getAsString(),
                     "time", event.get("time").getAsString(),
+                    "editable", editable,
+                    "viewOnly", !editable,
+                    "editHref", "mail?action=eventOpen&id=" + url(event.get("id").getAsString()),
                     "statusClass", event.get("statusClass").getAsString()));
         }
         LocalDate first = month.atDay(1);
@@ -494,6 +546,7 @@ public final class MailServlet extends HttpServlet {
         model.put("calendarDays", days);
         boolean syncFailed = "0".equals(request.getParameter("sync"));
         model.put("eventCreated", "1".equals(request.getParameter("created")) && !syncFailed);
+        model.put("eventUpdated", "1".equals(request.getParameter("updated")) && !syncFailed);
         model.put("eventSyncFailed", syncFailed);
     }
 
@@ -796,6 +849,17 @@ public final class MailServlet extends HttpServlet {
         model.put("invitationLocation", invite.location().isBlank() ? "Sin ubicación" : invite.location());
         model.put("invitationStart", date.format(invite.start().atZone(zone)));
         model.put("invitationEnd", date.format(invite.end().atZone(zone)));
+        model.put("invitationDescription", invite.description());
+        model.put("invitationDescriptionAvailable", !invite.description().isBlank());
+        model.put("invitationAttendees", String.join(", ", invite.attendees()));
+        model.put("invitationAttendeesAvailable", !invite.attendees().isEmpty());
+        model.put("invitationTimezone", zone.getId());
+        model.put("invitationStatus", invite.status().isBlank() ? "Sin estado" : invite.status());
+        model.put("invitationLink", invite.link());
+        model.put("invitationLinkAvailable", !invite.link().isBlank());
+        model.put("invitationMethod", invite.method());
+        model.put("invitationSequence", invite.sequence());
+        model.put("invitationEventUid", invite.uid());
         model.put("invitationFolder", folder);
         model.put("invitationUid", uid);
         String replied = String.valueOf(model.getOrDefault("invitationReply", ""));
