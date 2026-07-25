@@ -72,6 +72,9 @@ final class GatorUserStorageProvider implements UserStorageProvider, UserLookupP
         return new AbstractUserAdapter(session, realm, model) {
             @Override public String getUsername() { return account.username(); }
             @Override public String getEmail() { return account.email(); }
+            @Override public boolean isEmailVerified() {
+                return account.email() != null && !account.email().isBlank();
+            }
             @Override public boolean isEnabled() { return account.enabled(); }
             @Override public SubjectCredentialManager credentialManager() {
                 return new UserCredentialManager(session, realm, this);
