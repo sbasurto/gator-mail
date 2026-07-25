@@ -58,10 +58,20 @@ public final class MailServlet extends HttpServlet {
     private static final Parser MARKDOWN = Parser.builder().build();
     private static final HtmlRenderer MARKDOWN_HTML = HtmlRenderer.builder().build();
     private static final SecureRandom RANDOM = new SecureRandom();
-    private static final List<String> FILTER_HEADERS = List.of(
-            "X-Spam-Flag", "X-Spam-Status", "Authentication-Results", "Received-SPF",
-            "DKIM-Signature", "List-Id", "List-Unsubscribe", "Auto-Submitted",
-            "Precedence", "Reply-To", "Return-Path", "Message-ID", "Content-Type");
+    private static final List<Map.Entry<String, String>> FILTER_HEADERS = List.of(
+            Map.entry("X-Spam-Flag", "Detección de spam"),
+            Map.entry("X-Spam-Status", "Estado y puntuación de spam"),
+            Map.entry("Authentication-Results", "Resultado de autenticación"),
+            Map.entry("Received-SPF", "Validación SPF"),
+            Map.entry("DKIM-Signature", "Firma DKIM"),
+            Map.entry("List-Id", "Lista de correo"),
+            Map.entry("List-Unsubscribe", "Cancelar suscripción"),
+            Map.entry("Auto-Submitted", "Envío automático"),
+            Map.entry("Precedence", "Tipo de envío"),
+            Map.entry("Reply-To", "Dirección de respuesta"),
+            Map.entry("Return-Path", "Dirección de rebote"),
+            Map.entry("Message-ID", "Identificador del mensaje"),
+            Map.entry("Content-Type", "Tipo de contenido"));
     private final Gson gson = new Gson();
     private final GatorJsonView view = new GatorJsonView();
     private final ImapMailbox imap = new ImapMailbox();
@@ -1112,7 +1122,8 @@ public final class MailServlet extends HttpServlet {
                     value.addProperty("enabled", request.getParameter("enabled") != null);
                     String field = request.getParameter("field");
                     String header = request.getParameter("header");
-                    if ("HEADER".equals(field) && !FILTER_HEADERS.contains(header))
+                    if ("HEADER".equals(field)
+                            && FILTER_HEADERS.stream().noneMatch(option -> option.getKey().equals(header)))
                         throw new IllegalArgumentException("Selecciona un encabezado válido");
                     value.addProperty("field", field);
                     value.addProperty("operator", request.getParameter("operator"));
@@ -1194,8 +1205,10 @@ public final class MailServlet extends HttpServlet {
         model.put("contentClass", "mail-content");
         model.put("folderGroups", List.of());
         model.put("mailOpen", false);
-        model.put("mailFoldersMenu", false);
-        model.put("mailNavigationOnly", true);
+        List<ImapMailbox.FolderInfo> mailFolders = imap.folders(mailbox, accessToken);
+        model.put("folderMenus", folderMenus(mailFolders, "", rememberedPageSize(request, session)));
+        model.put("mailFoldersMenu", true);
+        model.put("mailNavigationOnly", false);
         model.put("csrf", csrf(session));
         model.put("configurationOpen", true);
         model.put("configurationUsersView", "users".equals(section));
@@ -1216,7 +1229,7 @@ public final class MailServlet extends HttpServlet {
         model.put("userAdminMessage", userNotice == null ? "" : userNotice);
         session.removeAttribute("mail.user.admin.notice");
         if ("folders".equals(section)) {
-            List<Map<String, Object>> folders = imap.folders(mailbox, accessToken).stream()
+            List<Map<String, Object>> folders = mailFolders.stream()
                     .filter(folder -> !systemFolder(folder))
                     .map(folder -> Map.<String, Object>of("name", folder.name(), "label", folder.label(),
                             "messages", folder.total()))
@@ -1224,7 +1237,7 @@ public final class MailServlet extends HttpServlet {
             model.put("configurationFolders", folders);
             model.put("configurationFoldersEmpty", folders.isEmpty());
         } else if ("filters".equals(section)) {
-            filtersModel(model, mailbox, accessToken);
+            filtersModel(model, mailbox, mailFolders);
         } else if ("users".equals(section)) {
             JsonObject result = checked(mailDbCall("mail_fn_admin_usuarios", String.valueOf(model.get("mailbox"))));
             List<Map<String, Object>> users = new ArrayList<>();
@@ -1252,8 +1265,9 @@ public final class MailServlet extends HttpServlet {
         }
     }
 
-    private void filtersModel(Map<String, Object> model, String mailbox, String accessToken) throws Exception {
-        List<Map<String, Object>> destinations = imap.folders(mailbox, accessToken).stream()
+    private void filtersModel(Map<String, Object> model, String mailbox,
+            List<ImapMailbox.FolderInfo> mailFolders) {
+        List<Map<String, Object>> destinations = mailFolders.stream()
                 .filter(folder -> !"INBOX".equalsIgnoreCase(folder.name()))
                 .map(folder -> Map.<String, Object>of("value", folder.name(), "label", folder.label()))
                 .toList();
@@ -1316,7 +1330,7 @@ public final class MailServlet extends HttpServlet {
     private static List<Map<String, Object>> filterHeaders(String selected) {
         List<Map.Entry<String, String>> values = new ArrayList<>();
         values.add(Map.entry("", "Selecciona un encabezado"));
-        FILTER_HEADERS.forEach(value -> values.add(Map.entry(value, value)));
+        values.addAll(FILTER_HEADERS);
         return choices(values, selected);
     }
 
