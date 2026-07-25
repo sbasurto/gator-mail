@@ -229,6 +229,8 @@ public final class AccessCodeSelfCheck {
         List<Map<String, Object>> filterOperators = List.of(
                 Map.of("value", "CONTAINS", "label", "Contiene", "selected", true));
         List<Map<String, Object>> filterHeaders = List.of(
+                Map.of("value", "From", "label", "Remitente", "selected", false),
+                Map.of("value", "To", "label", "Destinatario", "selected", false),
                 Map.of("value", "X-Spam-Flag", "label", "Detección de spam", "selected", true),
                 Map.of("value", "Authentication-Results", "label", "Resultado de autenticación", "selected", false));
         List<Map<String, Object>> filterDestinations = List.of(
@@ -315,6 +317,8 @@ public final class AccessCodeSelfCheck {
             assert html.contains(">Carpetas</span>");
             assert html.contains("value=\"filterSave\"");
             assert html.contains("value=\"X-Spam-Flag\" selected");
+            assert html.contains("value=\"From\">Remitente</option>");
+            assert html.contains("value=\"To\">Destinatario</option>");
             assert html.contains(">Detección de spam</option>");
             assert html.contains("value=\"Authentication-Results\"");
             assert html.contains(">Resultado de autenticación</option>");

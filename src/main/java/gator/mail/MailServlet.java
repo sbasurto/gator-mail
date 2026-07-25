@@ -59,6 +59,8 @@ public final class MailServlet extends HttpServlet {
     private static final HtmlRenderer MARKDOWN_HTML = HtmlRenderer.builder().build();
     private static final SecureRandom RANDOM = new SecureRandom();
     private static final List<Map.Entry<String, String>> FILTER_HEADERS = List.of(
+            Map.entry("From", "Remitente"),
+            Map.entry("To", "Destinatario"),
             Map.entry("X-Spam-Flag", "Detección de spam"),
             Map.entry("X-Spam-Status", "Estado y puntuación de spam"),
             Map.entry("Authentication-Results", "Resultado de autenticación"),
