@@ -18,6 +18,19 @@
         if (result.isConfirmed) button.form.requestSubmit(button);
     }));
 
+    document.querySelectorAll(".mail-event-complete-form").forEach(form => form.addEventListener("submit", async event => {
+        event.preventDefault();
+        const result = await Swal.fire({
+            title: "¿Concluir evento?",
+            text: "El evento dejará de aparecer como pendiente.",
+            icon: "question",
+            showCancelButton: true,
+            confirmButtonText: "Concluir",
+            cancelButtonText: "Cancelar"
+        });
+        if (result.isConfirmed) form.submit();
+    }));
+
     const post = (action, values, csrf) => {
         const form = document.createElement("form");
         form.method = "post";

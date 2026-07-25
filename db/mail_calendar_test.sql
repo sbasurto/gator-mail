@@ -54,6 +54,19 @@ begin
         'eventId', '7dc5dfc8-756b-4d35-b6db-dba287f46d71')::text);
     assert (resultado::jsonb #>> '{evento,summary}') = 'Evento actualizado'
        and (resultado::jsonb #>> '{evento,editable}')::boolean, 'El organizador no puede editar';
+    resultado := mail_fn_evento_concluir(json_build_object(
+        'eventId', '7dc5dfc8-756b-4d35-b6db-dba287f46d71',
+        'organizer', 'mail-calendar-test@soft-gator.com')::text);
+    assert resultado::jsonb ->> 'codigo' = '0'
+       and resultado::jsonb ->> 'status' = 'COMPLETED'
+       and (resultado::jsonb ->> 'sequence')::integer = 2, 'No se concluyó el evento';
+    assert (select evento_estatus = 4 and evento_pendiente = 0 and evento_fecha_fin_real is not null
+              from app_eventos where evento_id = '7dc5dfc8-756b-4d35-b6db-dba287f46d71'),
+        'No se persistió el estado concluido';
+    resultado := mail_fn_evento_concluir(json_build_object(
+        'eventId', '7dc5dfc8-756b-4d35-b6db-dba287f46d71',
+        'organizer', 'ajeno@example.com')::text);
+    assert resultado::jsonb ->> 'codigo' = '-1', 'Otro usuario pudo concluir el evento';
     resultado := mail_fn_get_evento(json_build_object(
         'email', 'nuevo@example.com',
         'eventId', '7dc5dfc8-756b-4d35-b6db-dba287f46d71')::text);

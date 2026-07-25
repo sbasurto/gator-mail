@@ -63,7 +63,8 @@ Cuando `GATOR_MAIL_EVENT_ENDPOINT` y `GATOR_MAIL_EVENT_SECRET` están definidos,
 cada alta se envía además por `POST` como JSON con `action: event`; aceptar,
 marcar como tentativa o rechazar una invitación se envía con `action: reply`,
 `uid`, `sequence`, `attendee` y `status` (`ACCEPTED`, `TENTATIVE` o
-`DECLINED`). El endpoint debe ser idempotente por `eventId` y devolver
+`DECLINED`); concluir un evento propio se envía con `action: complete`,
+`eventId`, `organizer`, `sequence` y `status: COMPLETED`. El endpoint debe ser idempotente por `eventId` y devolver
 `codigo: "0"`. Cada instalación puede reemplazarlo para sincronizar su propio
 calendario externo.
 Este contrato es independiente de `GATOR_MAIL_SMS_ENDPOINT`: no se deben

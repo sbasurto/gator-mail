@@ -175,6 +175,8 @@ begin
         'end', to_char(coalesce(e.evento_fecha_fin, e.evento_fecha_ini), 'YYYY-MM-DD"T"HH24:MI'),
         'timezone', coalesce(nullif(e.evento_timezone, ''), 'America/Mexico_City'),
         'tags', coalesce(e.evento_tags, ''), 'link', coalesce(e.evento_link, ''),
+        'status', case when e.evento_estatus = 4 then 'Terminado' else 'Activo' end,
+        'completed', coalesce(e.evento_estatus, 0) = 4,
         'editable', lower(coalesce(e.evento_organizador, '')) = correo,
         'guests', coalesce((select string_agg(ep.evento_part_email, ', ' order by ep.evento_part_email)
                              from app_evento_participante ep where ep.evento_id = e.evento_id), '')
@@ -198,6 +200,43 @@ begin
         return json_build_object('codigo', '-1', 'mensaje', 'Evento no encontrado o sin permiso para verlo')::text;
     end if;
     return json_build_object('codigo', '0', 'evento', resultado)::text;
+exception when others then
+    return json_build_object('codigo', '-1', 'mensaje', sqlerrm)::text;
+end;
+$$;
+
+create or replace function mail_fn_evento_concluir(v_json text)
+returns text language plpgsql security definer set search_path = public as $$
+declare
+    v jsonb := v_json::jsonb;
+    correo text := lower(trim(v ->> 'organizer'));
+    id text := trim(v ->> 'eventId');
+    estatus numeric;
+    secuencia integer;
+    mes text;
+begin
+    if correo is null or length(correo) > 320 or position('@' in correo) < 2
+            or id !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$' then
+        return json_build_object('codigo', '-1', 'mensaje', 'Evento inválido')::text;
+    end if;
+    select evento_estatus, coalesce(evento_secuencia, 0), to_char(evento_fecha_ini, 'YYYY-MM')
+      into estatus, secuencia, mes
+      from app_eventos
+     where evento_id = id and lower(coalesce(evento_organizador, '')) = correo
+       for update;
+    if not found then
+        return json_build_object('codigo', '-1', 'mensaje', 'Solo el organizador puede concluir el evento')::text;
+    end if;
+    if coalesce(estatus, 0) <> 4 then
+        update app_eventos
+           set evento_estatus = 4, evento_pendiente = 0,
+               evento_fecha_fin_real = current_timestamp,
+               evento_secuencia = secuencia + 1
+         where evento_id = id;
+        secuencia := secuencia + 1;
+    end if;
+    return json_build_object('codigo', '0', 'eventoId', id, 'organizer', correo,
+        'status', 'COMPLETED', 'sequence', secuencia, 'month', mes)::text;
 exception when others then
     return json_build_object('codigo', '-1', 'mensaje', sqlerrm)::text;
 end;
@@ -399,6 +438,6 @@ $$;
 
 revoke all on app_eventos, app_grupo_evento, app_evento_participante from public;
 revoke all on function mail_fn_get_eventos(text), mail_fn_get_evento(text), mail_fn_get_calendario(text),
-    mail_fn_evento_guardar(text), mail_fn_invitacion_responder(text) from public;
+    mail_fn_evento_guardar(text), mail_fn_evento_concluir(text), mail_fn_invitacion_responder(text) from public;
 grant execute on function mail_fn_get_eventos(text), mail_fn_get_evento(text), mail_fn_get_calendario(text),
-    mail_fn_evento_guardar(text), mail_fn_invitacion_responder(text) to w3apps;
+    mail_fn_evento_guardar(text), mail_fn_evento_concluir(text), mail_fn_invitacion_responder(text) to w3apps;

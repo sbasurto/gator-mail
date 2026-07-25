@@ -199,8 +199,11 @@ public final class MailServlet extends HttpServlet {
         model.put("calendarView", false);
         model.put("eventFormView", false);
         model.put("eventReadOnlyView", false);
+        model.put("eventCanComplete", false);
+        model.put("eventCompletedState", false);
         model.put("eventCreated", false);
         model.put("eventUpdated", false);
+        model.put("eventCompleted", false);
         model.put("eventSyncFailed", false);
         model.put("dashboardView", false);
         model.put("calendarClass", "");
@@ -304,11 +307,17 @@ public final class MailServlet extends HttpServlet {
         boolean eventEdit = "eventEdit".equals(action);
         boolean eventOpen = "eventOpen".equals(action);
         boolean eventSave = "eventSave".equals(action);
+        boolean eventComplete = "eventComplete".equals(action);
         boolean dashboard = (action == null || action.isBlank() || "verify".equals(action))
                 && request.getParameter("folder") == null;
-        if (!calendar && !dashboard && !eventNew && !eventEdit && !eventOpen && !eventSave) return false;
+        if (!calendar && !dashboard && !eventNew && !eventEdit && !eventOpen && !eventSave && !eventComplete)
+            return false;
         if (eventSave) {
             saveEvent(request, response, session, mailbox, accessToken);
+            return true;
+        }
+        if (eventComplete) {
+            completeEvent(request, response, session, mailbox);
             return true;
         }
         List<ImapMailbox.FolderInfo> folders = imap.folders(mailbox, accessToken);
@@ -347,8 +356,12 @@ public final class MailServlet extends HttpServlet {
             event = checked(mailDbCall("mail_fn_get_evento", gson.toJson(value))).getAsJsonObject("evento");
         }
         boolean editable = event.size() == 0 || event.get("editable").getAsBoolean();
+        boolean completed = event.size() > 0 && event.get("completed").getAsBoolean();
         model.put("eventFormView", editable);
         model.put("eventReadOnlyView", !editable);
+        model.put("eventCanComplete", editable && event.size() > 0 && !completed);
+        model.put("eventCompletedState", completed);
+        model.put("eventStatus", event.size() == 0 ? "Activo" : event.get("status").getAsString());
         model.put("eventFormTitle", event.size() == 0 ? "Agregar evento"
                 : editable ? "Actualizar evento" : "Detalle del evento");
         model.put("eventSubmitLabel", event.size() == 0 ? "Guardar y enviar invitaciones" : "Guardar cambios");
@@ -365,6 +378,20 @@ public final class MailServlet extends HttpServlet {
         model.put("eventLink", webLink(string(event, "link")));
         model.put("eventLinkAvailable", !string(event, "link").isBlank());
         if (editable) contactsModel(model, mailbox);
+    }
+
+    private void completeEvent(HttpServletRequest request, HttpServletResponse response, HttpSession session,
+            String mailbox) throws Exception {
+        if (!"POST".equals(request.getMethod()) || !csrf(session).equals(request.getParameter("csrf"))) {
+            response.sendError(HttpServletResponse.SC_FORBIDDEN);
+            return;
+        }
+        JsonObject value = json("organizer", mailbox);
+        value.addProperty("eventId", UUID.fromString(request.getParameter("eventId")).toString());
+        JsonObject completed = checked(mailDbCall("mail_fn_evento_concluir", gson.toJson(value)));
+        boolean synced = syncEvent(completed, "complete");
+        response.sendRedirect("mail?action=calendar&month=" + completed.get("month").getAsString()
+                + "&completed=1" + (synced ? "" : "&sync=0"));
     }
 
     private void saveEvent(HttpServletRequest request, HttpServletResponse response, HttpSession session,
@@ -564,6 +591,7 @@ public final class MailServlet extends HttpServlet {
         boolean syncFailed = "0".equals(request.getParameter("sync"));
         model.put("eventCreated", "1".equals(request.getParameter("created")) && !syncFailed);
         model.put("eventUpdated", "1".equals(request.getParameter("updated")) && !syncFailed);
+        model.put("eventCompleted", "1".equals(request.getParameter("completed")) && !syncFailed);
         model.put("eventSyncFailed", syncFailed);
     }
 

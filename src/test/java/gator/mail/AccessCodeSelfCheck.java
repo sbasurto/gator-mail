@@ -130,6 +130,7 @@ public final class AccessCodeSelfCheck {
                 "configurationAvailable", "configurationAdminAvailable", "configurationUsersView",
                 "configurationContactsView", "configurationFiltersView", "configurationFoldersView", "calendarView",
                 "dashboardView", "eventsAvailable", "eventFormView", "eventCreated", "eventUpdated", "eventSyncFailed",
+                "eventCanComplete", "eventCompleted", "eventCompletedState",
                 "invitationAvailable", "invitationCanReply", "invitationCancelled", "invitationReplyNotice",
                 "invitationSyncFailed", "smsAdminAvailable", "userAdminNotice"}) model.put(key, true);
         model.put("invitationCannotReply", false);
@@ -196,6 +197,7 @@ public final class AccessCodeSelfCheck {
         model.put("calendarPrevious", "mail?action=calendar&month=2026-06");
         model.put("calendarNext", "mail?action=calendar&month=2026-08");
         model.put("eventOrganizer", "usuario@example.com");
+        model.put("eventStatus", "Activo");
         model.put("eventFormTitle", "Actualizar evento");
         model.put("eventSubmitLabel", "Guardar cambios");
         model.put("eventId", "7dc5dfc8-756b-4d35-b6db-dba287f46d71");
@@ -272,7 +274,7 @@ public final class AccessCodeSelfCheck {
             assert html.contains("Sesión cerrada");
             assert html.contains("/gator-mail/css/gator-mail.css?v=32");
             assert html.contains("/elib/js/sweetalert2.all.min.js");
-            assert html.contains("/gator-mail/js/gator-mail.js?v=10");
+            assert html.contains("/gator-mail/js/gator-mail.js?v=11");
             assert html.contains("href=\"/gator-mail/oauth/password\"");
             assert html.contains("fontawesome-free-5.13.0-web/css/all.min.css");
             assert html.contains("&lt;user@example.com&gt;");
@@ -327,6 +329,8 @@ public final class AccessCodeSelfCheck {
             assert html.contains(">Total de correos</small>");
             assert html.contains(">Julio 2026</h1>");
             assert html.contains("value=\"eventSave\"");
+            assert html.contains("value=\"eventComplete\"");
+            assert html.contains(">Marcar como concluido</span>");
             assert html.contains("class=\"mail-event-form\" method=\"post\" action=\"/gator-mail/mail\"");
             assert html.contains("name=\"guests\"");
             assert html.contains("data-contact-target=\"mail-event-guests\"");
