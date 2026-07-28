@@ -27,7 +27,7 @@
     <welcome-file-list><welcome-file>index.jsp</welcome-file></welcome-file-list>
     <context-param>
         <param-name>gappConfigFile</param-name>
-        <param-value>pg_mail_identity</param-value>
+        <param-value>pg_gatormail_identity</param-value>
     </context-param>
     <context-param>
         <param-name>gappContactsDbFile</param-name>

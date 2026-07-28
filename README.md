@@ -85,7 +85,7 @@ El artefacto queda en `dist/gator-mail.war`.
 ## Despliegue Gator
 
 El contexto esperado es `/gator-mail`. La aplicación requiere acceso a la
-configuración de identidad `pg_mail_identity`, una entrada `broker_db` con
+configuración de identidad `pg_gatormail_identity`, una entrada `broker_db` con
 `db_use = 'mail'` y la asignación de esa aplicación a los grupos autorizados.
 El segundo factor sólo se solicita cuando `GATOR_MAIL_SMS_ENDPOINT` y
 `GATOR_MAIL_SMS_SECRET` están configurados y el usuario lo mantiene habilitado
