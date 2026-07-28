@@ -167,6 +167,8 @@ public final class MailServlet extends HttpServlet {
         model.put("mailContent", false);
         model.put("mailHtml", false);
         model.put("mailText", false);
+        model.put("originalHtmlAvailable", false);
+        model.put("originalHtml", "");
         model.put("attachmentsAvailable", false);
         model.put("composeAction", false);
         model.put("folderActionsDisabled", true);
@@ -177,8 +179,8 @@ public final class MailServlet extends HttpServlet {
         model.put("composeBcc", "");
         model.put("composeSubject", "");
         model.put("composeBody", "");
-        model.put("composeMarkdownSelected", "selected");
-        model.put("composeHtmlSelected", "");
+        model.put("composeMarkdownSelected", "");
+        model.put("composeHtmlSelected", "selected");
         model.put("invitationAvailable", false);
         model.put("invitationCanReply", false);
         model.put("invitationCannotReply", false);
@@ -195,11 +197,14 @@ public final class MailServlet extends HttpServlet {
         model.put("configurationContactsView", false);
         model.put("configurationFiltersView", false);
         model.put("configurationFoldersView", false);
+        model.put("configurationOptionsView", false);
         model.put("configurationOpen", false);
         model.put("configurationUsersClass", "");
         model.put("configurationContactsClass", "");
         model.put("configurationFiltersClass", "");
         model.put("configurationFoldersClass", "");
+        model.put("configurationOptionsClass", "");
+        model.put("smsAuthenticationEnabled", true);
         model.put("filterDestinationAvailable", false);
         model.put("filterRulesEmpty", true);
         model.put("filterAuditEmpty", true);
@@ -245,7 +250,7 @@ public final class MailServlet extends HttpServlet {
     }
 
     private String challenge(HttpServletRequest request, HttpSession session, String user) {
-        if (!smsConfigured()) {
+        if (!smsConfigured() || !smsAuthenticationEnabled(user)) {
             session.setAttribute("mail.challenge.verified", true);
             return "";
         }
@@ -686,6 +691,8 @@ public final class MailServlet extends HttpServlet {
             model.put("body", mail.html() ? htmlDocument(request.getContextPath(), mail.body()) : mail.body());
             model.put("mailHtml", mail.html());
             model.put("mailText", !mail.html());
+            model.put("originalHtmlAvailable", !mail.originalHtml().isBlank());
+            model.put("originalHtml", mail.originalHtml());
             List<Map<String, Object>> attachments = new ArrayList<>();
             for (ImapMailbox.Attachment attachment : mail.attachments()) attachments.add(Map.of(
                     "name", attachment.name(), "size", fileSize(attachment.size()),
@@ -777,10 +784,16 @@ public final class MailServlet extends HttpServlet {
         model.put("composeSubject", subject(mail.subject(), forward ? "RV:" : "Re:"));
         String original = mail.plain().isBlank() ? mail.body().replaceAll("<[^>]+>", "") : mail.plain();
         String header = forward
-                ? "---------- Mensaje reenviado ----------\nDe: " + mail.from() + "\nFecha: " + DATE.format(mail.sent())
-                        + "\nAsunto: " + mail.subject() + "\nPara: " + mail.to() + "\n\n"
-                : "El " + DATE.format(mail.sent()) + ", " + mail.from() + " escribió:\n\n> ";
-        model.put("composeBody", "\n\n" + header + (forward ? original : original.replace("\n", "\n> ")));
+                ? "<hr><p><strong>Mensaje reenviado</strong><br>De: " + htmlText(mail.from())
+                        + "<br>Fecha: " + htmlText(DATE.format(mail.sent()))
+                        + "<br>Asunto: " + htmlText(mail.subject()) + "<br>Para: " + htmlText(mail.to()) + "</p>"
+                : "<p>El " + htmlText(DATE.format(mail.sent())) + ", " + htmlText(mail.from())
+                        + " escribió:</p>";
+        model.put("composeBody", "<p><br></p>" + header + "<blockquote>" + htmlText(original) + "</blockquote>");
+    }
+
+    static String htmlText(String value) {
+        return value.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\n", "<br>");
     }
 
     static String subject(String value, String prefix) {
@@ -1090,14 +1103,17 @@ public final class MailServlet extends HttpServlet {
         model.put("configurationAvailable", true);
         model.put("configurationAdminAvailable", admin);
         String action = request.getParameter("action");
-        boolean requested = "settings".equals(action) || "userSave".equals(action) || "userToggle".equals(action)
+        boolean requested = "settings".equals(action) || "optionsSave".equals(action)
+                || "userSave".equals(action) || "userToggle".equals(action)
                 || "userReset".equals(action) || "userSafeList".equals(action)
                 || "contactSave".equals(action) || "contactDelete".equals(action)
                 || "filterSave".equals(action) || "filterDelete".equals(action);
         if (!requested) return false;
-        boolean personalAction = action.startsWith("filter") || "settings".equals(action)
+        boolean personalAction = action.startsWith("filter") || "optionsSave".equals(action)
+                || "settings".equals(action)
                 && ("filters".equals(request.getParameter("section"))
-                    || "folders".equals(request.getParameter("section")));
+                    || "folders".equals(request.getParameter("section"))
+                    || "options".equals(request.getParameter("section")));
         if (!admin && !personalAction) {
             response.sendError(HttpServletResponse.SC_FORBIDDEN);
             return true;
@@ -1109,7 +1125,12 @@ public final class MailServlet extends HttpServlet {
             }
             JsonObject value = new JsonObject();
             value.addProperty("actor", mailbox);
-            if (action.startsWith("filter")) {
+            if ("optionsSave".equals(action)) {
+                value.addProperty("user", String.valueOf(session.getAttribute("oidc.user")));
+                value.addProperty("smsEnabled", request.getParameter("smsEnabled") != null);
+                checked(mailDbCall("mail_fn_usuario_opciones_guardar", gson.toJson(value)));
+                response.sendRedirect("mail?action=settings&section=options");
+            } else if (action.startsWith("filter")) {
                 value.addProperty("mailbox", mailbox);
                 value.addProperty("id", request.getParameter("id"));
                 if ("filterDelete".equals(action)) {
@@ -1201,6 +1222,7 @@ public final class MailServlet extends HttpServlet {
         String requested = request.getParameter("section");
         String section = "filters".equals(requested) ? "filters"
                 : "folders".equals(requested) ? "folders"
+                : "options".equals(requested) ? "options"
                 : "contacts".equals(requested) ? "contacts" : "users";
         model.put("mailContent", true);
         model.put("layoutClass", "mail-workspace");
@@ -1217,10 +1239,12 @@ public final class MailServlet extends HttpServlet {
         model.put("configurationContactsView", "contacts".equals(section));
         model.put("configurationFiltersView", "filters".equals(section));
         model.put("configurationFoldersView", "folders".equals(section));
+        model.put("configurationOptionsView", "options".equals(section));
         model.put("configurationUsersClass", "users".equals(section) ? "active" : "");
         model.put("configurationContactsClass", "contacts".equals(section) ? "active" : "");
         model.put("configurationFiltersClass", "filters".equals(section) ? "active" : "");
         model.put("configurationFoldersClass", "folders".equals(section) ? "active" : "");
+        model.put("configurationOptionsClass", "options".equals(section) ? "active" : "");
         model.put("smsAdminAvailable", smsConfigured());
         Object password = session.getAttribute("mail.password.reset");
         model.put("passwordReset", password != null);
@@ -1230,7 +1254,11 @@ public final class MailServlet extends HttpServlet {
         model.put("userAdminNotice", userNotice != null);
         model.put("userAdminMessage", userNotice == null ? "" : userNotice);
         session.removeAttribute("mail.user.admin.notice");
-        if ("folders".equals(section)) {
+        if ("options".equals(section)) {
+            JsonObject result = checked(mailDbCall("mail_fn_usuario_opciones",
+                    String.valueOf(session.getAttribute("oidc.user"))));
+            model.put("smsAuthenticationEnabled", result.get("smsEnabled").getAsBoolean());
+        } else if ("folders".equals(section)) {
             List<Map<String, Object>> folders = mailFolders.stream()
                     .filter(folder -> !systemFolder(folder))
                     .map(folder -> Map.<String, Object>of("name", folder.name(), "label", folder.label(),
@@ -1265,6 +1293,10 @@ public final class MailServlet extends HttpServlet {
             }
             model.put("configurationContacts", contacts);
         }
+    }
+
+    private boolean smsAuthenticationEnabled(String user) {
+        return checked(mailDbCall("mail_fn_usuario_opciones", user)).get("smsEnabled").getAsBoolean();
     }
 
     private void filtersModel(Map<String, Object> model, String mailbox,

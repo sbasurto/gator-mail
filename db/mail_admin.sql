@@ -3,6 +3,7 @@ create table if not exists mail_administradores (
 );
 
 alter table app_usuarios alter column usuario_sesion_timeout set default 10800000;
+alter table app_usuarios add column if not exists usuario_sms_auth boolean not null default true;
 
 create table if not exists mail_usuario_telefonos (
     usuario_id text primary key references app_usuarios(usuario_id) on delete cascade,
@@ -34,6 +35,33 @@ $$;
 create or replace function mail_fn_admin_access(v_email text)
 returns text language sql stable security definer set search_path = public as $$
     select json_build_object('codigo', '0', 'admin', mail_fn_es_admin(v_email))::text;
+$$;
+
+create or replace function mail_fn_usuario_opciones(v_usuario text)
+returns text language sql stable security definer set search_path = public as $$
+    select json_build_object('codigo', case when count(*) = 1 then '0' else '-1' end,
+           'smsEnabled', coalesce(bool_or(usuario_sms_auth), true))::text
+      from app_usuarios where usuario_id = trim(v_usuario);
+$$;
+
+create or replace function mail_fn_usuario_opciones_guardar(v_json text)
+returns text language plpgsql security definer set search_path = public as $$
+declare
+    v jsonb := v_json::jsonb;
+    actor text := lower(trim(v ->> 'actor'));
+    usuario text := trim(v ->> 'user');
+begin
+    if not exists (select 1 from app_usuario_email where usuario_id = usuario
+                    and lower(usuario_email_email) = actor and coalesce(usuario_email_estado, 0) >= 0) then
+        raise exception 'No puedes modificar las opciones de otro usuario';
+    end if;
+    update app_usuarios set usuario_sms_auth = coalesce((v ->> 'smsEnabled')::boolean, false)
+     where usuario_id = usuario;
+    if not found then raise exception 'Usuario inexistente'; end if;
+    return json_build_object('codigo', '0')::text;
+exception when others then
+    return json_build_object('codigo', '-1', 'mensaje', sqlerrm)::text;
+end;
 $$;
 
 create or replace function mail_fn_admin_usuarios(v_email text)

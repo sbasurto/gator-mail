@@ -47,6 +47,11 @@ public final class AccessCodeSelfCheck {
         assert htmlBody.html().contains("<strong>HTML</strong>");
         assert !htmlBody.html().contains("script");
         assert htmlBody.plain().contains("Hola");
+        String richHtml = ImapMailbox.sanitizeHtml("<a href=\"https://example.com\">Enlace</a>"
+                + "<table><tr><th>A</th></tr><tr><td>B</td></tr></table><img src=\"cid:logo\">");
+        assert richHtml.contains("href=\"https://example.com\"");
+        assert richHtml.contains("<table>");
+        assert richHtml.contains("cid:logo");
         String calendarText = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nMETHOD:REQUEST\r\nBEGIN:VEVENT\r\n"
                 + "UID:demo@example.com\r\nSEQUENCE:2\r\nDTSTART:20260724T160000Z\r\n"
                 + "DTEND:20260724T170000Z\r\nORGANIZER:mailto:organizer@example.com\r\n"
@@ -95,9 +100,11 @@ public final class AccessCodeSelfCheck {
         assert MailServlet.pageSize("100") == 100;
         assert "Re: Hola".equals(MailServlet.subject("Hola", "Re:"));
         assert "re: Hola".equals(MailServlet.subject("re: Hola", "Re:"));
+        assert "&lt;b&gt;&amp;<br>Hola".equals(MailServlet.htmlText("<b>&\nHola"));
         assert "otro@example.com".equals(MailServlet.replyAllCc("yo@example.com", "autor@example.com",
                 "yo@example.com, otro@example.com", "autor@example.com"));
         assert "Junk".equals(ImapMailbox.promotedName("INBOX.Junk", '.'));
+        assert "inline-1@gator-mail".equals(ImapMailbox.inlineCid(0));
         assert "Spam".equals(ImapMailbox.promotedName("INBOX.Spam", '.'));
         assert ImapMailbox.promotedName("INBOX.Archivo", '.').isEmpty();
         List<Map<String, Object>> pagedFolders = MailServlet.folderGroups(List.of(
@@ -127,18 +134,23 @@ public final class AccessCodeSelfCheck {
         Map<String, Object> model = new HashMap<>();
         for (String key : new String[]{"challenge", "codeChallenge", "phoneCorrection", "composeView", "mailboxView", "messageView", "mailContent", "empty",
                 "hasMessages", "pending", "error", "loggedOut", "noticeVisible", "sendNotice", "mailHtml",
+                "originalHtmlAvailable",
                 "configurationAvailable", "configurationAdminAvailable", "configurationUsersView",
-                "configurationContactsView", "configurationFiltersView", "configurationFoldersView", "calendarView",
+                "configurationContactsView", "configurationFiltersView", "configurationFoldersView",
+                "configurationOptionsView", "calendarView",
                 "dashboardView", "eventsAvailable", "eventFormView", "eventCreated", "eventUpdated", "eventSyncFailed",
                 "eventCanComplete", "eventCompleted", "eventCompletedState",
                 "invitationAvailable", "invitationCanReply", "invitationCancelled", "invitationReplyNotice",
                 "invitationSyncFailed", "smsAdminAvailable", "userAdminNotice"}) model.put(key, true);
         model.put("invitationCannotReply", false);
+        model.put("smsAuthenticationEnabled", true);
+        model.put("configurationOptionsClass", "active");
         model.put("mailText", false);
         model.put("passwordReset", true);
         model.put("temporaryPassword", "Abcd_1234-Efgh_5678-Ijkl");
         model.put("userAdminMessage", "Teléfono agregado");
         model.put("body", "<script>parent.alert('bad')</script>");
+        model.put("originalHtml", "<script>alert('original')</script><p>Hola</p>");
         model.put("contextPath", "/gator-mail");
         model.put("layoutClass", "mail-workspace");
         model.put("contentClass", "mail-content");
@@ -274,9 +286,9 @@ public final class AccessCodeSelfCheck {
         try {
             String html = new GatorJsonView().renderResource("gator-mail/screens/mail.json", model);
             assert html.contains("Sesión cerrada");
-            assert html.contains("/gator-mail/css/gator-mail.css?v=32");
+            assert html.contains("/gator-mail/css/gator-mail.css?v=33");
             assert html.contains("/elib/js/sweetalert2.all.min.js");
-            assert html.contains("/gator-mail/js/gator-mail.js?v=11");
+            assert html.contains("/gator-mail/js/gator-mail.js?v=13");
             assert html.contains("href=\"/gator-mail/oauth/password\"");
             assert html.contains("fontawesome-free-5.13.0-web/css/all.min.css");
             assert html.contains("&lt;user@example.com&gt;");
@@ -284,10 +296,21 @@ public final class AccessCodeSelfCheck {
             assert html.contains("maxlength=\"12\"");
             assert html.contains("sandbox=\"\"");
             assert html.contains("srcdoc=\"&lt;script&gt;parent.alert(&#39;bad&#39;)&lt;/script&gt;\"");
+            assert html.contains("Ver HTML original");
+            assert html.contains("&lt;script&gt;alert(&#39;original&#39;)&lt;/script&gt;&lt;p&gt;Hola&lt;/p&gt;");
+            assert !html.contains("<script>alert('original')</script>");
             assert html.contains("mail-compose-body");
+            assert html.contains("id=\"mail-html-editor\"");
+            assert html.contains("contenteditable=\"true\"");
             assert html.contains("name=\"format\"");
             assert html.contains("id=\"mail-format-html\"");
             assert html.contains(">HTML</button>");
+            assert html.contains("name=\"format\" value=\"html\"");
+            assert html.contains("placeholder=\"Escribe tu mensaje con Markdown…\"");
+            assert html.indexOf("id=\"mail-format-html\"") < html.indexOf("id=\"mail-format-markdown\"");
+            assert html.contains("data-md=\"link\"");
+            assert html.contains("data-md=\"table\"");
+            assert html.contains("id=\"mail-insert-image\"");
             assert html.contains("class=\"mail-compose-form\" method=\"post\" action=\"/gator-mail/mail\"");
             assert html.contains("enctype=\"multipart/form-data\"");
             assert html.contains("name=\"attachments\"");
@@ -368,6 +391,9 @@ public final class AccessCodeSelfCheck {
             assert html.contains("form=\"mail-bulk-form\"");
             assert html.contains("Página 1 de 1");
             assert html.contains("Administrar contraseña");
+            assert html.contains("Opciones de usuario");
+            assert html.contains("Solicitar clave por SMS al iniciar sesión");
+            assert html.contains("value=\"optionsSave\"");
             assert html.indexOf("title=\"Redactar correo\"") < html.indexOf("title=\"Administrar contraseña\"");
             assert !html.contains("mail-layout");
             assert !html.contains("mail-main");

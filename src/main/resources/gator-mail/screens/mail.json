@@ -14,9 +14,9 @@
           { "tag": "link", "attrs": { "rel": "stylesheet", "href": "/elib/css2/fontawesome-free-5.13.0-web/css/all.min.css" } },
           { "tag": "link", "attrs": { "rel": "stylesheet", "href": "/elib/css/colors.css" } },
           { "tag": "link", "attrs": { "rel": "stylesheet", "href": "/elib/css2/sweetalert2.min.css?v=11.23.0" } },
-          { "tag": "link", "attrs": { "rel": "stylesheet", "href": "${contextPath}/css/gator-mail.css?v=32" } },
+          { "tag": "link", "attrs": { "rel": "stylesheet", "href": "${contextPath}/css/gator-mail.css?v=33" } },
           { "tag": "script", "attrs": { "src": "/elib/js/sweetalert2.all.min.js", "defer": "true" } },
-          { "tag": "script", "attrs": { "src": "${contextPath}/js/gator-mail.js?v=11", "defer": "true" } }
+          { "tag": "script", "attrs": { "src": "${contextPath}/js/gator-mail.js?v=13", "defer": "true" } }
         ]
       },
       {
@@ -122,6 +122,12 @@
                       { "tag": "strong", "children": [
                         { "tag": "span", "attrs": { "class": "mail-folder-icon fas fa-cog", "aria-hidden": "true" } },
                         { "tag": "span", "text": "Configuración" }
+                      ] }
+                    ] },
+                    { "tag": "a", "attrs": { "class": "mail-folder mail-folder-child ${configurationOptionsClass}", "href": "${contextPath}/mail?action=settings&section=options" }, "children": [
+                      { "tag": "strong", "children": [
+                        { "tag": "span", "attrs": { "class": "mail-folder-icon fas fa-user-cog", "aria-hidden": "true" } },
+                        { "tag": "span", "text": "Opciones de usuario" }
                       ] }
                     ] },
                     { "tag": "a", "if": "configurationAdminAvailable", "attrs": { "class": "mail-folder mail-folder-child ${configurationUsersClass}", "href": "${contextPath}/mail?action=settings&section=users" }, "children": [
@@ -570,6 +576,30 @@
                   },
                   {
                     "tag": "section",
+                    "if": "configurationOptionsView",
+                    "attrs": { "class": "card mail-panel" },
+                    "children": [
+                      { "tag": "header", "attrs": { "class": "card-header mail-panel-header" }, "children": [
+                        { "tag": "div", "children": [
+                          { "tag": "small", "attrs": { "class": "mail-eyebrow" }, "text": "Configuración" },
+                          { "tag": "h1", "attrs": { "class": "mail-panel-title" }, "text": "Opciones de usuario" }
+                        ] },
+                        { "tag": "a", "attrs": { "class": "btn btn-outline-secondary btn-sm", "href": "${contextPath}/mail" }, "text": "Volver al correo" }
+                      ] },
+                      { "tag": "form", "attrs": { "class": "mail-admin-row", "method": "post", "action": "${contextPath}/mail" }, "children": [
+                        { "tag": "input", "attrs": { "type": "hidden", "name": "csrf", "value": "${csrf}" } },
+                        { "tag": "label", "if": "smsAdminAvailable", "attrs": { "class": "form-check" }, "children": [
+                          { "tag": "input", "attrs": { "class": "form-check-input", "name": "smsEnabled", "type": "checkbox", "checked": "${smsAuthenticationEnabled}" } },
+                          { "tag": "span", "attrs": { "class": "form-check-label" }, "text": "Solicitar clave por SMS al iniciar sesión" }
+                        ] },
+                        { "tag": "p", "if": "smsAdminAvailable", "attrs": { "class": "text-muted" }, "text": "Si la desactivas, tu contraseña seguirá siendo necesaria, pero no se enviará una clave temporal por SMS." },
+                        { "tag": "p", "if": "smsAdminAvailable", "attrs": { "class": "text-warning" }, "text": "Deshabilitar esta opción reduce la seguridad de tu cuenta." },
+                        { "tag": "button", "if": "smsAdminAvailable", "attrs": { "class": "btn btn-primary", "type": "submit", "name": "action", "value": "optionsSave" }, "text": "Guardar opciones" }
+                      ] }
+                    ]
+                  },
+                  {
+                    "tag": "section",
                     "if": "configurationUsersView",
                     "attrs": { "class": "card mail-panel" },
                     "children": [
@@ -702,21 +732,24 @@
                         ] },
                         { "tag": "label", "attrs": { "class": "form-label", "for": "mail-compose-subject" }, "text": "Asunto" },
                         { "tag": "input", "attrs": { "class": "form-control", "id": "mail-compose-subject", "name": "subject", "type": "text", "value": "${composeSubject}", "maxlength": "200" } },
-                        { "tag": "div", "attrs": { "class": "mail-md-toolbar", "role": "toolbar", "aria-label": "Formato Markdown" }, "children": [
+                        { "tag": "div", "attrs": { "class": "mail-md-toolbar", "role": "toolbar", "aria-label": "Editor del mensaje" }, "children": [
                           { "tag": "button", "attrs": { "class": "btn btn-sm btn-light", "type": "button", "data-md": "bold", "title": "Negritas" }, "children": [{ "tag": "span", "attrs": { "class": "fas fa-bold", "aria-hidden": "true" } }] },
                           { "tag": "button", "attrs": { "class": "btn btn-sm btn-light", "type": "button", "data-md": "italic", "title": "Cursivas" }, "children": [{ "tag": "span", "attrs": { "class": "fas fa-italic", "aria-hidden": "true" } }] },
                           { "tag": "button", "attrs": { "class": "btn btn-sm btn-light", "type": "button", "data-md": "heading", "title": "Encabezado" }, "text": "H" },
                           { "tag": "button", "attrs": { "class": "btn btn-sm btn-light", "type": "button", "data-md": "list", "title": "Lista" }, "children": [{ "tag": "span", "attrs": { "class": "fas fa-list", "aria-hidden": "true" } }] },
                           { "tag": "button", "attrs": { "class": "btn btn-sm btn-light", "type": "button", "data-md": "link", "title": "Enlace" }, "children": [{ "tag": "span", "attrs": { "class": "fas fa-link", "aria-hidden": "true" } }] },
+                          { "tag": "button", "attrs": { "class": "btn btn-sm btn-light", "type": "button", "data-md": "table", "title": "Tabla" }, "children": [{ "tag": "span", "attrs": { "class": "fas fa-table", "aria-hidden": "true" } }] },
+                          { "tag": "button", "attrs": { "class": "btn btn-sm btn-light", "id": "mail-insert-image", "type": "button", "title": "Imagen en línea" }, "children": [{ "tag": "span", "attrs": { "class": "fas fa-image", "aria-hidden": "true" } }] },
                           { "tag": "div", "attrs": { "class": "mail-md-label", "aria-label": "Formato del mensaje" }, "children": [
                             { "tag": "span", "text": "Formato" },
-                            { "tag": "input", "attrs": { "type": "hidden", "id": "mail-compose-format", "name": "format", "value": "markdown" } },
-                            { "tag": "button", "attrs": { "class": "btn btn-sm btn-primary", "id": "mail-format-markdown", "type": "button" }, "text": "Markdown" },
-                            { "tag": "button", "attrs": { "class": "btn btn-sm btn-light", "id": "mail-format-html", "type": "button" }, "text": "HTML" }
+                            { "tag": "input", "attrs": { "type": "hidden", "id": "mail-compose-format", "name": "format", "value": "html" } },
+                            { "tag": "button", "attrs": { "class": "btn btn-sm btn-primary", "id": "mail-format-html", "type": "button" }, "text": "HTML" },
+                            { "tag": "button", "attrs": { "class": "btn btn-sm btn-light", "id": "mail-format-markdown", "type": "button" }, "text": "Markdown" }
                           ] }
                         ] },
                         { "tag": "label", "attrs": { "class": "visually-hidden", "for": "mail-compose-body" }, "text": "Contenido" },
-                        { "tag": "textarea", "attrs": { "class": "form-control mail-md-editor", "id": "mail-compose-body", "name": "body", "rows": "18", "spellcheck": "true", "required": "true", "placeholder": "Escribe tu mensaje con Markdown…" }, "text": "${composeBody}" },
+                        { "tag": "div", "attrs": { "class": "form-control mail-rich-editor", "id": "mail-html-editor", "contenteditable": "true", "role": "textbox", "aria-label": "Contenido del mensaje", "aria-multiline": "true", "spellcheck": "true" } },
+                        { "tag": "textarea", "attrs": { "class": "form-control mail-md-editor d-none", "id": "mail-compose-body", "name": "body", "rows": "18", "spellcheck": "true", "required": "true", "placeholder": "Escribe tu mensaje con Markdown…" }, "text": "${composeBody}" },
                         { "tag": "div", "attrs": { "class": "mail-file-fields" }, "children": [
                           { "tag": "label", "attrs": { "class": "mail-file-field", "for": "mail-compose-attachments" }, "children": [
                             { "tag": "span", "attrs": { "class": "fas fa-paperclip", "aria-hidden": "true" } }, { "tag": "span", "text": "Adjuntar archivos" },
@@ -724,7 +757,7 @@
                           ] },
                           { "tag": "label", "attrs": { "class": "mail-file-field", "for": "mail-compose-images" }, "children": [
                             { "tag": "span", "attrs": { "class": "fas fa-image", "aria-hidden": "true" } }, { "tag": "span", "text": "Incluir imágenes o archivos" },
-                            { "tag": "input", "attrs": { "id": "mail-compose-images", "name": "images", "type": "file", "multiple": "true" } }
+                            { "tag": "input", "attrs": { "id": "mail-compose-images", "name": "images", "type": "file", "accept": "image/png,image/jpeg,image/gif", "multiple": "true" } }
                           ] }
                         ] },
                         { "tag": "div", "attrs": { "class": "mail-compose-footer" }, "children": [
@@ -893,7 +926,11 @@
                             ] }
                           ] },
                           { "tag": "pre", "if": "mailText", "attrs": { "class": "mail-body" }, "text": "${body}" },
-                          { "tag": "iframe", "if": "mailHtml", "attrs": { "class": "mail-html-body", "sandbox": "", "referrerpolicy": "no-referrer", "title": "Contenido HTML del correo", "srcdoc": "${body}" } }
+                          { "tag": "iframe", "if": "mailHtml", "attrs": { "class": "mail-html-body", "sandbox": "", "referrerpolicy": "no-referrer", "title": "Contenido HTML del correo", "srcdoc": "${body}" } },
+                          { "tag": "details", "if": "originalHtmlAvailable", "attrs": { "class": "mt-3" }, "children": [
+                            { "tag": "summary", "attrs": { "class": "btn btn-sm btn-outline-secondary" }, "text": "Ver HTML original" },
+                            { "tag": "pre", "attrs": { "class": "mail-body" }, "text": "${originalHtml}" }
+                          ] }
                         ]
                       }
                     ]

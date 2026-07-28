@@ -32,6 +32,14 @@ begin
     assert (select telefono = '+525587654321' and not global_safe_list
               from mail_usuario_telefonos where usuario_id = 'mail-user-test'), 'No se reinició Global Safe List';
 
+    resultado := mail_fn_usuario_opciones('mail-user-test')::json;
+    assert resultado ->> 'smsEnabled' = 'true', 'SMS debe iniciar habilitado';
+    resultado := mail_fn_usuario_opciones_guardar('{"actor":"mail-admin-test@soft-gator.com",'
+        '"user":"mail-admin-test","smsEnabled":false}')::json;
+    assert resultado ->> 'codigo' = '0', 'No se guardó la preferencia SMS';
+    assert (mail_fn_usuario_opciones('mail-admin-test')::json ->> 'smsEnabled') = 'false',
+        'No se deshabilitó la autenticación SMS';
+
     select usuario_password into password_anterior from app_usuarios where usuario_id = 'mail-user-test';
     resultado := mail_fn_admin_usuario_reset('{"actor":"mail-admin-test@soft-gator.com",'
         '"user":"mail-user-test","password":"Abcd_1234-Efgh_5678-Ijkl"}')::json;

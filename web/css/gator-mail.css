@@ -208,6 +208,11 @@ body { min-height: 100vh; margin: 0; color: var(--gator-ink); background: var(--
 .mail-md-label { display: inline-flex; align-items: center; gap: .4rem; margin-left: auto; color: var(--gator-muted); font-size: .72rem; }
 .mail-md-label .btn { width: auto; min-width: auto; height: 1.9rem; padding: 0 .55rem; font-size: .7rem; }
 .mail-md-editor { min-height: 390px; margin-top: -.55rem; border-radius: 0 0 8px 8px !important; resize: vertical; font: 400 .92rem/1.65 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+.mail-rich-editor { min-height: 390px; margin-top: -.55rem; overflow: auto; border-radius: 0 0 8px 8px !important; line-height: 1.65; }
+.mail-rich-editor:empty::before { color: #81909c; content: "Escribe tu mensaje…"; }
+.mail-rich-editor img { max-width: 100%; height: auto; }
+.mail-rich-editor table { width: 100%; border-collapse: collapse; }
+.mail-rich-editor th, .mail-rich-editor td { padding: .45rem; border: 1px solid var(--gator-line); }
 .mail-file-fields { display: flex; flex-wrap: wrap; gap: .5rem; }
 .mail-file-field { display: inline-flex; align-items: center; gap: .4rem; padding: .5rem .7rem; border: 1px solid var(--gator-line); border-radius: 8px; color: var(--gator-blue-dark); cursor: pointer; font-size: .8rem; }
 .mail-file-field input { max-width: min(260px, 55vw); font-size: .75rem; }

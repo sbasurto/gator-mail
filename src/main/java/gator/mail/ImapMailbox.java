@@ -25,7 +25,6 @@ import java.util.Comparator;
 import java.util.Date;
 import java.util.List;
 import java.util.Properties;
-import java.util.UUID;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.imageio.ImageIO;
@@ -63,7 +62,7 @@ final class ImapMailbox {
     record Download(String name, byte[] data) { }
 
     record Mail(String from, String replyTo, String to, String cc, String subject, Instant sent, String body,
-            String plain, boolean html,
+            String plain, String originalHtml, boolean html,
             List<Attachment> attachments, ICalendar.Invite invitation, boolean invitationTrusted) {
     }
 
@@ -73,6 +72,7 @@ final class ImapMailbox {
 
     private static final class Parsed {
         String html = "";
+        String originalHtml = "";
         String plain = "";
         final List<Attachment> attachments = new ArrayList<>();
         final List<InlineImage> images = new ArrayList<>();
@@ -170,7 +170,8 @@ final class ImapMailbox {
                     addresses(message.getRecipients(Message.RecipientType.TO)),
                     addresses(message.getRecipients(Message.RecipientType.CC)), text(message.getSubject(), "(Sin asunto)"),
                     message.getSentDate() == null ? Instant.EPOCH : message.getSentDate().toInstant(),
-                    body, parsed.plain, !parsed.html.isBlank(), List.copyOf(parsed.attachments), parsed.invitation,
+                    body, parsed.plain, parsed.originalHtml, !parsed.html.isBlank(),
+                    List.copyOf(parsed.attachments), parsed.invitation,
                     parsed.invitation != null && address(message.getFrom(), parsed.invitation.organizer()));
         }
     }
@@ -375,10 +376,11 @@ final class ImapMailbox {
         StringBuilder richBody = new StringBuilder(html);
         List<String> inlineCids = new ArrayList<>();
         for (Upload upload : files) if (upload.inline()) {
-            String cid = UUID.randomUUID() + "@gator-mail";
+            String cid = inlineCid(inlineCids.size());
             inlineCids.add(cid);
-            richBody.append("<p><img src=\"cid:").append(cid).append("\" alt=\"")
-                    .append(escape(upload.name())).append("\"></p>");
+            if (richBody.indexOf("cid:" + cid) < 0)
+                richBody.append("<p><img src=\"cid:").append(cid).append("\" alt=\"")
+                        .append(escape(upload.name())).append("\"></p>");
         }
         MimeBodyPart rich = new MimeBodyPart();
         rich.setContent(richBody.toString(), "text/html; charset=UTF-8");
@@ -407,6 +409,10 @@ final class ImapMailbox {
         else message.setContent(content);
         message.saveChanges();
         return message;
+    }
+
+    static String inlineCid(int index) {
+        return "inline-" + (index + 1) + "@gator-mail";
     }
 
     private static InternetAddress[] addresses(String value, boolean required) {
@@ -536,6 +542,7 @@ final class ImapMailbox {
     private static Parsed parse(jakarta.mail.Part part) throws Exception {
         Parsed parsed = new Parsed();
         parse(part, "", parsed);
+        parsed.originalHtml = parsed.html;
         parsed.html = sanitizeHtml(parsed.html);
         parsed.plain = limited(parsed.plain);
         return parsed;

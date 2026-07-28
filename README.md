@@ -88,7 +88,8 @@ El contexto esperado es `/gator-mail`. La aplicación requiere acceso a la
 configuración de identidad `pg_mail_identity`, una entrada `broker_db` con
 `db_use = 'mail'` y la asignación de esa aplicación a los grupos autorizados.
 El segundo factor sólo se solicita cuando `GATOR_MAIL_SMS_ENDPOINT` y
-`GATOR_MAIL_SMS_SECRET` están configurados. El endpoint recibe JSON por `POST`
+`GATOR_MAIL_SMS_SECRET` están configurados y el usuario lo mantiene habilitado
+en **Configuración > Opciones de usuario**. El endpoint recibe JSON por `POST`
 con autenticación `Bearer`: `action` (`send` o `correct`), `usuario`,
 `application`, `userHint` y, para corregir, `telefono`. Debe devolver
 `codigo`, `phoneSent`, `challengeHash`, `expiresAt` y, en errores de envío,
@@ -101,6 +102,8 @@ Para actualizar un teléfono envía `action: sync`, `usuario`, `email`, `name` y
 `telefono`. El proveedor debe validar que el teléfono corresponda al usuario.
 Una instalación sin soporte de lista segura puede omitir el endpoint completo;
 Gator Mail no incluye credenciales ni dependencias de Twilio.
+La preferencia se guarda en `app_usuarios.usuario_sms_auth`; una instalación
+que implemente el endpoint debe omitir el desafío cuando ese valor sea falso.
 
 ## Filtros IMAP
 

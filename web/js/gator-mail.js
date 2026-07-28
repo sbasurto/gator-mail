@@ -218,37 +218,79 @@
     });
 
     const editor = document.querySelector("#mail-compose-body");
+    const visualEditor = document.querySelector("#mail-html-editor");
     const format = document.querySelector("#mail-compose-format");
     const markdownFormat = document.querySelector("#mail-format-markdown");
     const htmlFormat = document.querySelector("#mail-format-html");
+    const syncHtml = () => {
+        if (!editor || !visualEditor) return;
+        const content = visualEditor.cloneNode(true);
+        content.querySelectorAll("img[data-cid]").forEach(image => {
+            image.src = "cid:" + image.dataset.cid;
+            image.removeAttribute("data-cid");
+        });
+        editor.value = content.innerHTML;
+    };
+    if (editor && visualEditor) visualEditor.innerHTML = editor.value;
     const setFormat = () => {
-        if (!editor || !format) return;
+        if (!editor || !visualEditor || !format) return;
         const html = format.value === "html";
-        document.querySelectorAll("[data-md]").forEach(button => button.disabled = html);
         markdownFormat?.classList.toggle("btn-primary", !html);
         markdownFormat?.classList.toggle("btn-light", html);
         htmlFormat?.classList.toggle("btn-primary", html);
         htmlFormat?.classList.toggle("btn-light", !html);
-        editor.placeholder = html ? "Escribe HTML seguro…" : "Escribe tu mensaje con Markdown…";
-        editor.setAttribute("aria-label", html ? "Contenido HTML" : "Contenido Markdown");
+        visualEditor.classList.toggle("d-none", !html);
+        editor.classList.toggle("d-none", html);
+        editor.setAttribute("aria-label", "Contenido Markdown");
     };
-    markdownFormat?.addEventListener("click", () => { format.value = "markdown"; setFormat(); });
-    htmlFormat?.addEventListener("click", () => { format.value = "html"; setFormat(); });
+    markdownFormat?.addEventListener("click", () => { syncHtml(); format.value = "markdown"; setFormat(); });
+    htmlFormat?.addEventListener("click", () => {
+        if (format.value === "markdown") visualEditor.textContent = editor.value;
+        format.value = "html";
+        setFormat();
+    });
+    visualEditor?.addEventListener("input", syncHtml);
+    visualEditor?.closest("form")?.addEventListener("submit", syncHtml);
     setFormat();
     const markdown = {
-        bold: ["**", "**"],
-        italic: ["_", "_"],
-        heading: ["## ", ""],
-        list: ["- ", ""],
-        link: ["[", "](https://)"]
+        bold: ["**", "**"], italic: ["_", "_"], heading: ["## ", ""], list: ["- ", ""],
+        link: ["[", "](https://)"],
+        table: ["<table><thead><tr><th>Columna 1</th><th>Columna 2</th></tr></thead><tbody><tr><td>Dato 1</td><td>Dato 2</td></tr></tbody></table>", ""]
     };
     document.querySelectorAll("[data-md]").forEach(button => button.addEventListener("click", () => {
-        if (!editor || format?.value === "html") return;
-        const [before, after] = markdown[button.dataset.md];
-        const start = editor.selectionStart;
-        const end = editor.selectionEnd;
-        const selected = editor.value.slice(start, end) || (button.dataset.md === "link" ? "texto" : "");
-        editor.setRangeText(before + selected + after, start, end, "end");
-        editor.focus();
+        if (!editor || !format) return;
+        if (format.value === "markdown") {
+            const [before, after] = markdown[button.dataset.md];
+            const start = editor.selectionStart;
+            const end = editor.selectionEnd;
+            const selected = editor.value.slice(start, end) || (button.dataset.md === "link" ? "texto" : "");
+            editor.setRangeText(before + selected + after, start, end, "end");
+            editor.focus();
+            return;
+        }
+        visualEditor?.focus();
+        const command = { bold: "bold", italic: "italic", heading: "formatBlock", list: "insertUnorderedList" }[button.dataset.md];
+        if (command) document.execCommand(command, false, button.dataset.md === "heading" ? "h2" : null);
+        else if (button.dataset.md === "table") document.execCommand("insertHTML", false,
+            "<table><thead><tr><th>Columna 1</th><th>Columna 2</th></tr></thead><tbody><tr><td>Dato 1</td><td>Dato 2</td></tr></tbody></table><p><br></p>");
+        else {
+            const url = prompt("Dirección del enlace (https:// o mailto:)", "https://");
+            if (url && /^(https?:|mailto:)/i.test(url)) document.execCommand("createLink", false, url);
+        }
+        syncHtml();
     }));
+    const images = document.querySelector("#mail-compose-images");
+    document.querySelector("#mail-insert-image")?.addEventListener("click", () => images?.click());
+    images?.addEventListener("change", () => {
+        if (!visualEditor) return;
+        visualEditor.querySelectorAll("img[data-cid]").forEach(image => image.remove());
+        Array.from(images.files).forEach((file, index) => {
+            const image = document.createElement("img");
+            image.src = URL.createObjectURL(file);
+            image.alt = file.name;
+            image.dataset.cid = `inline-${index + 1}@gator-mail`;
+            visualEditor.append(image);
+        });
+        syncHtml();
+    });
 })();
