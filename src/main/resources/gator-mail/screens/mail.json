@@ -530,6 +530,8 @@
                           { "tag": "p", "attrs": { "class": "mail-eyebrow" }, "text": "Segundo paso" },
                           { "tag": "h1", "if": "codeChallenge", "attrs": { "class": "mail-state-title" }, "text": "Confirma que eres tú" },
                           { "tag": "p", "if": "codeChallenge", "attrs": { "class": "mail-state-copy" }, "text": "Enviamos una clave temporal por SMS al teléfono asociado con tu cuenta." },
+                          { "tag": "h1", "if": "mobileChallenge", "attrs": { "class": "mail-state-title" }, "text": "Autoriza tu acceso" },
+                          { "tag": "p", "if": "mobileChallenge", "attrs": { "class": "mail-state-copy" }, "text": "Enviamos una solicitud a Gator Mobile." },
                           { "tag": "h1", "if": "phoneCorrection", "attrs": { "class": "mail-state-title" }, "text": "Corrige tu teléfono" },
                           { "tag": "p", "if": "phoneCorrection", "attrs": { "class": "mail-state-copy" }, "text": "No pudimos entregar el SMS. Puedes corregir tu número una sola vez." },
                           { "tag": "span", "if": "noticeVisible", "attrs": { "class": "d-none mail-swal mail-swal-info", "title": "Aviso" }, "text": "${notice}" },
@@ -548,6 +550,16 @@
                           },
                           {
                             "tag": "form",
+                            "if": "mobileChallenge",
+                            "attrs": { "method": "post", "class": "mail-challenge-form", "id": "mail-mobile-challenge" },
+                            "children": [
+                              { "tag": "input", "attrs": { "type": "hidden", "name": "action", "value": "checkMobile" } },
+                              { "tag": "input", "attrs": { "type": "hidden", "name": "token", "value": "${token}" } },
+                              { "tag": "button", "attrs": { "class": "btn btn-primary btn-lg w-100 mail-primary-action", "type": "submit" }, "text": "Comprobar autorización" }
+                            ]
+                          },
+                          {
+                            "tag": "form",
                             "if": "codeChallenge",
                             "attrs": { "method": "post", "class": "mail-challenge-form" },
                             "children": [
@@ -561,12 +573,12 @@
                           },
                           {
                             "tag": "form",
-                            "if": "codeChallenge",
+                            "if": "resendChallenge",
                             "attrs": { "method": "post", "class": "mail-resend" },
                             "children": [
                               { "tag": "input", "attrs": { "type": "hidden", "name": "action", "value": "resend" } },
                               { "tag": "input", "attrs": { "type": "hidden", "name": "token", "value": "${token}" } },
-                              { "tag": "button", "attrs": { "class": "btn btn-link", "type": "submit", "disabled": "${resendDisabled}" }, "text": "No recibí la clave" },
+                              { "tag": "button", "attrs": { "class": "btn btn-link", "type": "submit", "disabled": "${resendDisabled}" }, "text": "Usar SMS" },
                               { "tag": "small", "attrs": { "class": "d-block text-muted" }, "text": "${resendWait}" }
                             ]
                           }

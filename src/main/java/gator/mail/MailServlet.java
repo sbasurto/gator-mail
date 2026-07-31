@@ -160,6 +160,8 @@ public final class MailServlet extends HttpServlet {
         model.put("accountHref", request.getContextPath() + "/oauth/password");
         model.put("challenge", false);
         model.put("codeChallenge", false);
+        model.put("mobileChallenge", false);
+        model.put("resendChallenge", false);
         model.put("phoneCorrection", false);
         model.put("mailboxView", false);
         model.put("messageView", false);
@@ -261,6 +263,36 @@ public final class MailServlet extends HttpServlet {
             session.setAttribute("mail.challenge.token", token);
         }
         long now = System.currentTimeMillis();
+        boolean mobilePending = session.getAttribute("mail.challenge.mobile.id") != null;
+        boolean fallback = false;
+        if (mobilePending && "checkMobile".equals(request.getParameter("action"))) {
+            if (!token.equals(request.getParameter("token"))) return "Solicitud inválida";
+            JsonObject status = json("usuario", user);
+            status.addProperty("action", "status");
+            status.addProperty("authorizationId", String.valueOf(session.getAttribute("mail.challenge.mobile.id")));
+            status.addProperty("requestToken", token);
+            JsonObject result = sms(status);
+            String state = result.has("status") ? result.get("status").getAsString() : "";
+            if (result.has("authorized") && result.get("authorized").getAsBoolean()) {
+                session.setAttribute("mail.challenge.verified", true);
+                session.removeAttribute("mail.challenge.mobile.id");
+                return "";
+            }
+            if ("REJECTED".equals(state)) {
+                session.removeAttribute("mail.challenge.mobile.id");
+                session.setAttribute("mail.challenge.denied", true);
+                return "Rechazaste el acceso desde Gator Mobile";
+            }
+            if ("EXPIRED".equals(state)) {
+                session.removeAttribute("mail.challenge.mobile.id");
+                mobilePending = false;
+                fallback = true;
+            } else {
+                return "Aprueba este acceso desde Gator Mobile";
+            }
+        }
+        if (Boolean.TRUE.equals(session.getAttribute("mail.challenge.denied")))
+            return "El acceso fue rechazado. Inicia una sesión nueva para volver a intentarlo.";
         if ("correctPhone".equals(request.getParameter("action"))) {
             if (!token.equals(request.getParameter("token"))
                     || !Boolean.TRUE.equals(session.getAttribute("mail.phone.correction")))
@@ -296,13 +328,21 @@ public final class MailServlet extends HttpServlet {
         long lastSent = number(session.getAttribute("mail.challenge.sent"));
         if (resend && (!token.equals(request.getParameter("token")) || now - lastSent < RESEND_WAIT_MS))
             return "Espera 30 segundos antes de solicitar otra clave";
-        if (session.getAttribute("mail.challenge.hash") == null || resend) {
+        if ((!mobilePending && session.getAttribute("mail.challenge.hash") == null) || resend || fallback) {
             JsonObject requestJson = json("usuario", user);
             requestJson.addProperty("action", "send");
             requestJson.addProperty("smsOnly", true);
             requestJson.addProperty("application", "Gator Mail");
             requestJson.addProperty("userHint", userHint(user));
+            requestJson.addProperty("requestToken", token);
+            requestJson.addProperty("fallback", resend || fallback);
             JsonObject result = sms(requestJson);
+            if (result.has("mobilePending") && result.get("mobilePending").getAsBoolean()) {
+                session.setAttribute("mail.challenge.mobile.id", result.get("authorizationId").getAsString());
+                session.setAttribute("mail.challenge.expires", result.get("expiresAt").getAsLong());
+                session.setAttribute("mail.challenge.sent", now);
+                return "Aprueba este acceso desde Gator Mobile";
+            }
             if (!"0".equals(result.get("codigo").getAsString()) || !result.get("phoneSent").getAsBoolean()) {
                 if (!Boolean.TRUE.equals(session.getAttribute("mail.phone.correction.used"))
                         && result.has("phoneCorrectionAllowed") && result.get("phoneCorrectionAllowed").getAsBoolean())
@@ -617,8 +657,11 @@ public final class MailServlet extends HttpServlet {
                 - number(session.getAttribute("mail.challenge.sent"))) + 999) / 1000);
         model.put("challenge", true);
         boolean correction = Boolean.TRUE.equals(session.getAttribute("mail.phone.correction"));
+        boolean mobile = session.getAttribute("mail.challenge.mobile.id") != null;
         model.put("phoneCorrection", correction);
-        model.put("codeChallenge", !correction);
+        model.put("mobileChallenge", mobile);
+        model.put("codeChallenge", !correction && !mobile);
+        model.put("resendChallenge", !correction);
         model.put("token", String.valueOf(session.getAttribute("mail.challenge.token")));
         model.put("notice", notice);
         model.put("noticeVisible", !notice.isBlank());

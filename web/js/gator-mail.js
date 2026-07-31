@@ -1,4 +1,7 @@
 (() => {
+    const mobileChallenge = document.getElementById("mail-mobile-challenge");
+    if (mobileChallenge) window.setTimeout(() => mobileChallenge.requestSubmit(), 2000);
+
     document.querySelectorAll(".mail-swal").forEach(alert => Swal.fire({
         icon: alert.classList.contains("mail-swal-success") ? "success" : "info",
         title: alert.title,
