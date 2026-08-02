@@ -16,7 +16,7 @@
           { "tag": "link", "attrs": { "rel": "stylesheet", "href": "/elib/css2/sweetalert2.min.css?v=11.23.0" } },
           { "tag": "link", "attrs": { "rel": "stylesheet", "href": "${contextPath}/css/gator-mail.css?v=34" } },
           { "tag": "script", "attrs": { "src": "/elib/js/sweetalert2.all.min.js", "defer": "true" } },
-          { "tag": "script", "attrs": { "src": "${contextPath}/js/gator-mail.js?v=13", "defer": "true" } }
+          { "tag": "script", "attrs": { "src": "${contextPath}/js/gator-mail.js?v=14", "defer": "true" } }
         ]
       },
       {
@@ -156,6 +156,9 @@
                     ] }
                   ] },
                   { "tag": "div", "attrs": { "class": "mail-folder-menu", "id": "mail-folder-menu", "data-csrf": "${csrf}", "role": "menu" }, "children": [
+                    { "tag": "button", "attrs": { "class": "mail-folder-menu-item", "id": "mail-folder-child", "type": "button", "role": "menuitem" }, "children": [
+                      { "tag": "span", "attrs": { "class": "fas fa-folder-plus", "aria-hidden": "true" } }, { "tag": "span", "text": "Nueva subcarpeta" }
+                    ] },
                     { "tag": "button", "attrs": { "class": "mail-folder-menu-item", "id": "mail-folder-rename", "type": "button", "role": "menuitem" }, "children": [
                       { "tag": "span", "attrs": { "class": "fas fa-pen", "aria-hidden": "true" } }, { "tag": "span", "text": "Renombrar" }
                     ] },

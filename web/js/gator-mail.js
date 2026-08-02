@@ -107,6 +107,19 @@
         });
     });
 
+    const child = document.querySelector("#mail-folder-child");
+    child?.addEventListener("click", async () => {
+        const { value: name } = await Swal.fire({
+            title: "Nueva subcarpeta",
+            input: "text",
+            inputLabel: `Dentro de ${child.dataset.folder}`,
+            showCancelButton: true,
+            confirmButtonText: "Crear",
+            cancelButtonText: "Cancelar"
+        });
+        if (name?.trim()) post("folderCreate", { parent: child.dataset.folder, name: name.trim() }, child.dataset.csrf);
+    });
+
     const rename = document.querySelector("#mail-folder-rename");
     rename?.addEventListener("click", async () => {
         const { value: name } = await Swal.fire({
@@ -141,8 +154,8 @@
         folder.addEventListener("contextmenu", event => {
             if (folder.dataset.folder.toUpperCase() === "INBOX") return;
             event.preventDefault();
-            rename.dataset.folder = remove.dataset.folder = folder.dataset.folder;
-            rename.dataset.csrf = remove.dataset.csrf = folderMenu.dataset.csrf;
+            child.dataset.folder = rename.dataset.folder = remove.dataset.folder = folder.dataset.folder;
+            child.dataset.csrf = rename.dataset.csrf = remove.dataset.csrf = folderMenu.dataset.csrf;
             folderMenu.classList.add("open");
             folderMenu.style.left = `${Math.min(event.clientX, window.innerWidth - 200)}px`;
             folderMenu.style.top = `${Math.min(event.clientY, window.innerHeight - 100)}px`;

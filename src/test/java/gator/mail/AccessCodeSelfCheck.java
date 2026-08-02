@@ -300,7 +300,8 @@ public final class AccessCodeSelfCheck {
             assert html.contains("Sesión cerrada");
             assert html.contains("/gator-mail/css/gator-mail.css?v=34");
             assert html.contains("/elib/js/sweetalert2.all.min.js");
-            assert html.contains("/gator-mail/js/gator-mail.js?v=13");
+            assert html.contains("/gator-mail/js/gator-mail.js?v=14");
+            assert html.contains("Nueva subcarpeta");
             assert html.contains("href=\"/gator-mail/oauth/password\"");
             assert html.contains("fontawesome-free-5.13.0-web/css/all.min.css");
             assert html.contains("&lt;user@example.com&gt;");

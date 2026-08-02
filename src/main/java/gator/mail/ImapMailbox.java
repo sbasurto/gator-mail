@@ -274,10 +274,12 @@ final class ImapMailbox {
         }
     }
 
-    String create(String mailbox, String name, String accessToken) throws Exception {
+    String create(String mailbox, String parentName, String name, String accessToken) throws Exception {
         try (Store store = connect(mailbox, accessToken)) {
-            Folder root = store.getDefaultFolder();
-            String destination = destination("", "", name, root.getSeparator());
+            String parent = parentName == null ? "" : parentName.strip();
+            Folder root = parent.isEmpty() ? store.getDefaultFolder() : store.getFolder(parent);
+            if (!parent.isEmpty() && !root.exists()) throw new IllegalArgumentException("La carpeta padre no existe");
+            String destination = destination("", parent, name, root.getSeparator());
             Folder folder = store.getFolder(destination);
             if (folder.exists()) throw new IllegalArgumentException("Ya existe una carpeta con ese nombre");
             if (!folder.create(Folder.HOLDS_MESSAGES))

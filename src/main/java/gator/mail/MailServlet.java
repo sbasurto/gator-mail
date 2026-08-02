@@ -1090,7 +1090,8 @@ public final class MailServlet extends HttpServlet {
             String folder = request.getParameter("folder");
             switch (action) {
                 case "folderCreate" -> {
-                    String created = imap.create(mailbox, request.getParameter("name"), accessToken);
+                    String created = imap.create(mailbox, request.getParameter("parent"),
+                            request.getParameter("name"), accessToken);
                     syncFolders(mailbox, accessToken);
                     syncFolder(mailbox, created, accessToken);
                     response.sendRedirect(folderReturn(request, created));
