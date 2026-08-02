@@ -1146,19 +1146,29 @@ public final class MailServlet extends HttpServlet {
             String mailbox, String accessToken) throws Exception {
         String requested = request.getParameter("folder");
         String folder = requested == null || requested.isBlank() ? "INBOX" : requested;
+        String sessionKey = cacheSessionKey(mailbox, folder);
         if ("refresh".equals(request.getParameter("action"))) {
             syncFolders(mailbox, accessToken);
             syncFolder(mailbox, folder, accessToken);
-            session.setAttribute("mail.cache.started", true);
+            session.setAttribute(sessionKey, true);
         }
         List<ImapMailbox.FolderInfo> folders = cachedFolders(mailbox);
         if (folders.isEmpty()) {
             syncFolders(mailbox, accessToken);
             syncFolder(mailbox, folder, accessToken);
             folders = cachedFolders(mailbox);
-        } else if (session.getAttribute("mail.cache.started") == null) {
-            session.setAttribute("mail.cache.started", true);
-            backgroundSync(mailbox, folder, accessToken);
+            session.setAttribute(sessionKey, true);
+        } else if (session.getAttribute(sessionKey) == null) {
+            session.setAttribute(sessionKey, true);
+            boolean needsHydration = folders.stream()
+                    .anyMatch(item -> item.name().equals(folder) && item.total() > 0)
+                    && cachedMessages(mailbox, folder, "", 1, 20).total() == 0;
+            if (needsHydration) {
+                syncFolder(mailbox, folder, accessToken);
+                folders = cachedFolders(mailbox);
+            } else {
+                backgroundSync(mailbox, folder, accessToken);
+            }
         }
         return folders;
     }
@@ -1608,6 +1618,10 @@ public final class MailServlet extends HttpServlet {
         JsonObject json = new JsonObject();
         json.addProperty(key, value);
         return json;
+    }
+
+    static String cacheSessionKey(String mailbox, String folder) {
+        return "mail.cache.started." + mailbox.toLowerCase(Locale.ROOT) + '.' + folder;
     }
 
     static List<Map<String, Object>> folderGroups(List<ImapMailbox.FolderInfo> folders, String selected, int size) {
