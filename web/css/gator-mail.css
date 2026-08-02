@@ -100,11 +100,10 @@ body { min-height: 100vh; margin: 0; color: var(--gator-ink); background: var(--
 .mail-stat > span { font-size: 1.4rem; }
 .mail-stat > strong { font-size: 2rem; line-height: 1; }
 .mail-stat > small { color: var(--gator-muted); font-weight: 700; }
-.mail-sender-list { display: grid; gap: .45rem; margin: 0; padding: 1rem 1rem 1rem 2.75rem; }
-.mail-sender-list li { padding-left: .25rem; color: var(--gator-muted); }
-.mail-sender-list li::marker { color: var(--gator-blue); font-weight: 750; }
-.mail-sender-list li > span { display: inline-block; max-width: calc(100% - 4rem); overflow: hidden; color: var(--gator-ink); text-overflow: ellipsis; vertical-align: middle; white-space: nowrap; }
-.mail-sender-list li > strong { float: right; min-width: 2.2rem; color: var(--gator-blue-dark); text-align: right; }
+.mail-sender-list { display: grid; gap: .45rem; margin: 0; padding: 1rem; }
+.mail-sender-row { display: flex; gap: 1rem; justify-content: space-between; color: var(--gator-muted); }
+.mail-sender-row > span { overflow: hidden; color: var(--gator-ink); text-overflow: ellipsis; white-space: nowrap; }
+.mail-sender-row > strong { min-width: 2.2rem; color: var(--gator-blue-dark); text-align: right; }
 .mail-agenda-title { text-align: center; }
 .mail-agenda-scroll { overflow-x: auto; }
 .mail-agenda-weekdays, .mail-agenda-days { display: grid; grid-template-columns: repeat(7, minmax(100px, 1fr)); min-width: 700px; }

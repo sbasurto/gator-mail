@@ -217,6 +217,12 @@ public final class AccessCodeSelfCheck {
         model.put("mailTotal", 12);
         model.put("mailUnread", 5);
         model.put("mailRead", 7);
+        model.put("recentSendersAvailable", true);
+        model.put("recentSendersEmpty", false);
+        model.put("recentSenders", List.of(Map.of("sender", "reciente@example.com", "count", 4)));
+        model.put("historicSendersAvailable", true);
+        model.put("historicSendersEmpty", false);
+        model.put("historicSenders", List.of(Map.of("sender", "historico@example.com", "count", 12)));
         model.put("calendarMonth", "Julio 2026");
         model.put("calendarPrevious", "mail?action=calendar&month=2026-06");
         model.put("calendarNext", "mail?action=calendar&month=2026-08");
@@ -369,6 +375,10 @@ public final class AccessCodeSelfCheck {
             assert html.contains(">Calendario</span>");
             assert html.contains(">Evento Uno</strong>");
             assert html.contains(">Total de correos</small>");
+            assert html.contains("Remitentes últimos 7 días");
+            assert html.contains("reciente@example.com");
+            assert html.contains("Remitentes históricos");
+            assert html.contains("historico@example.com");
             assert html.contains(">Julio 2026</h1>");
             assert html.contains("value=\"eventSave\"");
             assert html.contains("value=\"eventComplete\"");

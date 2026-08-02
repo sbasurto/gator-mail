@@ -227,8 +227,8 @@
                           ] }
                         ] },
                         { "tag": "p", "if": "recentSendersEmpty", "attrs": { "class": "mail-empty text-muted" }, "text": "No hay remitentes en este periodo." },
-                        { "tag": "ol", "if": "recentSendersAvailable", "attrs": { "class": "mail-sender-list" }, "children": [
-                          { "tag": "li", "each": "recentSenders", "as": "sender", "children": [
+                        { "tag": "div", "if": "recentSendersAvailable", "attrs": { "class": "mail-sender-list" }, "children": [
+                          { "tag": "div", "each": "recentSenders", "as": "sender", "attrs": { "class": "mail-sender-row" }, "children": [
                             { "tag": "span", "text": "${sender.sender}" }, { "tag": "strong", "text": "${sender.count}" }
                           ] }
                         ] }
@@ -240,8 +240,8 @@
                           ] }
                         ] },
                         { "tag": "p", "if": "historicSendersEmpty", "attrs": { "class": "mail-empty text-muted" }, "text": "No hay remitentes indexados." },
-                        { "tag": "ol", "if": "historicSendersAvailable", "attrs": { "class": "mail-sender-list" }, "children": [
-                          { "tag": "li", "each": "historicSenders", "as": "sender", "children": [
+                        { "tag": "div", "if": "historicSendersAvailable", "attrs": { "class": "mail-sender-list" }, "children": [
+                          { "tag": "div", "each": "historicSenders", "as": "sender", "attrs": { "class": "mail-sender-row" }, "children": [
                             { "tag": "span", "text": "${sender.sender}" }, { "tag": "strong", "text": "${sender.count}" }
                           ] }
                         ] }
