@@ -86,21 +86,24 @@ body { min-height: 100vh; margin: 0; color: var(--gator-ink); background: var(--
 .mail-panel-title { display: flex; align-items: center; gap: .55rem; }
 .mail-panel-title .fas { color: var(--gator-blue); font-size: 1rem; }
 .mail-panel-count { min-width: 2rem; padding: .3rem .6rem; border-radius: 999px; background: #eef5f8; color: var(--gator-blue-dark); font-size: .78rem; font-weight: 800; text-align: center; }
+.mail-events-panel .mail-panel-header { min-height: 66px; padding: .75rem 1rem; }
+.mail-events-panel .mail-panel-title { font-size: 1.15rem; }
 .mail-events-table-wrap { overflow-x: auto; }
 .mail-events-table { width: 100%; border-collapse: collapse; }
-.mail-events-table th { padding: .7rem 1rem; background: #f7fafb; color: var(--gator-muted); font-size: .72rem; letter-spacing: .04em; text-align: left; text-transform: uppercase; }
-.mail-events-table td { padding: .75rem 1rem; border-top: 1px solid #edf2f5; vertical-align: middle; }
+.mail-events-table th { padding: .45rem .75rem; background: #f7fafb; color: var(--gator-muted); font-size: .68rem; letter-spacing: .04em; text-align: left; text-transform: uppercase; }
+.mail-events-table td { padding: .45rem .75rem; border-top: 1px solid #edf2f5; vertical-align: middle; }
 .mail-dashboard-event:hover { background: #f8fbfc; }
 .mail-event-date, .mail-event-name { display: grid; gap: .1rem; }
 .mail-event-date { white-space: nowrap; }
-.mail-event-date small, .mail-event-name small, .mail-event-place { color: var(--gator-muted); font-size: .75rem; }
+.mail-event-date small, .mail-event-name small, .mail-event-place { color: var(--gator-muted); font-size: .7rem; }
 .mail-event-name { min-width: 12rem; }
+.mail-event-name strong { font-size: .82rem; }
 .mail-event-name strong, .mail-event-name small { max-width: 24rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mail-event-status { display: inline-block; padding: .28rem .55rem; border-radius: 999px; background: #e9f7ee; color: #176b43; white-space: nowrap; font-size: .72rem; font-weight: 750; }
+.mail-event-status { display: inline-block; padding: .2rem .45rem; border-radius: 999px; background: #e9f7ee; color: #176b43; white-space: nowrap; font-size: .68rem; font-weight: 750; }
 .mail-event-status.is-delayed { background: #fdebec; color: #a42b35; }
 .mail-event-status.is-next { background: #fff5dc; color: #966514; }
 .mail-event-status.is-done { background: #edf0f2; color: #52616a; }
-.mail-events-footer { display: flex; align-items: center; gap: .65rem; padding: .8rem 1rem; border-top: 1px solid #edf2f5; }
+.mail-events-footer { display: flex; align-items: center; gap: .55rem; padding: .55rem .75rem; border-top: 1px solid #edf2f5; }
 .mail-events-footer label, .mail-events-page-status { color: var(--gator-muted); font-size: .75rem; }
 .mail-events-footer select { width: auto; padding: .25rem 1.8rem .25rem .5rem; border: 1px solid var(--gator-line); border-radius: 7px; background: #fff; }
 .mail-events-page-status { margin-left: auto; }
@@ -125,6 +128,12 @@ body { min-height: 100vh; margin: 0; color: var(--gator-ink); background: var(--
 .mail-sender-name { overflow: hidden; color: var(--gator-ink); font-size: .86rem; text-overflow: ellipsis; white-space: nowrap; }
 .mail-sender-row > strong { min-width: 2.2rem; padding: .2rem .45rem; border-radius: 999px; background: #eef5f8; color: var(--gator-blue-dark); font-size: .76rem; text-align: center; }
 .mail-sender-panel.is-historic .mail-sender-row > strong { background: #f1ecfa; color: #6444a3; }
+.mail-sender-bar { grid-column: 2 / 4; width: 100%; height: .42rem; overflow: hidden; border: 0; border-radius: 999px; background: #e8f0f3; }
+.mail-sender-bar::-webkit-progress-bar { border-radius: 999px; background: #e8f0f3; }
+.mail-sender-bar::-webkit-progress-value { border-radius: 999px; background: linear-gradient(90deg, var(--gator-blue), #44b7c5); }
+.mail-sender-bar::-moz-progress-bar { border-radius: 999px; background: linear-gradient(90deg, var(--gator-blue), #44b7c5); }
+.mail-sender-panel.is-historic .mail-sender-bar::-webkit-progress-value { background: linear-gradient(90deg, #7654b8, #a586dd); }
+.mail-sender-panel.is-historic .mail-sender-bar::-moz-progress-bar { background: linear-gradient(90deg, #7654b8, #a586dd); }
 .mail-agenda-title { text-align: center; }
 .mail-agenda-scroll { overflow-x: auto; }
 .mail-agenda-weekdays, .mail-agenda-days { display: grid; grid-template-columns: repeat(7, minmax(100px, 1fr)); min-width: 700px; }

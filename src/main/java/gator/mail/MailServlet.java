@@ -627,9 +627,13 @@ public final class MailServlet extends HttpServlet {
 
     private static void senderRanking(Map<String, Object> model, String name, com.google.gson.JsonArray values) {
         List<Map<String, Object>> rows = new ArrayList<>();
+        int maximum = 1;
+        for (JsonElement element : values) maximum = Math.max(maximum,
+                element.getAsJsonObject().get("count").getAsInt());
         for (JsonElement element : values) {
             JsonObject sender = element.getAsJsonObject();
-            rows.add(Map.of("sender", sender.get("sender").getAsString(), "count", sender.get("count").getAsInt()));
+            rows.add(Map.of("sender", sender.get("sender").getAsString(),
+                    "count", sender.get("count").getAsInt(), "max", maximum));
         }
         model.put(name, rows);
         model.put(name + "Count", rows.size());

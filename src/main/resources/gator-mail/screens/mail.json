@@ -14,7 +14,7 @@
           { "tag": "link", "attrs": { "rel": "stylesheet", "href": "/elib/css2/fontawesome-free-5.13.0-web/css/all.min.css" } },
           { "tag": "link", "attrs": { "rel": "stylesheet", "href": "/elib/css/colors.css" } },
           { "tag": "link", "attrs": { "rel": "stylesheet", "href": "/elib/css2/sweetalert2.min.css?v=11.23.0" } },
-          { "tag": "link", "attrs": { "rel": "stylesheet", "href": "${contextPath}/css/gator-mail.css?v=36" } },
+          { "tag": "link", "attrs": { "rel": "stylesheet", "href": "${contextPath}/css/gator-mail.css?v=37" } },
           { "tag": "script", "attrs": { "src": "/elib/js/sweetalert2.all.min.js", "defer": "true" } },
           { "tag": "script", "attrs": { "src": "${contextPath}/js/gator-mail.js?v=15", "defer": "true" } }
         ]
@@ -256,7 +256,8 @@
                         { "tag": "div", "if": "recentSendersAvailable", "attrs": { "class": "mail-sender-list" }, "children": [
                           { "tag": "div", "each": "recentSenders", "as": "sender", "attrs": { "class": "mail-sender-row" }, "children": [
                             { "tag": "span", "attrs": { "class": "mail-sender-icon fas fa-user-circle", "aria-hidden": "true" } },
-                            { "tag": "span", "attrs": { "class": "mail-sender-name" }, "text": "${sender.sender}" }, { "tag": "strong", "text": "${sender.count}" }
+                            { "tag": "span", "attrs": { "class": "mail-sender-name" }, "text": "${sender.sender}" }, { "tag": "strong", "text": "${sender.count}" },
+                            { "tag": "progress", "attrs": { "class": "mail-sender-bar", "value": "${sender.count}", "max": "${sender.max}", "aria-label": "${sender.count} mensajes" } }
                           ] }
                         ] }
                       ] },
@@ -272,7 +273,8 @@
                         { "tag": "div", "if": "historicSendersAvailable", "attrs": { "class": "mail-sender-list" }, "children": [
                           { "tag": "div", "each": "historicSenders", "as": "sender", "attrs": { "class": "mail-sender-row" }, "children": [
                             { "tag": "span", "attrs": { "class": "mail-sender-icon fas fa-user-circle", "aria-hidden": "true" } },
-                            { "tag": "span", "attrs": { "class": "mail-sender-name" }, "text": "${sender.sender}" }, { "tag": "strong", "text": "${sender.count}" }
+                            { "tag": "span", "attrs": { "class": "mail-sender-name" }, "text": "${sender.sender}" }, { "tag": "strong", "text": "${sender.count}" },
+                            { "tag": "progress", "attrs": { "class": "mail-sender-bar", "value": "${sender.count}", "max": "${sender.max}", "aria-label": "${sender.count} mensajes" } }
                           ] }
                         ] }
                       ] }

@@ -220,11 +220,11 @@ public final class AccessCodeSelfCheck {
         model.put("recentSendersAvailable", true);
         model.put("recentSendersEmpty", false);
         model.put("recentSendersCount", 1);
-        model.put("recentSenders", List.of(Map.of("sender", "reciente@example.com", "count", 4)));
+        model.put("recentSenders", List.of(Map.of("sender", "reciente@example.com", "count", 4, "max", 4)));
         model.put("historicSendersAvailable", true);
         model.put("historicSendersEmpty", false);
         model.put("historicSendersCount", 1);
-        model.put("historicSenders", List.of(Map.of("sender", "historico@example.com", "count", 12)));
+        model.put("historicSenders", List.of(Map.of("sender", "historico@example.com", "count", 12, "max", 12)));
         model.put("calendarMonth", "Julio 2026");
         model.put("calendarPrevious", "mail?action=calendar&month=2026-06");
         model.put("calendarNext", "mail?action=calendar&month=2026-08");
@@ -307,7 +307,7 @@ public final class AccessCodeSelfCheck {
         try {
             String html = new GatorJsonView().renderResource("gator-mail/screens/mail.json", model);
             assert html.contains("Sesión cerrada");
-            assert html.contains("/gator-mail/css/gator-mail.css?v=36");
+            assert html.contains("/gator-mail/css/gator-mail.css?v=37");
             assert html.contains("/elib/js/sweetalert2.all.min.js");
             assert html.contains("/gator-mail/js/gator-mail.js?v=15");
             assert html.contains("Nueva subcarpeta");
@@ -386,6 +386,7 @@ public final class AccessCodeSelfCheck {
             assert html.contains("reciente@example.com");
             assert html.contains("Remitentes históricos");
             assert html.contains("historico@example.com");
+            assert html.contains("class=\"mail-sender-bar\" value=\"12\" max=\"12\"");
             assert html.contains(">Julio 2026</h1>");
             assert html.contains("value=\"eventSave\"");
             assert html.contains("value=\"eventComplete\"");
