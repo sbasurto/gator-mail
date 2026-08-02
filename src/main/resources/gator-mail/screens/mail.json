@@ -14,9 +14,9 @@
           { "tag": "link", "attrs": { "rel": "stylesheet", "href": "/elib/css2/fontawesome-free-5.13.0-web/css/all.min.css" } },
           { "tag": "link", "attrs": { "rel": "stylesheet", "href": "/elib/css/colors.css" } },
           { "tag": "link", "attrs": { "rel": "stylesheet", "href": "/elib/css2/sweetalert2.min.css?v=11.23.0" } },
-          { "tag": "link", "attrs": { "rel": "stylesheet", "href": "${contextPath}/css/gator-mail.css?v=35" } },
+          { "tag": "link", "attrs": { "rel": "stylesheet", "href": "${contextPath}/css/gator-mail.css?v=36" } },
           { "tag": "script", "attrs": { "src": "/elib/js/sweetalert2.all.min.js", "defer": "true" } },
-          { "tag": "script", "attrs": { "src": "${contextPath}/js/gator-mail.js?v=14", "defer": "true" } }
+          { "tag": "script", "attrs": { "src": "${contextPath}/js/gator-mail.js?v=15", "defer": "true" } }
         ]
       },
       {
@@ -177,24 +177,48 @@
                     "if": "dashboardView",
                     "attrs": { "class": "mail-dashboard-grid" },
                     "children": [
-                      { "tag": "section", "attrs": { "class": "card mail-panel" }, "children": [
+                      { "tag": "section", "attrs": { "class": "card mail-panel mail-events-panel" }, "children": [
                         { "tag": "header", "attrs": { "class": "card-header mail-panel-header" }, "children": [
                           { "tag": "div", "children": [
-                            { "tag": "small", "attrs": { "class": "mail-eyebrow" }, "text": "Calendario" },
-                            { "tag": "h1", "attrs": { "class": "mail-panel-title" }, "text": "Eventos" }
-                          ] }
+                            { "tag": "h1", "attrs": { "class": "mail-panel-title" }, "children": [
+                              { "tag": "span", "attrs": { "class": "fas fa-list-check", "aria-hidden": "true" } },
+                              { "tag": "span", "text": "Eventos pendientes" }
+                            ] }
+                          ] },
+                          { "tag": "span", "attrs": { "class": "mail-panel-count" }, "text": "${eventsCount}" }
                         ] },
                         { "tag": "p", "if": "eventsEmpty", "attrs": { "class": "mail-empty text-muted" }, "text": "No hay eventos en este periodo." },
-                        { "tag": "div", "if": "eventsAvailable", "attrs": { "class": "mail-event-list" }, "children": [
-                          { "tag": "div", "each": "events", "as": "event", "attrs": { "class": "mail-event ${event.statusClass}" }, "children": [
-                            { "tag": "span", "attrs": { "class": "mail-event-icon fas fa-calendar-day", "aria-hidden": "true" } },
-                            { "tag": "div", "attrs": { "class": "mail-event-copy" }, "children": [
-                              { "tag": "strong", "text": "${event.summary}" },
-                              { "tag": "p", "text": "${event.description}" },
-                              { "tag": "small", "text": "Inicia: ${event.start} · Termina: ${event.end}" },
-                              { "tag": "small", "if": "event.place", "text": "Lugar: ${event.place}" }
+                        { "tag": "div", "if": "eventsAvailable", "attrs": { "class": "mail-events-table-wrap" }, "children": [
+                          { "tag": "table", "attrs": { "class": "mail-events-table" }, "children": [
+                            { "tag": "thead", "children": [ { "tag": "tr", "children": [
+                              { "tag": "th", "text": "Fecha" }, { "tag": "th", "text": "Evento" },
+                              { "tag": "th", "text": "Estado" }, { "tag": "th", "attrs": { "class": "mail-event-place" }, "text": "Lugar" }
+                            ] } ] },
+                            { "tag": "tbody", "attrs": { "id": "mail-dashboard-events" }, "children": [
+                              { "tag": "tr", "each": "events", "as": "event", "attrs": { "class": "mail-dashboard-event" }, "children": [
+                                { "tag": "td", "attrs": { "class": "mail-event-date" }, "children": [
+                                  { "tag": "strong", "text": "${event.startDate}" }, { "tag": "small", "text": "${event.startTime}" }
+                                ] },
+                                { "tag": "td", "attrs": { "class": "mail-event-name" }, "children": [
+                                  { "tag": "strong", "text": "${event.summary}" }, { "tag": "small", "text": "${event.description}" }
+                                ] },
+                                { "tag": "td", "children": [ { "tag": "span", "attrs": { "class": "mail-event-status ${event.statusClass}" }, "text": "${event.status}" } ] },
+                                { "tag": "td", "attrs": { "class": "mail-event-place" }, "text": "${event.place}" }
+                              ] }
+                            ] }
+                          ] },
+                          { "tag": "div", "attrs": { "class": "mail-events-footer" }, "children": [
+                            { "tag": "label", "attrs": { "for": "mail-events-page-size" }, "text": "Por página" },
+                            { "tag": "select", "attrs": { "id": "mail-events-page-size" }, "children": [
+                              { "tag": "option", "attrs": { "value": "5", "selected": "true" }, "text": "5" },
+                              { "tag": "option", "attrs": { "value": "10" }, "text": "10" },
+                              { "tag": "option", "attrs": { "value": "20" }, "text": "20" }
                             ] },
-                            { "tag": "span", "attrs": { "class": "mail-event-status" }, "text": "${event.status}" }
+                            { "tag": "span", "attrs": { "id": "mail-events-page-status", "class": "mail-events-page-status" }, "text": "" },
+                            { "tag": "div", "attrs": { "class": "mail-events-pager" }, "children": [
+                              { "tag": "button", "attrs": { "id": "mail-events-prev", "type": "button", "class": "btn btn-sm btn-outline-secondary" }, "text": "Anterior" },
+                              { "tag": "button", "attrs": { "id": "mail-events-next", "type": "button", "class": "btn btn-sm btn-outline-secondary" }, "text": "Siguiente" }
+                            ] }
                           ] }
                         ] }
                       ] },
@@ -220,29 +244,35 @@
                           ] }
                         ] }
                       ] },
-                      { "tag": "section", "attrs": { "class": "card mail-panel" }, "children": [
+                      { "tag": "section", "attrs": { "class": "card mail-panel mail-sender-panel is-recent" }, "children": [
                         { "tag": "header", "attrs": { "class": "card-header mail-panel-header" }, "children": [
                           { "tag": "div", "children": [
+                            { "tag": "small", "attrs": { "class": "mail-eyebrow" }, "text": "Actividad reciente" },
                             { "tag": "h2", "attrs": { "class": "mail-panel-title" }, "text": "Remitentes últimos 7 días" }
-                          ] }
+                          ] },
+                          { "tag": "span", "attrs": { "class": "mail-panel-count" }, "text": "${recentSendersCount}" }
                         ] },
                         { "tag": "p", "if": "recentSendersEmpty", "attrs": { "class": "mail-empty text-muted" }, "text": "No hay remitentes en este periodo." },
                         { "tag": "div", "if": "recentSendersAvailable", "attrs": { "class": "mail-sender-list" }, "children": [
                           { "tag": "div", "each": "recentSenders", "as": "sender", "attrs": { "class": "mail-sender-row" }, "children": [
-                            { "tag": "span", "text": "${sender.sender}" }, { "tag": "strong", "text": "${sender.count}" }
+                            { "tag": "span", "attrs": { "class": "mail-sender-icon fas fa-user-circle", "aria-hidden": "true" } },
+                            { "tag": "span", "attrs": { "class": "mail-sender-name" }, "text": "${sender.sender}" }, { "tag": "strong", "text": "${sender.count}" }
                           ] }
                         ] }
                       ] },
-                      { "tag": "section", "attrs": { "class": "card mail-panel" }, "children": [
+                      { "tag": "section", "attrs": { "class": "card mail-panel mail-sender-panel is-historic" }, "children": [
                         { "tag": "header", "attrs": { "class": "card-header mail-panel-header" }, "children": [
                           { "tag": "div", "children": [
+                            { "tag": "small", "attrs": { "class": "mail-eyebrow" }, "text": "Actividad acumulada" },
                             { "tag": "h2", "attrs": { "class": "mail-panel-title" }, "text": "Remitentes históricos" }
-                          ] }
+                          ] },
+                          { "tag": "span", "attrs": { "class": "mail-panel-count" }, "text": "${historicSendersCount}" }
                         ] },
                         { "tag": "p", "if": "historicSendersEmpty", "attrs": { "class": "mail-empty text-muted" }, "text": "No hay remitentes indexados." },
                         { "tag": "div", "if": "historicSendersAvailable", "attrs": { "class": "mail-sender-list" }, "children": [
                           { "tag": "div", "each": "historicSenders", "as": "sender", "attrs": { "class": "mail-sender-row" }, "children": [
-                            { "tag": "span", "text": "${sender.sender}" }, { "tag": "strong", "text": "${sender.count}" }
+                            { "tag": "span", "attrs": { "class": "mail-sender-icon fas fa-user-circle", "aria-hidden": "true" } },
+                            { "tag": "span", "attrs": { "class": "mail-sender-name" }, "text": "${sender.sender}" }, { "tag": "strong", "text": "${sender.count}" }
                           ] }
                         ] }
                       ] }

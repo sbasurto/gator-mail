@@ -238,6 +238,7 @@ public final class MailServlet extends HttpServlet {
         model.put("calendarClass", "");
         model.put("eventsAvailable", false);
         model.put("eventsEmpty", false);
+        model.put("eventsCount", 0);
         model.put("mailOpen", true);
         model.put("mailFoldersMenu", true);
         model.put("mailNavigationOnly", false);
@@ -605,15 +606,20 @@ public final class MailServlet extends HttpServlet {
         List<Map<String, Object>> events = new ArrayList<>();
         for (JsonElement element : result.getAsJsonArray("eventos")) {
             JsonObject event = element.getAsJsonObject();
+            String start = event.get("start").getAsString();
+            int separator = start.indexOf(' ');
             events.add(Map.of("summary", event.get("summary").getAsString(),
                     "description", event.get("description").getAsString(),
-                    "place", event.get("place").getAsString(), "start", event.get("start").getAsString(),
-                    "end", event.get("end").getAsString(), "status", event.get("status").getAsString(),
+                    "place", event.get("place").getAsString(),
+                    "startDate", separator < 0 ? start : start.substring(0, separator),
+                    "startTime", separator < 0 ? "" : start.substring(separator + 1),
+                    "status", event.get("status").getAsString(),
                     "statusClass", event.get("statusClass").getAsString()));
         }
         model.put("events", events);
         model.put("eventsAvailable", !events.isEmpty());
         model.put("eventsEmpty", events.isEmpty());
+        model.put("eventsCount", events.size());
         JsonObject senders = checked(mailDbCall("mail_fn_cache_remitentes", mailbox));
         senderRanking(model, "recentSenders", senders.getAsJsonArray("recientes"));
         senderRanking(model, "historicSenders", senders.getAsJsonArray("historicos"));
@@ -626,6 +632,7 @@ public final class MailServlet extends HttpServlet {
             rows.add(Map.of("sender", sender.get("sender").getAsString(), "count", sender.get("count").getAsInt()));
         }
         model.put(name, rows);
+        model.put(name + "Count", rows.size());
         model.put(name + "Available", !rows.isEmpty());
         model.put(name + "Empty", rows.isEmpty());
     }

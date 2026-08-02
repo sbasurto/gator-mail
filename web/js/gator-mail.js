@@ -34,6 +34,28 @@
         if (result.isConfirmed) form.submit();
     }));
 
+    const eventRows = [...document.querySelectorAll("#mail-dashboard-events .mail-dashboard-event")];
+    const eventPageSize = document.getElementById("mail-events-page-size");
+    const eventPageStatus = document.getElementById("mail-events-page-status");
+    const eventPrevious = document.getElementById("mail-events-prev");
+    const eventNext = document.getElementById("mail-events-next");
+    if (eventPageSize && eventPageStatus && eventPrevious && eventNext) {
+        let page = 0;
+        const renderEvents = () => {
+            const size = Number(eventPageSize.value) || 5;
+            const pages = Math.max(1, Math.ceil(eventRows.length / size));
+            page = Math.max(0, Math.min(page, pages - 1));
+            eventRows.forEach((row, index) => row.hidden = index < page * size || index >= (page + 1) * size);
+            eventPageStatus.textContent = `${eventRows.length} eventos · ${page + 1} / ${pages}`;
+            eventPrevious.disabled = page === 0;
+            eventNext.disabled = page >= pages - 1;
+        };
+        eventPageSize.addEventListener("change", () => { page = 0; renderEvents(); });
+        eventPrevious.addEventListener("click", () => { page--; renderEvents(); });
+        eventNext.addEventListener("click", () => { page++; renderEvents(); });
+        renderEvents();
+    }
+
     const post = (action, values, csrf) => {
         const form = document.createElement("form");
         form.method = "post";

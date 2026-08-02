@@ -219,9 +219,11 @@ public final class AccessCodeSelfCheck {
         model.put("mailRead", 7);
         model.put("recentSendersAvailable", true);
         model.put("recentSendersEmpty", false);
+        model.put("recentSendersCount", 1);
         model.put("recentSenders", List.of(Map.of("sender", "reciente@example.com", "count", 4)));
         model.put("historicSendersAvailable", true);
         model.put("historicSendersEmpty", false);
+        model.put("historicSendersCount", 1);
         model.put("historicSenders", List.of(Map.of("sender", "historico@example.com", "count", 12)));
         model.put("calendarMonth", "Julio 2026");
         model.put("calendarPrevious", "mail?action=calendar&month=2026-06");
@@ -245,8 +247,9 @@ public final class AccessCodeSelfCheck {
         model.put("calendarDays", List.of(Map.of("number", 21, "className", "is-today",
                 "events", List.of(Map.of("summary", "Evento Uno", "description", "Descripción",
                         "time", "10:00", "statusClass", "is-on-time")))));
+        model.put("eventsCount", 1);
         model.put("events", List.of(Map.of("summary", "Evento Uno", "description", "Descripción",
-                "place", "Oficina", "start", "21/07/2026 10:00", "end", "21/07/2026 11:00",
+                "place", "Oficina", "startDate", "21/07/2026", "startTime", "10:00",
                 "status", "A tiempo", "statusClass", "is-on-time")));
         model.put("configurationUsers", List.of(Map.of("id", "usuario", "name", "Usuario Uno",
                 "email", "usuario@example.com", "enabled", true, "phone", "+525512345678",
@@ -304,9 +307,9 @@ public final class AccessCodeSelfCheck {
         try {
             String html = new GatorJsonView().renderResource("gator-mail/screens/mail.json", model);
             assert html.contains("Sesión cerrada");
-            assert html.contains("/gator-mail/css/gator-mail.css?v=35");
+            assert html.contains("/gator-mail/css/gator-mail.css?v=36");
             assert html.contains("/elib/js/sweetalert2.all.min.js");
-            assert html.contains("/gator-mail/js/gator-mail.js?v=14");
+            assert html.contains("/gator-mail/js/gator-mail.js?v=15");
             assert html.contains("Nueva subcarpeta");
             assert html.contains("href=\"/gator-mail/oauth/password\"");
             assert html.contains("fontawesome-free-5.13.0-web/css/all.min.css");
@@ -374,6 +377,10 @@ public final class AccessCodeSelfCheck {
             assert html.contains("class=\"mail-folder mail-folder-child active\"");
             assert html.contains(">Calendario</span>");
             assert html.contains(">Evento Uno</strong>");
+            assert html.contains("Eventos pendientes");
+            assert html.contains("id=\"mail-dashboard-events\"");
+            assert html.contains("id=\"mail-events-page-size\"");
+            assert html.contains(">Anterior</button>");
             assert html.contains(">Total de correos</small>");
             assert html.contains("Remitentes últimos 7 días");
             assert html.contains("reciente@example.com");
