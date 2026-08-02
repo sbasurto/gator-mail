@@ -614,6 +614,20 @@ public final class MailServlet extends HttpServlet {
         model.put("events", events);
         model.put("eventsAvailable", !events.isEmpty());
         model.put("eventsEmpty", events.isEmpty());
+        JsonObject senders = checked(mailDbCall("mail_fn_cache_remitentes", mailbox));
+        senderRanking(model, "recentSenders", senders.getAsJsonArray("recientes"));
+        senderRanking(model, "historicSenders", senders.getAsJsonArray("historicos"));
+    }
+
+    private static void senderRanking(Map<String, Object> model, String name, com.google.gson.JsonArray values) {
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (JsonElement element : values) {
+            JsonObject sender = element.getAsJsonObject();
+            rows.add(Map.of("sender", sender.get("sender").getAsString(), "count", sender.get("count").getAsInt()));
+        }
+        model.put(name, rows);
+        model.put(name + "Available", !rows.isEmpty());
+        model.put(name + "Empty", rows.isEmpty());
     }
 
     private void calendarModel(HttpServletRequest request, Map<String, Object> model, String mailbox) {

@@ -60,6 +60,10 @@ hidratación consulta IMAP y las siguientes actualizaciones usan `UIDNEXT` y
 únicamente la carpeta afectada. Abrir, responder, mover, eliminar y descargar
 siguen operando primero en IMAP y actualizan PostgreSQL sólo después del éxito.
 La prueba reversible del esquema está en `db/mail_cache_test.sql`.
+El tablero calcula los remitentes de los últimos siete días y los históricos
+con `db/mail_sender_rankings.sql`, exclusivamente a partir de la caché de Entrada.
+El benchmark reversible `db/mail_cache_benchmark.sql` mide listado y rankings
+con 100 000 encabezados y siempre termina con `rollback`.
 El directorio autónomo se instala con `db/mail_contacts.sql`; no requiere
 tablas externas ni copia hashes de usuario.
 La administración de usuarios y contactos se instala con `db/mail_admin.sql`;
@@ -139,6 +143,8 @@ journalctl -u gator-mail-filter -f -o cat
 
 Cada registro incluye buzón, UIDVALIDITY, UID, regla, carpeta, intento,
 resultado y detalle. Nunca contiene cuerpos ni contraseñas.
+La guía completa de construcción, instalación, actualización y reversa está en
+[`docs/GATOR_MAIL_FILTER.md`](docs/GATOR_MAIL_FILTER.md).
 
 La sesión HTTP se conserva durante reinicios controlados de Gator Mail para no
 repetir el segundo factor mientras la misma sesión continúe activa. Cerrar

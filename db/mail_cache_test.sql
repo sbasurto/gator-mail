@@ -27,12 +27,14 @@ declare
     folders jsonb := mail_fn_cache_carpetas(email)::jsonb;
     messages jsonb := mail_fn_cache_mensajes(json_build_object(
         'email', email, 'folder', 'INBOX', 'query', 'prueba', 'page', 1, 'size', 20)::text)::jsonb;
+    senders jsonb := mail_fn_cache_remitentes(email)::jsonb;
 begin
     assert jsonb_array_length(folders -> 'carpetas') = 3;
     assert (select value ->> 'parent' = 'Clientes' from jsonb_array_elements(folders -> 'carpetas') value
              where value ->> 'name' = 'Clientes.VIP');
     assert messages ->> 'total' = '1';
     assert messages #>> '{mensajes,0,subject}' = 'Mensaje de prueba';
+    assert senders #>> '{historicos,0,sender}' = 'prueba@example.com';
 end;
 $test$;
 

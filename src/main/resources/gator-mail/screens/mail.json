@@ -14,7 +14,7 @@
           { "tag": "link", "attrs": { "rel": "stylesheet", "href": "/elib/css2/fontawesome-free-5.13.0-web/css/all.min.css" } },
           { "tag": "link", "attrs": { "rel": "stylesheet", "href": "/elib/css/colors.css" } },
           { "tag": "link", "attrs": { "rel": "stylesheet", "href": "/elib/css2/sweetalert2.min.css?v=11.23.0" } },
-          { "tag": "link", "attrs": { "rel": "stylesheet", "href": "${contextPath}/css/gator-mail.css?v=34" } },
+          { "tag": "link", "attrs": { "rel": "stylesheet", "href": "${contextPath}/css/gator-mail.css?v=35" } },
           { "tag": "script", "attrs": { "src": "/elib/js/sweetalert2.all.min.js", "defer": "true" } },
           { "tag": "script", "attrs": { "src": "${contextPath}/js/gator-mail.js?v=14", "defer": "true" } }
         ]
@@ -217,6 +217,32 @@
                           { "tag": "div", "attrs": { "class": "mail-stat is-read" }, "children": [
                             { "tag": "span", "attrs": { "class": "fas fa-envelope-open", "aria-hidden": "true" } },
                             { "tag": "strong", "text": "${mailRead}" }, { "tag": "small", "text": "Leídos" }
+                          ] }
+                        ] }
+                      ] },
+                      { "tag": "section", "attrs": { "class": "card mail-panel" }, "children": [
+                        { "tag": "header", "attrs": { "class": "card-header mail-panel-header" }, "children": [
+                          { "tag": "div", "children": [
+                            { "tag": "h2", "attrs": { "class": "mail-panel-title" }, "text": "Remitentes últimos 7 días" }
+                          ] }
+                        ] },
+                        { "tag": "p", "if": "recentSendersEmpty", "attrs": { "class": "mail-empty text-muted" }, "text": "No hay remitentes en este periodo." },
+                        { "tag": "ol", "if": "recentSendersAvailable", "attrs": { "class": "mail-sender-list" }, "children": [
+                          { "tag": "li", "each": "recentSenders", "as": "sender", "children": [
+                            { "tag": "span", "text": "${sender.sender}" }, { "tag": "strong", "text": "${sender.count}" }
+                          ] }
+                        ] }
+                      ] },
+                      { "tag": "section", "attrs": { "class": "card mail-panel" }, "children": [
+                        { "tag": "header", "attrs": { "class": "card-header mail-panel-header" }, "children": [
+                          { "tag": "div", "children": [
+                            { "tag": "h2", "attrs": { "class": "mail-panel-title" }, "text": "Remitentes históricos" }
+                          ] }
+                        ] },
+                        { "tag": "p", "if": "historicSendersEmpty", "attrs": { "class": "mail-empty text-muted" }, "text": "No hay remitentes indexados." },
+                        { "tag": "ol", "if": "historicSendersAvailable", "attrs": { "class": "mail-sender-list" }, "children": [
+                          { "tag": "li", "each": "historicSenders", "as": "sender", "children": [
+                            { "tag": "span", "text": "${sender.sender}" }, { "tag": "strong", "text": "${sender.count}" }
                           ] }
                         ] }
                       ] }

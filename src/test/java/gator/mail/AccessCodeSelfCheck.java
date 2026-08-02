@@ -298,7 +298,7 @@ public final class AccessCodeSelfCheck {
         try {
             String html = new GatorJsonView().renderResource("gator-mail/screens/mail.json", model);
             assert html.contains("Sesión cerrada");
-            assert html.contains("/gator-mail/css/gator-mail.css?v=34");
+            assert html.contains("/gator-mail/css/gator-mail.css?v=35");
             assert html.contains("/elib/js/sweetalert2.all.min.js");
             assert html.contains("/gator-mail/js/gator-mail.js?v=14");
             assert html.contains("Nueva subcarpeta");
