@@ -1643,9 +1643,6 @@ public final class MailServlet extends HttpServlet {
                 continue;
             }
             List<Map<String, Object>> submenu = new ArrayList<>();
-            Map<String, Object> folderEntry = folderModel(folder, selected, true, size);
-            folderEntry.put("label", "Mensajes");
-            submenu.add(folderEntry);
             for (ImapMailbox.FolderInfo child : nested) submenu.add(folderModel(child, selected, true, size));
             Map<String, Object> group = folderModel(folder, selected, false, size);
             group.put("leaf", false);

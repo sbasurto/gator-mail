@@ -133,7 +133,9 @@ public final class AccessCodeSelfCheck {
                 "", 20);
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> deepChildren = (List<Map<String, Object>>) deepFolders.get(0).get("children");
-        assert String.valueOf(deepChildren.get(2).get("className")).contains("mail-folder-depth-3");
+        assert deepChildren.size() == 2;
+        assert "Activos".equals(deepChildren.get(0).get("label"));
+        assert String.valueOf(deepChildren.get(1).get("className")).contains("mail-folder-depth-3");
         assert !MailServlet.cacheSessionKey("USER@EXAMPLE.COM", "INBOX")
                 .equals(MailServlet.cacheSessionKey("user@example.com", "Clientes.VIP"));
         boolean rejectedUid = false;
