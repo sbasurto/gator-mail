@@ -9,6 +9,7 @@ service_home=/opt/gator-mail-filter
 secret_dir=/etc/gator-mail-filter
 secret_file=$secret_dir/imap-master.secret
 db_secret_file=$secret_dir/database.secret
+environment_file=/etc/gator-mail-filter.conf
 dovecot_master=/etc/dovecot/passwd.masterusers
 dovecot_config=/etc/dovecot/conf.d/11-gator-mail-filter.conf
 dovecot_main=/etc/dovecot/dovecot.conf
@@ -23,6 +24,14 @@ done
 command -v psql >/dev/null
 command -v openssl >/dev/null
 command -v doveconf >/dev/null
+
+imap_host=${GATOR_MAIL_FILTER_IMAP_HOST:-}
+if [[ -z $imap_host && -f $environment_file ]]; then
+    while IFS='=' read -r key value; do
+        [[ $key == GATOR_MAIL_FILTER_IMAP_HOST ]] && imap_host=$value
+    done < "$environment_file"
+fi
+imap_host=${imap_host:-127.0.0.1}
 
 getent group "$service_user" >/dev/null || groupadd --system "$service_user"
 getent passwd "$service_user" >/dev/null || useradd --system --gid "$service_user" \
@@ -109,19 +118,37 @@ grant select, insert, update on mail_filtro_estado, mail_filtro_auditoria to gat
 grant usage, select on sequence mail_filtro_auditoria_auditoria_id_seq to gator_mail_filter;
 SQL
 
+pgbouncer_auth_file=/etc/pgbouncer/userlist.txt
+if [[ -f $pgbouncer_auth_file ]]; then
+    verifier=$(runuser -u postgres -- psql -X -Atq -d postgres \
+        -c "select rolpassword from pg_authid where rolname = 'gator_mail_filter'")
+    [[ $verifier == SCRAM-SHA-256\$* ]] || { echo "Verificador SCRAM inválido" >&2; exit 1; }
+    temporary_auth=$(mktemp /etc/pgbouncer/.userlist.XXXXXX)
+    awk -v role='"gator_mail_filter"' '$1 != role' "$pgbouncer_auth_file" > "$temporary_auth"
+    printf '"gator_mail_filter" "%s"\n' "$verifier" >> "$temporary_auth"
+    chown --reference="$pgbouncer_auth_file" "$temporary_auth"
+    chmod --reference="$pgbouncer_auth_file" "$temporary_auth"
+    mv -f "$temporary_auth" "$pgbouncer_auth_file"
+    if command -v systemctl >/dev/null && systemctl is-active --quiet pgbouncer; then
+        systemctl reload pgbouncer
+    elif command -v rc-service >/dev/null; then
+        rc-service pgbouncer reload
+    fi
+fi
+
 temporary_environment=$(mktemp /etc/.gator-mail-filter.XXXXXX)
 printf '%s\n' \
     'GATOR_MAIL_FILTER_DB_URL=jdbc:postgresql://127.0.0.1:6432/db_gatormail' \
     'GATOR_MAIL_FILTER_DB_USER=gator_mail_filter' \
     "GATOR_MAIL_FILTER_DB_PASSWORD=$database_secret" \
-    'GATOR_MAIL_FILTER_IMAP_HOST=127.0.0.1' \
+    "GATOR_MAIL_FILTER_IMAP_HOST=$imap_host" \
     'GATOR_MAIL_FILTER_IMAP_PORT=993' \
     "GATOR_MAIL_FILTER_MASTER_USER=$service_user" \
     "GATOR_MAIL_FILTER_MASTER_SECRET_FILE=$secret_file" \
     'GATOR_MAIL_FILTER_MASTER_SEPARATOR=*' \
     'GATOR_MAIL_FILTER_REFRESH_SECONDS=15' \
     'GATOR_MAIL_FILTER_MAX_ATTEMPTS=5' > "$temporary_environment"
-install -m 0640 -o root -g "$service_user" "$temporary_environment" /etc/gator-mail-filter.conf
+install -m 0640 -o root -g "$service_user" "$temporary_environment" "$environment_file"
 rm -f "$temporary_environment"
 
 if command -v systemctl >/dev/null && [[ -d /run/systemd/system ]]; then

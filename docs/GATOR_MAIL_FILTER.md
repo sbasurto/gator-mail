@@ -23,9 +23,12 @@ sudo deploy/install-filter.sh \
 
 El instalador crea los usuarios, genera secretos en `/etc/gator-mail-filter/`,
 configura el usuario maestro Dovecot, concede los permisos mínimos y activa la
-unidad systemd u OpenRC. No imprime contraseñas. En instalaciones que usan un
-`auth_file` estático de PgBouncer, el administrador debe registrar también el
-rol `gator_mail_filter`; con `auth_query` no se necesita un paso adicional.
+unidad systemd u OpenRC. No imprime contraseñas. Si existe el `auth_file`
+estándar de PgBouncer, sincroniza automáticamente el verificador SCRAM del rol
+`gator_mail_filter`; con `auth_query` no se necesita ese paso.
+
+Defina `GATOR_MAIL_FILTER_IMAP_HOST` con el nombre incluido en el certificado
+TLS durante la primera instalación. Las actualizaciones conservan ese valor.
 
 Para una instalación manual, copie
 `deploy/gator-mail-filter.conf.example` a `/etc/gator-mail-filter.conf`,
