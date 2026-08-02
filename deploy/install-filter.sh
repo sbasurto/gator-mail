@@ -8,6 +8,7 @@ service_user=gator-mail-filter
 service_home=/opt/gator-mail-filter
 secret_dir=/etc/gator-mail-filter
 secret_file=$secret_dir/imap-master.secret
+db_secret_file=$secret_dir/database.secret
 dovecot_master=/etc/dovecot/passwd.masterusers
 dovecot_config=/etc/dovecot/conf.d/11-gator-mail-filter.conf
 dovecot_main=/etc/dovecot/dovecot.conf
@@ -36,6 +37,13 @@ if [[ ! -s $secret_file ]]; then
     chown root:"$service_user" "$temporary_secret"
     chmod 0640 "$temporary_secret"
     mv -f "$temporary_secret" "$secret_file"
+fi
+if [[ ! -s $db_secret_file ]]; then
+    temporary_secret=$(mktemp "$secret_dir/.database.XXXXXX")
+    openssl rand -hex 32 > "$temporary_secret"
+    chown root:"$service_user" "$temporary_secret"
+    chmod 0640 "$temporary_secret"
+    mv -f "$temporary_secret" "$db_secret_file"
 fi
 
 release="$service_home/releases/$(date +%Y%m%d%H%M%S)"
@@ -85,13 +93,15 @@ fi
 rm -f "$dovecot_config.previous"
 rm -f "$dovecot_main.previous"
 
-runuser -u postgres -- psql -X -v ON_ERROR_STOP=1 -d db_gatormail <<'SQL'
+database_secret=$(<"$db_secret_file")
+runuser -u postgres -- psql -X -v ON_ERROR_STOP=1 -v role_password="$database_secret" -d db_gatormail <<'SQL'
 do $$
 begin
     if not exists (select 1 from pg_roles where rolname = 'gator_mail_filter') then
         create role gator_mail_filter login;
     end if;
 end $$;
+alter role gator_mail_filter password :'role_password';
 grant connect on database db_gatormail to gator_mail_filter;
 grant usage on schema public to gator_mail_filter;
 grant select on mail_filtro_reglas to gator_mail_filter;
@@ -101,10 +111,10 @@ SQL
 
 temporary_environment=$(mktemp /etc/.gator-mail-filter.XXXXXX)
 printf '%s\n' \
-    'GATOR_MAIL_FILTER_DB_URL=jdbc:postgresql://127.0.0.1:5432/db_gatormail' \
+    'GATOR_MAIL_FILTER_DB_URL=jdbc:postgresql://127.0.0.1:6432/db_gatormail' \
     'GATOR_MAIL_FILTER_DB_USER=gator_mail_filter' \
-    'GATOR_MAIL_FILTER_DB_PASSWORD=' \
-    'GATOR_MAIL_FILTER_IMAP_HOST=mail.soft-gator.com' \
+    "GATOR_MAIL_FILTER_DB_PASSWORD=$database_secret" \
+    'GATOR_MAIL_FILTER_IMAP_HOST=127.0.0.1' \
     'GATOR_MAIL_FILTER_IMAP_PORT=993' \
     "GATOR_MAIL_FILTER_MASTER_USER=$service_user" \
     "GATOR_MAIL_FILTER_MASTER_SECRET_FILE=$secret_file" \

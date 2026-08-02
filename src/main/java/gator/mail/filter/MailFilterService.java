@@ -410,10 +410,10 @@ public final class MailFilterService {
             if (password.isEmpty()) throw new IllegalArgumentException("El secreto maestro está vacío");
             return new Config(
                     environment.getOrDefault("GATOR_MAIL_FILTER_DB_URL",
-                            "jdbc:postgresql://127.0.0.1:5432/db_gatormail"),
+                            "jdbc:postgresql://127.0.0.1:6432/db_gatormail"),
                     environment.getOrDefault("GATOR_MAIL_FILTER_DB_USER", "gator_mail_filter"),
                     environment.getOrDefault("GATOR_MAIL_FILTER_DB_PASSWORD", ""),
-                    environment.getOrDefault("GATOR_MAIL_FILTER_IMAP_HOST", "mail.soft-gator.com"),
+                    environment.getOrDefault("GATOR_MAIL_FILTER_IMAP_HOST", "127.0.0.1"),
                     integer(environment, "GATOR_MAIL_FILTER_IMAP_PORT", 993, 1, 65535),
                     required(environment, "GATOR_MAIL_FILTER_MASTER_USER"), password,
                     environment.getOrDefault("GATOR_MAIL_FILTER_MASTER_SEPARATOR", "*"),
