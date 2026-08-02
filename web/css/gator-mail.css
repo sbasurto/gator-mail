@@ -35,6 +35,14 @@ body { min-height: 100vh; margin: 0; color: var(--gator-ink); background: var(--
 .mail-folder-group > summary::after { color: #8b98a1; font-size: .8rem; content: "\25B8"; }
 .mail-folder-group[open] > summary::after { content: "\25BE"; }
 .mail-folder-child { margin-left: 1.1rem; padding-left: 1rem; font-size: .92rem; }
+.mail-folder-depth-1 { margin-left: 1.1rem; }
+.mail-folder-depth-2 { margin-left: 2.2rem; }
+.mail-folder-depth-3 { margin-left: 3.3rem; }
+.mail-folder-depth-4 { margin-left: 4.4rem; }
+.mail-folder-depth-5 { margin-left: 5.5rem; }
+.mail-folder-depth-6 { margin-left: 6.6rem; }
+.mail-folder-depth-7 { margin-left: 7.7rem; }
+.mail-folder-depth-8 { margin-left: 8.8rem; }
 .mail-folder strong { display: inline-flex; align-items: center; min-width: 0; font-size: .9rem; font-weight: 650; }
 .mail-folder strong > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mail-folder small { opacity: .72; font-size: .68rem; white-space: nowrap; }

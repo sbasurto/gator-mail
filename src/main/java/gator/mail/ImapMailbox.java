@@ -3,6 +3,7 @@ package gator.mail;
 import jakarta.mail.Address;
 import jakarta.mail.BodyPart;
 import jakarta.mail.Folder;
+import jakarta.mail.FetchProfile;
 import jakarta.mail.Flags;
 import jakarta.mail.Message;
 import jakarta.mail.Multipart;
@@ -23,7 +24,9 @@ import java.util.Arrays;
 import java.util.Base64;
 import java.util.Comparator;
 import java.util.Date;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -54,6 +57,11 @@ final class ImapMailbox {
 
     record MessagePage(List<Summary> messages, int total, int page, int size) {
     }
+
+    record CacheState(long uidValidity, long uidNext, long modSeq, int cached) { }
+
+    record MessageSync(long uidValidity, long uidNext, long modSeq, int total, int unread,
+            boolean reset, List<Summary> messages) { }
 
     record Attachment(String part, String name, String type, long size) { }
 
@@ -158,6 +166,70 @@ final class ImapMailbox {
         }
     }
 
+    MessageSync syncMessages(String mailbox, String folderName, CacheState state, String accessToken)
+            throws Exception {
+        try (Store store = connect(mailbox, accessToken); Folder raw = folder(store, folderName)) {
+            IMAPFolder folder = (IMAPFolder) raw;
+            folder.open(Folder.READ_ONLY);
+            long uidValidity = folder.getUIDValidity();
+            long uidNext = folder.getUIDNext();
+            long modSeq = modSeq(folder);
+            int total = folder.getMessageCount();
+            int unread = Math.max(0, folder.getUnreadMessageCount());
+            boolean reset = state == null || state.uidValidity() != uidValidity || state.uidNext() <= 0;
+            Message[] selected;
+            if (reset) {
+                selected = folder.getMessages();
+            } else {
+                Message[] added = uidNext > state.uidNext()
+                        ? folder.getMessagesByUID(state.uidNext(), UIDFolder.LASTUID) : new Message[0];
+                if (state.cached() + added.length != total) {
+                    reset = true;
+                    selected = folder.getMessages();
+                } else {
+                    try {
+                        Message[] changed = modSeq > state.modSeq() && state.modSeq() > 0
+                                ? folder.getMessagesByUIDChangedSince(1, Math.max(1, state.uidNext() - 1),
+                                        state.modSeq())
+                                : new Message[0];
+                        selected = distinct(folder, added, changed);
+                    } catch (Exception unsupportedCondstore) {
+                        reset = true;
+                        selected = folder.getMessages();
+                    }
+                }
+            }
+            FetchProfile profile = new FetchProfile();
+            profile.add(FetchProfile.Item.ENVELOPE);
+            profile.add(FetchProfile.Item.FLAGS);
+            profile.add(UIDFolder.FetchProfileItem.UID);
+            folder.fetch(selected, profile);
+            return new MessageSync(uidValidity, uidNext, modSeq, total, unread, reset,
+                    summaries(folder, selected));
+        }
+    }
+
+    private static Message[] distinct(UIDFolder folder, Message[] first, Message[] second) throws Exception {
+        Map<Long, Message> result = new LinkedHashMap<>();
+        for (Message message : first) if (message != null) result.put(folder.getUID(message), message);
+        for (Message message : second) if (message != null) result.put(folder.getUID(message), message);
+        return result.values().toArray(Message[]::new);
+    }
+
+    private static List<Summary> summaries(UIDFolder folder, Message[] messages) throws Exception {
+        List<Summary> result = new ArrayList<>(messages.length);
+        for (Message message : messages) if (message != null) result.add(new Summary(folder.getUID(message),
+                addresses(message.getFrom()), text(message.getSubject(), "(Sin asunto)"),
+                message.getSentDate() == null ? Instant.EPOCH : message.getSentDate().toInstant(),
+                message.isSet(Flags.Flag.SEEN)));
+        return result;
+    }
+
+    private static long modSeq(IMAPFolder folder) {
+        try { return Math.max(0, folder.getHighestModSeq()); }
+        catch (Exception unsupportedCondstore) { return 0; }
+    }
+
     Mail read(String mailbox, String folderName, long uid, String accessToken) throws Exception {
         try (Store store = connect(mailbox, accessToken); Folder folder = folder(store, folderName)) {
             folder.open(Folder.READ_WRITE);
@@ -256,7 +328,7 @@ final class ImapMailbox {
         }
     }
 
-    void deleteMessages(String mailbox, String folderName, long[] uids, String accessToken) throws Exception {
+    String deleteMessages(String mailbox, String folderName, long[] uids, String accessToken) throws Exception {
         if (uids == null || uids.length == 0 || uids.length > 100 || Arrays.stream(uids).anyMatch(uid -> uid <= 0))
             throw new IllegalArgumentException("Selecciona entre 1 y 100 mensajes");
         try (Store store = connect(mailbox, accessToken)) {
@@ -267,12 +339,13 @@ final class ImapMailbox {
             try {
                 Message[] messages = Arrays.stream(((UIDFolder) source).getMessagesByUID(uids))
                         .filter(message -> message != null).toArray(Message[]::new);
-                if (messages.length == 0) return;
+                if (messages.length == 0) return folderName;
                 if (expunge) source.setFlags(messages, new Flags(Flags.Flag.DELETED), true);
                 else ((IMAPFolder) source).moveMessages(messages, trash);
             } finally {
                 if (source.isOpen()) source.close(expunge);
             }
+            return expunge ? folderName : trash.getFullName();
         }
     }
 

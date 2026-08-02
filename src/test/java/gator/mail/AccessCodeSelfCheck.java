@@ -126,6 +126,14 @@ public final class AccessCodeSelfCheck {
         assert "Correo".equals(folderMenus.get(0).get("label"));
         assert "Carpetas personales".equals(folderMenus.get(1).get("label"));
         assert Boolean.TRUE.equals(folderMenus.get(1).get("open"));
+        List<Map<String, Object>> deepFolders = MailServlet.folderGroups(List.of(
+                new ImapMailbox.FolderInfo("Clientes", "Clientes", "", "Clientes", 0, 0, 3),
+                new ImapMailbox.FolderInfo("Clientes.Activos", "Activos", "Clientes", "Clientes", 1, 0, 2),
+                new ImapMailbox.FolderInfo("Clientes.Activos.VIP", "VIP", "Clientes.Activos", "Clientes", 2, 0, 1)),
+                "", 20);
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> deepChildren = (List<Map<String, Object>>) deepFolders.get(0).get("children");
+        assert String.valueOf(deepChildren.get(2).get("className")).contains("mail-folder-depth-3");
         boolean rejectedUid = false;
         try { MailServlet.uids(new String[]{"0"}); }
         catch (IllegalArgumentException expected) { rejectedUid = true; }
@@ -286,7 +294,7 @@ public final class AccessCodeSelfCheck {
         try {
             String html = new GatorJsonView().renderResource("gator-mail/screens/mail.json", model);
             assert html.contains("Sesión cerrada");
-            assert html.contains("/gator-mail/css/gator-mail.css?v=33");
+            assert html.contains("/gator-mail/css/gator-mail.css?v=34");
             assert html.contains("/elib/js/sweetalert2.all.min.js");
             assert html.contains("/gator-mail/js/gator-mail.js?v=13");
             assert html.contains("href=\"/gator-mail/oauth/password\"");

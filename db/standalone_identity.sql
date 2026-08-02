@@ -76,6 +76,7 @@ create table if not exists app_usuario_mail (
 );
 
 \ir mail_carpetas.sql
+\ir mail_cache.sql
 
 create or replace function app_fn_hash_password(v_password text, v_salt text, v_loops integer)
 returns text

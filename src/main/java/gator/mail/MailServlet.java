@@ -40,6 +40,10 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import org.commonmark.parser.Parser;
 import org.commonmark.renderer.html.HtmlRenderer;
 
@@ -77,6 +81,12 @@ public final class MailServlet extends HttpServlet {
     private final Gson gson = new Gson();
     private final GatorJsonView view = new GatorJsonView();
     private final ImapMailbox imap = new ImapMailbox();
+    private final ExecutorService cacheExecutor = Executors.newFixedThreadPool(4);
+    private final Set<String> cacheSyncs = ConcurrentHashMap.newKeySet();
+
+    @Override public void destroy() {
+        cacheExecutor.shutdownNow();
+    }
 
     @Override protected void doGet(HttpServletRequest request, HttpServletResponse response) throws IOException {
         process(request, response);
@@ -377,7 +387,7 @@ public final class MailServlet extends HttpServlet {
             completeEvent(request, response, session, mailbox);
             return true;
         }
-        List<ImapMailbox.FolderInfo> folders = imap.folders(mailbox, accessToken);
+        List<ImapMailbox.FolderInfo> folders = foldersForRequest(request, session, mailbox, accessToken);
         int total = 0;
         int unread = 0;
         for (ImapMailbox.FolderInfo folder : folders) {
@@ -671,7 +681,7 @@ public final class MailServlet extends HttpServlet {
 
     private void mailboxModel(Map<String, Object> model, HttpServletRequest request, String mailbox,
             String accessToken) throws Exception {
-        List<ImapMailbox.FolderInfo> folders = imap.folders(mailbox, accessToken);
+        List<ImapMailbox.FolderInfo> folders = foldersForRequest(request, request.getSession(), mailbox, accessToken);
         String requested = request.getParameter("folder");
         ImapMailbox.FolderInfo selected = folders.stream().filter(folder -> folder.name().equals(requested))
                 .findFirst().orElseGet(() -> folders.stream().filter(folder -> folder.name().equalsIgnoreCase("INBOX"))
@@ -736,6 +746,7 @@ public final class MailServlet extends HttpServlet {
             model.put("mailText", !mail.html());
             model.put("originalHtmlAvailable", !mail.originalHtml().isBlank());
             model.put("originalHtml", mail.originalHtml());
+            markRead(mailbox, folderName, Long.parseLong(uid));
             List<Map<String, Object>> attachments = new ArrayList<>();
             for (ImapMailbox.Attachment attachment : mail.attachments()) attachments.add(Map.of(
                     "name", attachment.name(), "size", fileSize(attachment.size()),
@@ -753,10 +764,10 @@ public final class MailServlet extends HttpServlet {
 
         model.put("mailboxView", true);
         model.put("folderLabel", selected.label());
-        ImapMailbox.MessagePage result = imap.messages(mailbox, folderName, query, requestedPage, size, accessToken);
+        ImapMailbox.MessagePage result = cachedMessages(mailbox, folderName, query, requestedPage, size);
         List<ImapMailbox.Summary> messages = result.messages();
         int pages = Math.max(1, (result.total() + result.size() - 1) / result.size());
-        model.put("refreshHref", mailboxHref(folderName, query, result.page(), result.size()));
+        model.put("refreshHref", mailboxHref(folderName, query, result.page(), result.size()) + "&action=refresh");
         model.put("page", result.page());
         model.put("pageSize", result.size());
         model.put("pageSummary", "Página " + result.page() + " de " + pages + " · " + result.total() + " mensajes");
@@ -793,7 +804,9 @@ public final class MailServlet extends HttpServlet {
             return true;
         }
         String folder = request.getParameter("folder");
-        imap.deleteMessages(mailbox, folder, uids(request.getParameterValues("uid")), accessToken);
+        String destination = imap.deleteMessages(mailbox, folder, uids(request.getParameterValues("uid")), accessToken);
+        syncFolder(mailbox, folder, accessToken);
+        if (!folder.equals(destination)) syncFolder(mailbox, destination, accessToken);
         String query = searchQuery(request.getParameter("q"));
         response.sendRedirect(mailboxHref(folder, query, page(request.getParameter("page")),
                 pageSize(request.getParameter("size"))));
@@ -809,8 +822,11 @@ public final class MailServlet extends HttpServlet {
         }
         try {
             String source = request.getParameter("source");
-            imap.moveMessages(mailbox, source, request.getParameter("target"),
+            String target = request.getParameter("target");
+            imap.moveMessages(mailbox, source, target,
                     uids(request.getParameterValues("uid")), accessToken);
+            syncFolder(mailbox, source, accessToken);
+            syncFolder(mailbox, target, accessToken);
             response.sendRedirect("mail?folder=" + url(source));
         } catch (IllegalArgumentException error) {
             response.sendError(HttpServletResponse.SC_BAD_REQUEST, "No fue posible mover el mensaje");
@@ -868,6 +884,8 @@ public final class MailServlet extends HttpServlet {
             String drafts = imap.saveDraft(mailbox, request.getParameter("to"), request.getParameter("cc"),
                     request.getParameter("bcc"), request.getParameter("subject"), body.plain(), body.html(),
                     uploads(request), accessToken);
+            syncFolders(mailbox, accessToken);
+            syncFolder(mailbox, drafts, accessToken);
             response.sendRedirect("mail?folder=" + url(drafts));
         } catch (IllegalArgumentException error) {
             response.sendError(HttpServletResponse.SC_BAD_REQUEST, error.getMessage());
@@ -886,6 +904,8 @@ public final class MailServlet extends HttpServlet {
         String folder = imap.send(mailbox, request.getParameter("to"), request.getParameter("cc"),
                 request.getParameter("bcc"), request.getParameter("subject"), body.plain(), body.html(),
                 uploads(request), accessToken);
+        syncFolders(mailbox, accessToken);
+        syncFolder(mailbox, folder, accessToken);
         response.sendRedirect("mail?folder=" + url(folder) + "&sent=1");
         return true;
     }
@@ -1071,16 +1091,25 @@ public final class MailServlet extends HttpServlet {
             switch (action) {
                 case "folderCreate" -> {
                     String created = imap.create(mailbox, request.getParameter("name"), accessToken);
+                    syncFolders(mailbox, accessToken);
+                    syncFolder(mailbox, created, accessToken);
                     response.sendRedirect(folderReturn(request, created));
                 }
                 case "folderRename" -> {
                     String renamed = imap.rename(mailbox, folder, request.getParameter("name"), accessToken);
+                    syncFolders(mailbox, accessToken);
+                    syncFolder(mailbox, renamed, accessToken);
                     response.sendRedirect(folderReturn(request, renamed));
                 }
-                case "folderMove" -> response.sendRedirect("mail?folder="
-                        + url(imap.move(mailbox, folder, request.getParameter("parent"), accessToken)));
+                case "folderMove" -> {
+                    String moved = imap.move(mailbox, folder, request.getParameter("parent"), accessToken);
+                    syncFolders(mailbox, accessToken);
+                    syncFolder(mailbox, moved, accessToken);
+                    response.sendRedirect("mail?folder=" + url(moved));
+                }
                 case "folderDelete" -> {
                     imap.delete(mailbox, folder, accessToken);
+                    syncFolders(mailbox, accessToken);
                     response.sendRedirect(folderReturn(request, "INBOX"));
                 }
                 default -> response.sendError(HttpServletResponse.SC_BAD_REQUEST);
@@ -1111,6 +1140,139 @@ public final class MailServlet extends HttpServlet {
         statement.addParam(gson.toJson(value));
         String config = getServletContext().getInitParameter("gappConfigFile");
         return JsonParser.parseString(new GappDBHelper(config).executeStore(statement)).getAsJsonObject();
+    }
+
+    private List<ImapMailbox.FolderInfo> foldersForRequest(HttpServletRequest request, HttpSession session,
+            String mailbox, String accessToken) throws Exception {
+        String requested = request.getParameter("folder");
+        String folder = requested == null || requested.isBlank() ? "INBOX" : requested;
+        if ("refresh".equals(request.getParameter("action"))) {
+            syncFolders(mailbox, accessToken);
+            syncFolder(mailbox, folder, accessToken);
+            session.setAttribute("mail.cache.started", true);
+        }
+        List<ImapMailbox.FolderInfo> folders = cachedFolders(mailbox);
+        if (folders.isEmpty()) {
+            syncFolders(mailbox, accessToken);
+            syncFolder(mailbox, folder, accessToken);
+            folders = cachedFolders(mailbox);
+        } else if (session.getAttribute("mail.cache.started") == null) {
+            session.setAttribute("mail.cache.started", true);
+            backgroundSync(mailbox, folder, accessToken);
+        }
+        return folders;
+    }
+
+    private void backgroundSync(String mailbox, String folder, String accessToken) {
+        String key = mailbox.toLowerCase(Locale.ROOT) + '\n' + folder;
+        if (!cacheSyncs.add(key)) return;
+        cacheExecutor.submit(() -> {
+            try {
+                syncFolders(mailbox, accessToken);
+                syncFolder(mailbox, folder, accessToken);
+            } catch (Exception error) {
+                getServletContext().log("No fue posible actualizar la caché IMAP de " + mailbox, error);
+            } finally {
+                cacheSyncs.remove(key);
+            }
+        });
+    }
+
+    private List<ImapMailbox.FolderInfo> cachedFolders(String mailbox) {
+        JsonObject result = checked(mailDbCall("mail_fn_cache_carpetas", mailbox));
+        List<ImapMailbox.FolderInfo> folders = new ArrayList<>();
+        for (JsonElement element : result.getAsJsonArray("carpetas")) {
+            JsonObject folder = element.getAsJsonObject();
+            folders.add(new ImapMailbox.FolderInfo(folder.get("name").getAsString(),
+                    folder.get("label").getAsString(), folder.get("parent").getAsString(),
+                    folder.get("root").getAsString(), folder.get("depth").getAsInt(),
+                    folder.get("unread").getAsInt(), folder.get("total").getAsInt()));
+        }
+        return folders;
+    }
+
+    private void syncFolders(String mailbox, String accessToken) throws Exception {
+        JsonObject value = json("email", mailbox);
+        var folders = new com.google.gson.JsonArray();
+        int order = 0;
+        for (ImapMailbox.FolderInfo folder : imap.folders(mailbox, accessToken)) {
+            JsonObject item = new JsonObject();
+            item.addProperty("name", folder.name());
+            item.addProperty("label", folder.label());
+            item.addProperty("parent", folder.parent());
+            item.addProperty("root", folder.root());
+            item.addProperty("depth", folder.depth());
+            item.addProperty("unread", folder.unread());
+            item.addProperty("total", folder.total());
+            item.addProperty("sort_order", order++);
+            folders.add(item);
+        }
+        value.add("folders", folders);
+        checked(mailDbCall("mail_fn_cache_carpetas_guardar", gson.toJson(value)));
+    }
+
+    private void syncFolder(String mailbox, String folderName, String accessToken) throws Exception {
+        JsonObject folders = checked(mailDbCall("mail_fn_cache_carpetas", mailbox));
+        JsonObject cached = null;
+        for (JsonElement element : folders.getAsJsonArray("carpetas")) {
+            JsonObject folder = element.getAsJsonObject();
+            if (folderName.equals(folder.get("name").getAsString())) {
+                cached = folder;
+                break;
+            }
+        }
+        if (cached == null) return;
+        ImapMailbox.CacheState state = cached.get("uidValidity").getAsLong() <= 0 ? null
+                : new ImapMailbox.CacheState(cached.get("uidValidity").getAsLong(),
+                        cached.get("uidNext").getAsLong(), cached.get("modSeq").getAsLong(),
+                        cached.get("cached").getAsInt());
+        ImapMailbox.MessageSync sync = imap.syncMessages(mailbox, folderName, state, accessToken);
+        JsonObject value = json("email", mailbox);
+        value.addProperty("folder", folderName);
+        value.addProperty("uidValidity", sync.uidValidity());
+        value.addProperty("uidNext", sync.uidNext());
+        value.addProperty("modSeq", sync.modSeq());
+        value.addProperty("total", sync.total());
+        value.addProperty("unread", sync.unread());
+        value.addProperty("reset", sync.reset());
+        var messages = new com.google.gson.JsonArray();
+        for (ImapMailbox.Summary message : sync.messages()) {
+            JsonObject item = new JsonObject();
+            item.addProperty("uid", message.uid());
+            item.addProperty("sender", message.from());
+            item.addProperty("subject", message.subject());
+            item.addProperty("sent_epoch", message.sent().getEpochSecond());
+            item.addProperty("seen", message.seen());
+            messages.add(item);
+        }
+        value.add("messages", messages);
+        checked(mailDbCall("mail_fn_cache_mensajes_guardar", gson.toJson(value)));
+    }
+
+    private ImapMailbox.MessagePage cachedMessages(String mailbox, String folder, String query, int page, int size) {
+        JsonObject value = json("email", mailbox);
+        value.addProperty("folder", folder);
+        value.addProperty("query", query);
+        value.addProperty("page", page);
+        value.addProperty("size", size);
+        JsonObject result = checked(mailDbCall("mail_fn_cache_mensajes", gson.toJson(value)));
+        List<ImapMailbox.Summary> messages = new ArrayList<>();
+        for (JsonElement element : result.getAsJsonArray("mensajes")) {
+            JsonObject message = element.getAsJsonObject();
+            messages.add(new ImapMailbox.Summary(message.get("uid").getAsLong(),
+                    message.get("from").getAsString(), message.get("subject").getAsString(),
+                    java.time.Instant.ofEpochSecond(message.get("sentEpoch").getAsLong()),
+                    message.get("seen").getAsBoolean()));
+        }
+        return new ImapMailbox.MessagePage(messages, result.get("total").getAsInt(),
+                result.get("page").getAsInt(), result.get("size").getAsInt());
+    }
+
+    private void markRead(String mailbox, String folder, long uid) {
+        JsonObject value = json("email", mailbox);
+        value.addProperty("folder", folder);
+        value.addProperty("uid", uid);
+        checked(mailDbCall("mail_fn_cache_marcar_leido", gson.toJson(value)));
     }
 
     private void contactsModel(Map<String, Object> model, String mailbox) {
@@ -1180,7 +1342,7 @@ public final class MailServlet extends HttpServlet {
                     checked(mailDbCall("mail_fn_filtro_eliminar", gson.toJson(value)));
                 } else {
                     String destination = request.getParameter("destination");
-                    boolean exists = imap.folders(mailbox, accessToken).stream()
+                    boolean exists = cachedFolders(mailbox).stream()
                             .anyMatch(folder -> folder.name().equals(destination) && !"INBOX".equalsIgnoreCase(destination));
                     if (!exists) throw new IllegalArgumentException("La carpeta destino no existe");
                     value.addProperty("name", request.getParameter("name"));
@@ -1272,7 +1434,7 @@ public final class MailServlet extends HttpServlet {
         model.put("contentClass", "mail-content");
         model.put("folderGroups", List.of());
         model.put("mailOpen", false);
-        List<ImapMailbox.FolderInfo> mailFolders = imap.folders(mailbox, accessToken);
+        List<ImapMailbox.FolderInfo> mailFolders = foldersForRequest(request, session, mailbox, accessToken);
         model.put("folderMenus", folderMenus(mailFolders, "", rememberedPageSize(request, session)));
         model.put("mailFoldersMenu", true);
         model.put("mailNavigationOnly", false);
@@ -1506,7 +1668,8 @@ public final class MailServlet extends HttpServlet {
             int size) {
         Map<String, Object> model = new HashMap<>();
         model.put("className", (folder.name().equals(selected) ? "active " : "")
-                + (child ? "mail-folder-child" : ""));
+                + (child ? "mail-folder-child " : "")
+                + "mail-folder-depth-" + Math.min(8, folder.depth() + 1));
         model.put("href", mailboxHref(folder.name(), "", 1, size));
         model.put("label", folder.label());
         model.put("count", (folder.unread() > 0 ? folder.unread() + " sin leer · " : "") + folder.total());

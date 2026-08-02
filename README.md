@@ -51,6 +51,15 @@ El tema claro de entrada y salida se encuentra en `keycloak-theme/gator-mail`.
 
 Las carpetas IMAP se guardan en la tabla jerárquica `mail_carpetas`; el script
 idempotente para crearla está en `db/mail_carpetas.sql`.
+El listado de carpetas y mensajes se sirve desde la caché reconstruible de
+`db_gatormail`, instalada con `db/mail_cache.sql`. Sólo conserva el remitente,
+asunto, fecha, estado leído y la identidad IMAP `(carpeta, UIDVALIDITY, UID)`;
+los cuerpos y adjuntos permanecen exclusivamente en Dovecot. La primera
+hidratación consulta IMAP y las siguientes actualizaciones usan `UIDNEXT` y
+`MODSEQ`. Si cambia `UIDVALIDITY` o se detecta una eliminación, se reconstruye
+únicamente la carpeta afectada. Abrir, responder, mover, eliminar y descargar
+siguen operando primero en IMAP y actualizan PostgreSQL sólo después del éxito.
+La prueba reversible del esquema está en `db/mail_cache_test.sql`.
 El directorio autónomo se instala con `db/mail_contacts.sql`; no requiere
 tablas externas ni copia hashes de usuario.
 La administración de usuarios y contactos se instala con `db/mail_admin.sql`;
