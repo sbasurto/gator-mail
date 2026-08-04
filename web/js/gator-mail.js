@@ -221,6 +221,19 @@
         });
         if (result.isConfirmed) bulkForm.submit();
     });
+    document.querySelector(".mail-message-delete-form")?.addEventListener("submit", async event => {
+        event.preventDefault();
+        const result = await Swal.fire({
+            title: "¿Eliminar este mensaje?",
+            text: "En Papelera la eliminación será definitiva.",
+            icon: "warning",
+            showCancelButton: true,
+            confirmButtonText: "Eliminar",
+            cancelButtonText: "Cancelar",
+            confirmButtonColor: "#b52f3a"
+        });
+        if (result.isConfirmed) event.currentTarget.submit();
+    });
 
     const contactPicker = document.querySelector("#mail-contact-picker");
     const contactSearch = document.querySelector("#mail-contact-search");

@@ -40,6 +40,7 @@ El proceso de Tomcat puede recibir estas variables de entorno:
   `https://mail.soft-gator.com/auth/realms/gator`)
 - `GATOR_MAIL_OAUTH_REDIRECT_URI` (opcional; se calcula desde la petición si
   no se define)
+- `GATOR_MAIL_SMS_ENABLED` (`true` para habilitar el desafío; deshabilitado por defecto)
 - `GATOR_MAIL_SMS_ENDPOINT` (opcional; URL HTTPS del proveedor de desafíos)
 - `GATOR_MAIL_SMS_SECRET` (secreto Bearer compartido con ese proveedor)
 - `GATOR_MAIL_EVENT_ENDPOINT` (opcional; URL HTTPS para sincronizar eventos)
@@ -100,8 +101,8 @@ El artefacto queda en `dist/gator-mail.war`.
 El contexto esperado es `/gator-mail`. La aplicación requiere acceso a la
 configuración de identidad `pg_gatormail_identity`, una entrada `broker_db` con
 `db_use = 'mail'` y la asignación de esa aplicación a los grupos autorizados.
-El segundo factor sólo se solicita cuando `GATOR_MAIL_SMS_ENDPOINT` y
-`GATOR_MAIL_SMS_SECRET` están configurados y el usuario lo mantiene habilitado
+El segundo factor sólo se solicita cuando `GATOR_MAIL_SMS_ENABLED=true`,
+`GATOR_MAIL_SMS_ENDPOINT` y `GATOR_MAIL_SMS_SECRET` están configurados, y el usuario lo mantiene habilitado
 en **Configuración > Opciones de usuario**. El endpoint recibe JSON por `POST`
 con autenticación `Bearer`: `action` (`send` o `correct`), `usuario`,
 `application`, `userHint` y, para corregir, `telefono`. Debe devolver

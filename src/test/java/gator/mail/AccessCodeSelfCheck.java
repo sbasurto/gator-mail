@@ -289,6 +289,11 @@ public final class AccessCodeSelfCheck {
         model.put("configurationFolders", List.of(Map.of("name", "Archivo", "label", "Archivo", "messages", 3)));
         model.put("attachmentsAvailable", true);
         model.put("attachments", List.of(Map.of("name", "documento.pdf", "size", "10 KB", "href", "mail?action=attachment")));
+        model.put("composeAttachmentsAvailable", true);
+        model.put("composeAttachments", List.of(Map.of("name", "documento.pdf", "size", "10 KB")));
+        model.put("composeSourceFolder", "INBOX");
+        model.put("composeSourceUid", "1");
+        model.put("messageUid", "1");
         model.put("cc", "copia@example.com");
         model.put("replyHref", "mail?action=reply&uid=1");
         model.put("replyAllHref", "mail?action=replyAll&uid=1");
@@ -307,9 +312,9 @@ public final class AccessCodeSelfCheck {
         try {
             String html = new GatorJsonView().renderResource("gator-mail/screens/mail.json", model);
             assert html.contains("Sesión cerrada");
-            assert html.contains("/gator-mail/css/gator-mail.css?v=37");
+            assert html.contains("/gator-mail/css/gator-mail.css?v=38");
             assert html.contains("/elib/js/sweetalert2.all.min.js");
-            assert html.contains("/gator-mail/js/gator-mail.js?v=15");
+            assert html.contains("/gator-mail/js/gator-mail.js?v=16");
             assert html.contains("Nueva subcarpeta");
             assert html.contains("href=\"/gator-mail/oauth/password\"");
             assert html.contains("fontawesome-free-5.13.0-web/css/all.min.css");
@@ -337,6 +342,9 @@ public final class AccessCodeSelfCheck {
             assert html.contains("enctype=\"multipart/form-data\"");
             assert html.contains("name=\"attachments\"");
             assert html.contains("name=\"images\"");
+            assert html.contains("name=\"sourceFolder\" value=\"INBOX\"");
+            assert html.contains("name=\"sourceUid\" value=\"1\"");
+            assert html.contains("Adjuntos conservados");
             assert html.contains("documento.pdf");
             assert html.contains("title=\"Descargar documento.pdf\"");
             assert html.contains("Reunión de proyecto");
@@ -349,6 +357,8 @@ public final class AccessCodeSelfCheck {
             assert html.contains("Sesión cerrada correctamente");
             assert html.contains(">Responder a todos</span>");
             assert html.contains(">Reenviar</span>");
+            assert html.contains("class=\"mail-message-delete-form\"");
+            assert html.contains(">Eliminar</span>");
             assert html.contains("Guardar borrador");
             assert html.contains("value=\"sendMessage\"");
             assert html.contains(">Enviar</span>");

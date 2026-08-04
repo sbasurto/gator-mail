@@ -14,9 +14,9 @@
           { "tag": "link", "attrs": { "rel": "stylesheet", "href": "/elib/css2/fontawesome-free-5.13.0-web/css/all.min.css" } },
           { "tag": "link", "attrs": { "rel": "stylesheet", "href": "/elib/css/colors.css" } },
           { "tag": "link", "attrs": { "rel": "stylesheet", "href": "/elib/css2/sweetalert2.min.css?v=11.23.0" } },
-          { "tag": "link", "attrs": { "rel": "stylesheet", "href": "${contextPath}/css/gator-mail.css?v=37" } },
+          { "tag": "link", "attrs": { "rel": "stylesheet", "href": "${contextPath}/css/gator-mail.css?v=38" } },
           { "tag": "script", "attrs": { "src": "/elib/js/sweetalert2.all.min.js", "defer": "true" } },
-          { "tag": "script", "attrs": { "src": "${contextPath}/js/gator-mail.js?v=15", "defer": "true" } }
+          { "tag": "script", "attrs": { "src": "${contextPath}/js/gator-mail.js?v=16", "defer": "true" } }
         ]
       },
       {
@@ -759,6 +759,8 @@
                       ] },
                       { "tag": "form", "attrs": { "class": "mail-compose-form", "method": "post", "action": "${contextPath}/mail", "enctype": "multipart/form-data" }, "children": [
                         { "tag": "input", "attrs": { "type": "hidden", "name": "csrf", "value": "${csrf}" } },
+                        { "tag": "input", "if": "composeAttachmentsAvailable", "attrs": { "type": "hidden", "name": "sourceFolder", "value": "${composeSourceFolder}" } },
+                        { "tag": "input", "if": "composeAttachmentsAvailable", "attrs": { "type": "hidden", "name": "sourceUid", "value": "${composeSourceUid}" } },
                         { "tag": "div", "attrs": { "class": "mail-recipient-field" }, "children": [
                           { "tag": "label", "attrs": { "class": "form-label", "for": "mail-compose-to" }, "text": "Para" },
                           { "tag": "div", "attrs": { "class": "mail-recipient-control" }, "children": [
@@ -823,6 +825,13 @@
                         { "tag": "label", "attrs": { "class": "visually-hidden", "for": "mail-compose-body" }, "text": "Contenido" },
                         { "tag": "div", "attrs": { "class": "form-control mail-rich-editor", "id": "mail-html-editor", "contenteditable": "true", "role": "textbox", "aria-label": "Contenido del mensaje", "aria-multiline": "true", "spellcheck": "true" } },
                         { "tag": "textarea", "attrs": { "class": "form-control mail-md-editor d-none", "id": "mail-compose-body", "name": "body", "rows": "18", "spellcheck": "true", "required": "true", "placeholder": "Escribe tu mensaje con Markdown…" }, "text": "${composeBody}" },
+                        { "tag": "section", "if": "composeAttachmentsAvailable", "attrs": { "class": "mail-attachments", "aria-label": "Adjuntos conservados" }, "children": [
+                          { "tag": "strong", "text": "Adjuntos conservados" },
+                          { "tag": "span", "each": "composeAttachments", "as": "attachment", "attrs": { "class": "mail-attachment" }, "children": [
+                            { "tag": "span", "attrs": { "class": "fas fa-paperclip", "aria-hidden": "true" } },
+                            { "tag": "span", "text": "${attachment.name}" }, { "tag": "small", "text": "${attachment.size}" }
+                          ] }
+                        ] },
                         { "tag": "div", "attrs": { "class": "mail-file-fields" }, "children": [
                           { "tag": "label", "attrs": { "class": "mail-file-field", "for": "mail-compose-attachments" }, "children": [
                             { "tag": "span", "attrs": { "class": "fas fa-paperclip", "aria-hidden": "true" } }, { "tag": "span", "text": "Adjuntar archivos" },
@@ -954,6 +963,15 @@
                             ] },
                             { "tag": "a", "attrs": { "class": "btn btn-sm btn-outline-primary", "href": "${forwardHref}" }, "children": [
                               { "tag": "span", "attrs": { "class": "fas fa-share", "aria-hidden": "true" } }, { "tag": "span", "text": "Reenviar" }
+                            ] },
+                            { "tag": "form", "attrs": { "class": "mail-message-delete-form", "method": "post", "action": "${contextPath}/mail" }, "children": [
+                              { "tag": "input", "attrs": { "type": "hidden", "name": "action", "value": "messageDelete" } },
+                              { "tag": "input", "attrs": { "type": "hidden", "name": "csrf", "value": "${csrf}" } },
+                              { "tag": "input", "attrs": { "type": "hidden", "name": "folder", "value": "${selectedFolder}" } },
+                              { "tag": "input", "attrs": { "type": "hidden", "name": "uid", "value": "${messageUid}" } },
+                              { "tag": "button", "attrs": { "class": "btn btn-sm btn-outline-danger", "type": "submit" }, "children": [
+                                { "tag": "span", "attrs": { "class": "fas fa-trash-alt", "aria-hidden": "true" } }, { "tag": "span", "text": "Eliminar" }
+                              ] }
                             ] }
                           ] },
                           { "tag": "section", "if": "invitationAvailable", "attrs": { "class": "mail-invitation", "aria-label": "Invitación de calendario" }, "children": [

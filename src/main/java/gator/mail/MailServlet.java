@@ -54,6 +54,8 @@ public final class MailServlet extends HttpServlet {
     private static final int MAX_ATTEMPTS = 5;
     private static final String SMS_ENDPOINT = System.getenv("GATOR_MAIL_SMS_ENDPOINT");
     private static final String SMS_SECRET = System.getenv("GATOR_MAIL_SMS_SECRET");
+    private static final boolean SMS_ENABLED = Boolean.parseBoolean(
+            System.getenv().getOrDefault("GATOR_MAIL_SMS_ENABLED", "false"));
     private static final String EVENT_ENDPOINT = System.getenv("GATOR_MAIL_EVENT_ENDPOINT");
     private static final String EVENT_SECRET = System.getenv("GATOR_MAIL_EVENT_SECRET");
     private static final HttpClient HTTP = HttpClient.newHttpClient();
@@ -182,6 +184,10 @@ public final class MailServlet extends HttpServlet {
         model.put("originalHtmlAvailable", false);
         model.put("originalHtml", "");
         model.put("attachmentsAvailable", false);
+        model.put("composeAttachmentsAvailable", false);
+        model.put("composeSourceFolder", "");
+        model.put("composeSourceUid", "");
+        model.put("messageUid", "");
         model.put("composeAction", false);
         model.put("folderActionsDisabled", true);
         model.put("selectedFolder", "");
@@ -745,6 +751,13 @@ public final class MailServlet extends HttpServlet {
                 model.put("composeCancelHref", mailboxHref(folderName, query, page(request.getParameter("page")), size)
                         + "&uid=" + uid);
                 composeReply(model, action, mailbox, mail);
+                if (!mail.attachments().isEmpty()) {
+                    model.put("composeAttachmentsAvailable", true);
+                    model.put("composeSourceFolder", folderName);
+                    model.put("composeSourceUid", uid);
+                    model.put("composeAttachments", mail.attachments().stream().map(attachment -> Map.of(
+                            "name", attachment.name(), "size", fileSize(attachment.size()))).toList());
+                }
             }
             return;
         }
@@ -759,6 +772,7 @@ public final class MailServlet extends HttpServlet {
                 return;
             }
             model.put("messageView", true);
+            model.put("messageUid", uid);
             model.put("folderHref", mailboxHref(folderName, query, requestedPage, size));
             model.put("folderLabel", selected.label());
             model.put("subject", mail.subject());
@@ -908,7 +922,7 @@ public final class MailServlet extends HttpServlet {
             MessageBody body = messageBody(request.getParameter("body"), request.getParameter("format"));
             String drafts = imap.saveDraft(mailbox, request.getParameter("to"), request.getParameter("cc"),
                     request.getParameter("bcc"), request.getParameter("subject"), body.plain(), body.html(),
-                    uploads(request), accessToken);
+                    uploads(request, mailbox, accessToken), accessToken);
             syncFolders(mailbox, accessToken);
             syncFolder(mailbox, drafts, accessToken);
             response.sendRedirect("mail?folder=" + url(drafts));
@@ -928,7 +942,7 @@ public final class MailServlet extends HttpServlet {
         MessageBody body = messageBody(request.getParameter("body"), request.getParameter("format"));
         String folder = imap.send(mailbox, request.getParameter("to"), request.getParameter("cc"),
                 request.getParameter("bcc"), request.getParameter("subject"), body.plain(), body.html(),
-                uploads(request), accessToken);
+                uploads(request, mailbox, accessToken), accessToken);
         syncFolders(mailbox, accessToken);
         syncFolder(mailbox, folder, accessToken);
         response.sendRedirect("mail?folder=" + url(folder) + "&sent=1");
@@ -1086,6 +1100,25 @@ public final class MailServlet extends HttpServlet {
             if (name.isEmpty() || name.length() > 180) throw new IllegalArgumentException("Nombre de archivo inválido");
             byte[] data = part.getInputStream().readNBytes(25 * 1024 * 1024 + 1);
             result.add(upload(name, part.getContentType(), data, inline));
+        }
+        return result;
+    }
+
+    private List<ImapMailbox.Upload> uploads(HttpServletRequest request, String mailbox, String accessToken)
+            throws Exception {
+        List<ImapMailbox.Upload> result = uploads(request);
+        String folder = request.getParameter("sourceFolder");
+        String uid = request.getParameter("sourceUid");
+        if (folder == null || folder.isBlank() || uid == null || uid.isBlank()) return result;
+        if (!uid.matches("[0-9]+")) throw new IllegalArgumentException("Mensaje original inválido");
+        ImapMailbox.Mail source = imap.read(mailbox, folder, Long.parseLong(uid), accessToken);
+        if (source == null) throw new IllegalArgumentException("Mensaje original inexistente");
+        long total = result.stream().mapToLong(upload -> upload.data().length).sum();
+        for (ImapMailbox.Attachment attachment : source.attachments()) {
+            ImapMailbox.Download download = imap.download(mailbox, folder, Long.parseLong(uid), attachment.part(), accessToken);
+            if (result.size() >= 10 || (total += download.data().length) > 25 * 1024 * 1024)
+                throw new IllegalArgumentException("Máximo 10 archivos y 25 MB en total");
+            result.add(upload(download.name(), attachment.type(), download.data(), false));
         }
         return result;
     }
@@ -1823,7 +1856,8 @@ public final class MailServlet extends HttpServlet {
     }
 
     private static boolean smsConfigured() {
-        return SMS_ENDPOINT != null && !SMS_ENDPOINT.isBlank() && SMS_SECRET != null && !SMS_SECRET.isBlank();
+        return SMS_ENABLED && SMS_ENDPOINT != null && !SMS_ENDPOINT.isBlank()
+                && SMS_SECRET != null && !SMS_SECRET.isBlank();
     }
 
     private JsonObject sms(JsonObject value) {
