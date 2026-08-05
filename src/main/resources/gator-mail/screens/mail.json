@@ -16,7 +16,7 @@
           { "tag": "link", "attrs": { "rel": "stylesheet", "href": "/elib/css2/sweetalert2.min.css?v=11.23.0" } },
           { "tag": "link", "attrs": { "rel": "stylesheet", "href": "${contextPath}/css/gator-mail.css?v=40" } },
           { "tag": "script", "attrs": { "src": "/elib/js/sweetalert2.all.min.js", "defer": "true" } },
-          { "tag": "script", "attrs": { "src": "${contextPath}/js/gator-mail.js?v=18", "defer": "true" } }
+          { "tag": "script", "attrs": { "src": "${contextPath}/js/gator-mail.js?v=19", "defer": "true" } }
         ]
       },
       {
@@ -983,7 +983,7 @@
                             { "tag": "a", "attrs": { "class": "btn btn-sm btn-outline-primary", "href": "${forwardHref}" }, "children": [
                               { "tag": "span", "attrs": { "class": "fas fa-share", "aria-hidden": "true" } }, { "tag": "span", "text": "Reenviar" }
                             ] },
-                            { "tag": "button", "attrs": { "class": "btn btn-sm btn-outline-secondary", "id": "mail-print-message", "type": "button" }, "children": [
+                            { "tag": "a", "attrs": { "class": "btn btn-sm btn-outline-secondary", "id": "mail-print-message", "href": "${printHref}", "target": "_blank", "rel": "noopener noreferrer" }, "children": [
                               { "tag": "span", "attrs": { "class": "fas fa-print", "aria-hidden": "true" } }, { "tag": "span", "text": "Imprimir" }
                             ] },
                             { "tag": "form", "attrs": { "class": "mail-message-delete-form", "method": "post", "action": "${contextPath}/mail" }, "children": [

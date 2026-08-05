@@ -3,6 +3,7 @@ package gator.mail;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import gator.lib.web.gui.GatorJsonView;
+import java.time.Instant;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.HashMap;
@@ -41,6 +42,12 @@ public final class AccessCodeSelfCheck {
         String safeImage = ImapMailbox.sanitizeHtml("<img src=\"cid:logo\" onerror=\"alert(1)\">");
         assert safeImage.contains("cid:logo");
         assert !safeImage.contains("onerror");
+        String styledMail = ImapMailbox.sanitizeHtml(
+                "<p style=\"color:#123456;position:fixed;background-image:url(https://tracker.invalid/pixel)\">Hola</p>");
+        assert styledMail.contains("style=");
+        assert styledMail.contains("color");
+        assert !styledMail.contains("position:fixed");
+        assert !styledMail.contains("tracker.invalid");
         MailServlet.MessageBody htmlBody = MailServlet.messageBody(
                 "<h1>Hola</h1><p><strong>HTML</strong></p><script>alert(1)</script>", "html");
         assert htmlBody.html().contains("<h1>Hola</h1>");
@@ -306,6 +313,7 @@ public final class AccessCodeSelfCheck {
         model.put("replyHref", "mail?action=reply&uid=1");
         model.put("replyAllHref", "mail?action=replyAll&uid=1");
         model.put("forwardHref", "mail?action=forward&uid=1");
+        model.put("printHref", "mail?action=print&folder=INBOX&uid=1");
         model.put("composeAction", true);
         model.put("query", "urgente");
         model.put("emptyText", "No se encontraron mensajes.");
@@ -322,7 +330,7 @@ public final class AccessCodeSelfCheck {
             assert html.contains("Sesión cerrada");
             assert html.contains("/gator-mail/css/gator-mail.css?v=40");
             assert html.contains("/elib/js/sweetalert2.all.min.js");
-            assert html.contains("/gator-mail/js/gator-mail.js?v=18");
+            assert html.contains("/gator-mail/js/gator-mail.js?v=19");
             assert html.contains("Nueva subcarpeta");
             assert html.contains("href=\"/gator-mail/oauth/password\"");
             assert html.contains("fontawesome-free-5.13.0-web/css/all.min.css");
@@ -369,6 +377,7 @@ public final class AccessCodeSelfCheck {
             assert html.contains(">Reenviar</span>");
             assert html.contains("id=\"mail-print-message\"");
             assert html.contains(">Imprimir</span>");
+            assert html.contains("href=\"mail?action=print&amp;folder=INBOX&amp;uid=1\" target=\"_blank\" rel=\"noopener noreferrer\"");
             assert html.contains("class=\"mail-message-delete-form\"");
             assert html.contains(">Eliminar</span>");
             assert html.contains("Guardar borrador");
@@ -474,6 +483,19 @@ public final class AccessCodeSelfCheck {
         }
         String document = MailServlet.htmlDocument("/gator-mail", "<p>Hola</p>");
         assert document.contains("/gator-mail/css/mail-content.css?v=1");
+        assert document.contains("style-src 'self' 'unsafe-inline'");
+        String print = MailServlet.printDocument("/gator-mail", new ImapMailbox.Mail(
+                "autor@example.com", "autor@example.com", "destino@example.com", "copia@example.com",
+                "Asunto de impresión", Instant.parse("2026-08-05T15:00:00Z"),
+                "<p style=\"color:#123456\">Contenido completo</p>", "Contenido completo", "", true,
+                List.of(new ImapMailbox.Attachment("2", "documento.pdf", "application/pdf", 1024)), null, false));
+        assert print.contains("Asunto de impresión");
+        assert print.contains("autor@example.com");
+        assert print.contains("destino@example.com");
+        assert print.contains("copia@example.com");
+        assert print.contains("Contenido completo");
+        assert print.contains("documento.pdf");
+        assert print.contains("gator-mail-print.css?v=1");
         assert document.contains("img-src data:");
         assert document.contains("<p>Hola</p>");
     }

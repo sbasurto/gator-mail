@@ -141,6 +141,8 @@ public final class MailServlet extends HttpServlet {
                 return;
             } else if (saveDraft(request, response, session, mailbox, OAuthServlet.accessToken(request))) {
                 return;
+            } else if (printMessage(request, response, mailbox, OAuthServlet.accessToken(request))) {
+                return;
             } else if (downloadAttachment(request, response, mailbox, OAuthServlet.accessToken(request))) {
                 return;
             } else {
@@ -804,6 +806,7 @@ public final class MailServlet extends HttpServlet {
             model.put("replyHref", "mail?action=reply" + source);
             model.put("replyAllHref", "mail?action=replyAll" + source);
             model.put("forwardHref", "mail?action=forward" + source);
+            model.put("printHref", "mail?action=print" + source);
             return;
         }
 
@@ -1092,6 +1095,38 @@ public final class MailServlet extends HttpServlet {
         return true;
     }
 
+    private boolean printMessage(HttpServletRequest request, HttpServletResponse response, String mailbox,
+            String accessToken) throws Exception {
+        if (!"print".equals(request.getParameter("action"))) return false;
+        String uid = request.getParameter("uid");
+        if (uid == null || !uid.matches("[0-9]+")) throw new IllegalArgumentException("Mensaje inválido");
+        ImapMailbox.Mail mail = imap.read(mailbox, request.getParameter("folder"), Long.parseLong(uid), accessToken);
+        if (mail == null) throw new IllegalArgumentException("Mensaje inexistente");
+        response.reset();
+        response.setContentType("text/html;charset=UTF-8");
+        response.setHeader("Cache-Control", "private, no-store");
+        response.setHeader("Content-Security-Policy", "default-src 'none'; style-src 'self'; script-src 'self'; img-src data:; base-uri 'none'");
+        response.getWriter().print(printDocument(request.getContextPath(), mail));
+        return true;
+    }
+
+    static String printDocument(String contextPath, ImapMailbox.Mail mail) {
+        StringBuilder attachments = new StringBuilder();
+        for (ImapMailbox.Attachment attachment : mail.attachments())
+            attachments.append("<li>").append(htmlText(attachment.name())).append(" — ")
+                    .append(fileSize(attachment.size())).append("</li>");
+        String body = mail.html() ? mail.body() : "<div class=\"mail-print-text\">" + htmlText(mail.body()) + "</div>";
+        return "<!doctype html><html lang=\"es\"><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
+                + "<title>" + htmlText(mail.subject()) + "</title><link rel=\"stylesheet\" href=\"" + contextPath
+                + "/css/gator-mail-print.css?v=1\"><script src=\"" + contextPath
+                + "/js/gator-mail-print.js?v=1\" defer></script></head><body><main class=\"mail-print\">"
+                + "<button id=\"mail-print-again\" type=\"button\">Imprimir</button><header><h1>" + htmlText(mail.subject())
+                + "</h1><time>" + htmlText(DATE.format(mail.sent())) + "</time></header><dl><dt>De</dt><dd>"
+                + htmlText(mail.from()) + "</dd><dt>Para</dt><dd>" + htmlText(mail.to()) + "</dd><dt>CC</dt><dd>"
+                + htmlText(mail.cc()) + "</dd></dl>" + (attachments.isEmpty() ? "" : "<section class=\"mail-print-attachments\"><strong>Archivos adjuntos</strong><ul>" + attachments + "</ul></section>")
+                + "<article class=\"mail-print-body\">" + body + "</article></main></body></html>";
+    }
+
     private static List<ImapMailbox.Upload> uploads(HttpServletRequest request) throws Exception {
         List<ImapMailbox.Upload> result = new ArrayList<>();
         long total = 0;
@@ -1143,7 +1178,7 @@ public final class MailServlet extends HttpServlet {
 
     static String htmlDocument(String contextPath, String body) {
         return "<!doctype html><html><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
-                + "<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; style-src 'self'; img-src data:\">"
+                + "<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; style-src 'self' 'unsafe-inline'; img-src data:\">"
                 + "<link rel=\"stylesheet\" href=\"" + contextPath + "/css/mail-content.css?v=1\"></head>"
                 + "<body class=\"gator-email\">" + body + "</body></html>";
     }

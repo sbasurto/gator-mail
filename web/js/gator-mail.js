@@ -8,8 +8,6 @@
         text: alert.textContent
     }));
 
-    document.querySelector("#mail-print-message")?.addEventListener("click", () => window.print());
-
     document.querySelectorAll(".mail-password-reset").forEach(button => button.addEventListener("click", async event => {
         event.preventDefault();
         const result = await Swal.fire({

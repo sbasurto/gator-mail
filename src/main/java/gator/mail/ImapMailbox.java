@@ -45,7 +45,7 @@ import jakarta.mail.search.SubjectTerm;
 final class ImapMailbox {
     private static final Logger LOG = Logger.getLogger(ImapMailbox.class.getName());
     private static final PolicyFactory HTML = Sanitizers.FORMATTING.and(Sanitizers.BLOCKS)
-            .and(Sanitizers.TABLES).and(Sanitizers.LINKS).and(new HtmlPolicyBuilder()
+            .and(Sanitizers.TABLES).and(Sanitizers.LINKS).and(Sanitizers.STYLES).and(new HtmlPolicyBuilder()
                     .allowElements("img").allowAttributes("src", "alt", "title").onElements("img")
                     .allowUrlProtocols("cid").toFactory());
     private static final int MAX_FILE_BYTES = 25 * 1024 * 1024;

@@ -1,0 +1,22 @@
+@page { margin: 16mm; }
+* { box-sizing: border-box; }
+body { margin: 0; background: #eef3f6; color: #172b3a; font: 400 15px/1.55 Arial, Helvetica, sans-serif; }
+.mail-print { width: min(900px, calc(100% - 2rem)); margin: 1rem auto; padding: 2rem; background: #fff; box-shadow: 0 8px 30px #173c5420; }
+#mail-print-again { float: right; padding: .55rem .9rem; border: 0; border-radius: 7px; background: #087bab; color: #fff; font-weight: 700; cursor: pointer; }
+h1 { margin: 0; padding-right: 7rem; color: #183044; font-size: 1.8rem; line-height: 1.25; }
+time { display: block; margin-top: .4rem; color: #667b89; }
+dl { display: grid; grid-template-columns: auto 1fr; gap: .25rem .75rem; margin: 1.5rem 0; padding: 1rem 0; border-top: 1px solid #dce6ed; border-bottom: 1px solid #dce6ed; }
+dt { color: #526673; font-weight: 700; } dd { margin: 0; overflow-wrap: anywhere; }
+.mail-print-attachments { margin-bottom: 1.25rem; padding: .8rem 1rem; border: 1px solid #dce6ed; border-radius: 8px; background: #f7fafb; }
+.mail-print-attachments ul { margin: .45rem 0 0; padding-left: 1.25rem; }
+.mail-print-body { overflow-wrap: anywhere; }
+.mail-print-body img { max-width: 100%; height: auto; }
+.mail-print-body table { max-width: 100%; border-collapse: collapse; }
+.mail-print-body th, .mail-print-body td { padding: .5rem; border: 1px solid #dce6ed; }
+.mail-print-text { white-space: pre-wrap; }
+@media print {
+    body { background: #fff; }
+    .mail-print { width: 100%; margin: 0; padding: 0; box-shadow: none; }
+    #mail-print-again { display: none; }
+    a { color: #111; }
+}
