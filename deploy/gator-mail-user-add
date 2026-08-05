@@ -1,0 +1,26 @@
+#!/bin/bash
+set -euo pipefail
+
+user=${1:-}
+email=${2:-}
+[[ $EUID -eq 0 ]] || { echo "El aprovisionador requiere root" >&2; exit 1; }
+[[ $user =~ ^[a-z_][a-z0-9_.-]{0,31}$ ]] || { echo "Usuario Linux inválido" >&2; exit 1; }
+[[ $email =~ ^[a-z0-9.!#%_+?^~-]+@[a-z0-9.-]+\.[a-z]{2,63}$ ]] || { echo "Correo inválido" >&2; exit 1; }
+
+domain=${email#*@}
+domain=${domain//[^a-z0-9]/}
+base=/home/$domain
+home=$base/$user
+[[ -d $base ]] || { echo "No existe el directorio del dominio $base" >&2; exit 1; }
+
+if getent passwd "$user" >/dev/null; then
+    [[ $(getent passwd "$user" | cut -d: -f6) == "$home" ]] || {
+        echo "El usuario ya existe en otro directorio" >&2; exit 1;
+    }
+else
+    /usr/bin/useradd --create-home --home-dir "$home" --shell /bin/bash --user-group "$user"
+fi
+
+group=$(id -gn "$user")
+/usr/bin/install -d -o "$user" -g "$group" -m 0755 "$home/.maildir" \
+    "$home/.maildir/cur" "$home/.maildir/new" "$home/.maildir/tmp"

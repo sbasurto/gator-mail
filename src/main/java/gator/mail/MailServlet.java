@@ -35,6 +35,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -44,6 +45,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import org.commonmark.parser.Parser;
 import org.commonmark.renderer.html.HtmlRenderer;
 
@@ -58,6 +60,8 @@ public final class MailServlet extends HttpServlet {
             System.getenv().getOrDefault("GATOR_MAIL_SMS_ENABLED", "false"));
     private static final String EVENT_ENDPOINT = System.getenv("GATOR_MAIL_EVENT_ENDPOINT");
     private static final String EVENT_SECRET = System.getenv("GATOR_MAIL_EVENT_SECRET");
+    private static final String USER_PROVISIONER = System.getenv().getOrDefault(
+            "GATOR_MAIL_USER_PROVISIONER", "/usr/local/sbin/gator-mail-user-add");
     private static final HttpClient HTTP = HttpClient.newHttpClient();
     private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")
             .withZone(ZoneId.systemDefault());
@@ -756,7 +760,9 @@ public final class MailServlet extends HttpServlet {
                     model.put("composeSourceFolder", folderName);
                     model.put("composeSourceUid", uid);
                     model.put("composeAttachments", mail.attachments().stream().map(attachment -> Map.of(
-                            "name", attachment.name(), "size", fileSize(attachment.size()))).toList());
+                            "name", attachment.name(), "size", fileSize(attachment.size()), "part", attachment.part(),
+                            "href", "mail?action=attachment&folder=" + url(folderName) + "&uid=" + uid
+                                    + "&part=" + url(attachment.part()))).toList());
                 }
             }
             return;
@@ -1113,8 +1119,14 @@ public final class MailServlet extends HttpServlet {
         if (!uid.matches("[0-9]+")) throw new IllegalArgumentException("Mensaje original inválido");
         ImapMailbox.Mail source = imap.read(mailbox, folder, Long.parseLong(uid), accessToken);
         if (source == null) throw new IllegalArgumentException("Mensaje original inexistente");
+        String[] requested = request.getParameterValues("sourceAttachment");
+        if (requested == null) return result;
+        Set<String> selected = new HashSet<>(List.of(requested));
+        if (source.attachments().stream().filter(attachment -> selected.contains(attachment.part())).count()
+                != selected.size()) throw new IllegalArgumentException("Adjunto original inválido");
         long total = result.stream().mapToLong(upload -> upload.data().length).sum();
         for (ImapMailbox.Attachment attachment : source.attachments()) {
+            if (!selected.contains(attachment.part())) continue;
             ImapMailbox.Download download = imap.download(mailbox, folder, Long.parseLong(uid), attachment.part(), accessToken);
             if (result.size() >= 10 || (total += download.data().length) > 25 * 1024 * 1024)
                 throw new IllegalArgumentException("Máximo 10 archivos y 25 MB en total");
@@ -1378,7 +1390,7 @@ public final class MailServlet extends HttpServlet {
         model.put("configurationAdminAvailable", admin);
         String action = request.getParameter("action");
         boolean requested = "settings".equals(action) || "optionsSave".equals(action)
-                || "userSave".equals(action) || "userToggle".equals(action)
+                || "userCreate".equals(action) || "userSave".equals(action) || "userToggle".equals(action)
                 || "userReset".equals(action) || "userSafeList".equals(action)
                 || "contactSave".equals(action) || "contactDelete".equals(action)
                 || "filterSave".equals(action) || "filterDelete".equals(action);
@@ -1432,7 +1444,17 @@ public final class MailServlet extends HttpServlet {
                 response.sendRedirect("mail?action=settings&section=filters");
             } else if (action.startsWith("user")) {
                 value.addProperty("user", request.getParameter("user"));
-                if ("userReset".equals(action)) {
+                if ("userCreate".equals(action)) {
+                    String password = temporaryPassword();
+                    value.addProperty("name", request.getParameter("name"));
+                    value.addProperty("email", request.getParameter("email"));
+                    value.addProperty("password", password);
+                    value.addProperty("sessionTimeoutMinutes", request.getParameter("sessionTimeoutMinutes"));
+                    provisionLinuxUser(request.getParameter("user"), request.getParameter("email"));
+                    checked(mailDbCall("mail_fn_admin_usuario_crear", gson.toJson(value)));
+                    session.setAttribute("mail.password.reset", password);
+                    session.setAttribute("mail.user.admin.notice", "Usuario y cuenta Linux creados correctamente");
+                } else if ("userReset".equals(action)) {
                     String password = temporaryPassword();
                     value.addProperty("password", password);
                     checked(mailDbCall("mail_fn_admin_usuario_reset", gson.toJson(value)));
@@ -1556,6 +1578,9 @@ public final class MailServlet extends HttpServlet {
                         "status", enabled ? "Activo" : "Inactivo", "toggleLabel", enabled ? "Desactivar" : "Activar"));
             }
             model.put("configurationUsers", users);
+            model.put("configurationUserCount", users.size());
+            model.put("configurationActiveUserCount", users.stream()
+                    .filter(user -> Boolean.TRUE.equals(user.get("enabled"))).count());
         } else {
             JsonObject result = checked(mailDbCall("mail_fn_admin_contactos", String.valueOf(model.get("mailbox"))));
             List<Map<String, Object>> contacts = new ArrayList<>();
@@ -1571,6 +1596,29 @@ public final class MailServlet extends HttpServlet {
 
     private boolean smsAuthenticationEnabled(String user) {
         return checked(mailDbCall("mail_fn_usuario_opciones", user)).get("smsEnabled").getAsBoolean();
+    }
+
+    private static void provisionLinuxUser(String user, String email) throws Exception {
+        linuxHome(user, email);
+        Process process = new ProcessBuilder("/usr/bin/sudo", "-n", USER_PROVISIONER, user, email)
+                .redirectErrorStream(true).start();
+        if (!process.waitFor(20, TimeUnit.SECONDS)) {
+            process.destroyForcibly();
+            throw new IllegalStateException("El alta de la cuenta Linux excedió el tiempo permitido");
+        }
+        String output = new String(process.getInputStream().readNBytes(4096), StandardCharsets.UTF_8).strip();
+        if (process.exitValue() != 0)
+            throw new IllegalStateException(output.isBlank() ? "No fue posible crear la cuenta Linux" : output);
+    }
+
+    static String linuxHome(String user, String email) {
+        String account = user == null ? "" : user.strip().toLowerCase(Locale.ROOT);
+        String address = email == null ? "" : email.strip().toLowerCase(Locale.ROOT);
+        if (!account.matches("[a-z_][a-z0-9_.-]{0,31}")
+                || !address.matches("[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9.-]+\\.[a-z]{2,63}"))
+            throw new IllegalArgumentException("Usuario o correo inválido");
+        String domain = address.substring(address.indexOf('@') + 1).replaceAll("[^a-z0-9]", "");
+        return "/home/" + domain + "/" + account;
     }
 
     private void filtersModel(Map<String, Object> model, String mailbox,

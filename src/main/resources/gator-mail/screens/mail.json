@@ -14,9 +14,9 @@
           { "tag": "link", "attrs": { "rel": "stylesheet", "href": "/elib/css2/fontawesome-free-5.13.0-web/css/all.min.css" } },
           { "tag": "link", "attrs": { "rel": "stylesheet", "href": "/elib/css/colors.css" } },
           { "tag": "link", "attrs": { "rel": "stylesheet", "href": "/elib/css2/sweetalert2.min.css?v=11.23.0" } },
-          { "tag": "link", "attrs": { "rel": "stylesheet", "href": "${contextPath}/css/gator-mail.css?v=38" } },
+          { "tag": "link", "attrs": { "rel": "stylesheet", "href": "${contextPath}/css/gator-mail.css?v=39" } },
           { "tag": "script", "attrs": { "src": "/elib/js/sweetalert2.all.min.js", "defer": "true" } },
-          { "tag": "script", "attrs": { "src": "${contextPath}/js/gator-mail.js?v=16", "defer": "true" } }
+          { "tag": "script", "attrs": { "src": "${contextPath}/js/gator-mail.js?v=17", "defer": "true" } }
         ]
       },
       {
@@ -679,13 +679,30 @@
                       { "tag": "header", "attrs": { "class": "card-header mail-panel-header" }, "children": [
                         { "tag": "div", "children": [
                           { "tag": "small", "attrs": { "class": "mail-eyebrow" }, "text": "Configuración" },
-                          { "tag": "h1", "attrs": { "class": "mail-panel-title" }, "text": "Usuarios" }
+                          { "tag": "h1", "attrs": { "class": "mail-panel-title" }, "text": "Directorio de usuarios" },
+                          { "tag": "p", "attrs": { "class": "mail-user-summary" }, "text": "${configurationActiveUserCount} activos de ${configurationUserCount} usuarios" }
                         ] },
                         { "tag": "a", "attrs": { "class": "btn btn-outline-secondary btn-sm", "href": "${contextPath}/mail" }, "text": "Volver al correo" }
                       ] },
                       { "tag": "div", "attrs": { "class": "mail-admin-list" }, "children": [
                         { "tag": "span", "if": "passwordReset", "attrs": { "class": "d-none mail-swal mail-swal-success", "title": "Contraseña restablecida" }, "text": "Contraseña temporal: ${temporaryPassword}. El usuario deberá cambiarla al ingresar." },
                         { "tag": "span", "if": "userAdminNotice", "attrs": { "class": "d-none mail-swal mail-swal-success", "title": "Usuario actualizado" }, "text": "${userAdminMessage}" },
+                        { "tag": "form", "attrs": { "class": "mail-admin-row mail-admin-user mail-admin-new mail-user-create", "method": "post", "action": "${contextPath}/mail" }, "children": [
+                          { "tag": "input", "attrs": { "type": "hidden", "name": "csrf", "value": "${csrf}" } },
+                          { "tag": "div", "attrs": { "class": "mail-user-create-heading" }, "children": [
+                            { "tag": "span", "attrs": { "class": "fas fa-user-plus", "aria-hidden": "true" } },
+                            { "tag": "div", "children": [{ "tag": "strong", "text": "Agregar usuario" }, { "tag": "small", "text": "Crea el acceso y su cuenta Linux en el directorio del dominio." }] }
+                          ] },
+                          { "tag": "label", "children": [{ "tag": "small", "text": "Usuario Linux" }, { "tag": "input", "attrs": { "class": "form-control", "name": "user", "required": "true", "maxlength": "32", "pattern": "[a-z_][a-z0-9_.-]{0,31}", "placeholder": "jperez", "autocomplete": "off" } }] },
+                          { "tag": "label", "children": [{ "tag": "small", "text": "Nombre completo" }, { "tag": "input", "attrs": { "class": "form-control", "name": "name", "required": "true", "maxlength": "200", "placeholder": "Juan Pérez" } }] },
+                          { "tag": "label", "children": [{ "tag": "small", "text": "Correo" }, { "tag": "input", "attrs": { "class": "form-control", "name": "email", "type": "email", "required": "true", "maxlength": "320", "placeholder": "jperez@empresa.com" } }] },
+                          { "tag": "label", "children": [{ "tag": "small", "text": "Sesión (minutos)" }, { "tag": "input", "attrs": { "class": "form-control", "name": "sessionTimeoutMinutes", "type": "number", "value": "180", "min": "1", "max": "10080", "required": "true" } }] },
+                          { "tag": "div", "attrs": { "class": "mail-admin-actions" }, "children": [
+                            { "tag": "button", "attrs": { "class": "btn btn-primary", "type": "submit", "name": "action", "value": "userCreate" }, "children": [
+                              { "tag": "span", "attrs": { "class": "fas fa-user-plus", "aria-hidden": "true" } }, { "tag": "span", "text": "Crear usuario" }
+                            ] }
+                          ] }
+                        ] },
                         { "tag": "form", "each": "configurationUsers", "as": "user", "attrs": { "class": "mail-admin-row mail-admin-user", "method": "post", "action": "${contextPath}/mail" }, "children": [
                           { "tag": "input", "attrs": { "type": "hidden", "name": "csrf", "value": "${csrf}" } },
                           { "tag": "input", "attrs": { "type": "hidden", "name": "user", "value": "${user.id}" } },
@@ -764,7 +781,7 @@
                         { "tag": "div", "attrs": { "class": "mail-recipient-field" }, "children": [
                           { "tag": "label", "attrs": { "class": "form-label", "for": "mail-compose-to" }, "text": "Para" },
                           { "tag": "div", "attrs": { "class": "mail-recipient-control" }, "children": [
-                            { "tag": "input", "attrs": { "class": "form-control", "id": "mail-compose-to", "name": "to", "type": "text", "value": "${composeTo}", "placeholder": "destinatario@dominio.com", "required": "true", "autocomplete": "off" } },
+                            { "tag": "input", "attrs": { "class": "form-control mail-recipient-input", "id": "mail-compose-to", "name": "to", "type": "text", "value": "${composeTo}", "placeholder": "destinatario@dominio.com", "required": "true", "autocomplete": "off" } },
                             { "tag": "button", "attrs": { "class": "btn btn-outline-secondary mail-contact-open", "type": "button", "data-contact-target": "mail-compose-to", "aria-controls": "mail-contact-picker", "aria-expanded": "false", "title": "Seleccionar contactos para Para" }, "children": [
                               { "tag": "span", "attrs": { "class": "fas fa-address-book", "aria-hidden": "true" } },
                               { "tag": "span", "text": "Contactos" }
@@ -774,7 +791,7 @@
                         { "tag": "div", "attrs": { "class": "mail-recipient-field" }, "children": [
                           { "tag": "label", "attrs": { "class": "form-label", "for": "mail-compose-cc" }, "text": "CC" },
                           { "tag": "div", "attrs": { "class": "mail-recipient-control" }, "children": [
-                            { "tag": "input", "attrs": { "class": "form-control", "id": "mail-compose-cc", "name": "cc", "type": "text", "value": "${composeCc}", "placeholder": "Con copia", "autocomplete": "off" } },
+                            { "tag": "input", "attrs": { "class": "form-control mail-recipient-input", "id": "mail-compose-cc", "name": "cc", "type": "text", "value": "${composeCc}", "placeholder": "Con copia", "autocomplete": "off" } },
                             { "tag": "button", "attrs": { "class": "btn btn-outline-secondary mail-contact-open", "type": "button", "data-contact-target": "mail-compose-cc", "aria-controls": "mail-contact-picker", "aria-expanded": "false", "title": "Seleccionar contactos para CC" }, "children": [
                               { "tag": "span", "attrs": { "class": "fas fa-address-book", "aria-hidden": "true" } },
                               { "tag": "span", "text": "Contactos" }
@@ -784,7 +801,7 @@
                         { "tag": "div", "attrs": { "class": "mail-recipient-field" }, "children": [
                           { "tag": "label", "attrs": { "class": "form-label", "for": "mail-compose-bcc" }, "text": "CCO" },
                           { "tag": "div", "attrs": { "class": "mail-recipient-control" }, "children": [
-                            { "tag": "input", "attrs": { "class": "form-control", "id": "mail-compose-bcc", "name": "bcc", "type": "text", "value": "${composeBcc}", "placeholder": "Con copia oculta", "autocomplete": "off" } },
+                            { "tag": "input", "attrs": { "class": "form-control mail-recipient-input", "id": "mail-compose-bcc", "name": "bcc", "type": "text", "value": "${composeBcc}", "placeholder": "Con copia oculta", "autocomplete": "off" } },
                             { "tag": "button", "attrs": { "class": "btn btn-outline-secondary mail-contact-open", "type": "button", "data-contact-target": "mail-compose-bcc", "aria-controls": "mail-contact-picker", "aria-expanded": "false", "title": "Seleccionar contactos para CCO" }, "children": [
                               { "tag": "span", "attrs": { "class": "fas fa-address-book", "aria-hidden": "true" } },
                               { "tag": "span", "text": "Contactos" }
@@ -827,9 +844,11 @@
                         { "tag": "textarea", "attrs": { "class": "form-control mail-md-editor d-none", "id": "mail-compose-body", "name": "body", "rows": "18", "spellcheck": "true", "required": "true", "placeholder": "Escribe tu mensaje con Markdown…" }, "text": "${composeBody}" },
                         { "tag": "section", "if": "composeAttachmentsAvailable", "attrs": { "class": "mail-attachments", "aria-label": "Adjuntos conservados" }, "children": [
                           { "tag": "strong", "text": "Adjuntos conservados" },
-                          { "tag": "span", "each": "composeAttachments", "as": "attachment", "attrs": { "class": "mail-attachment" }, "children": [
+                          { "tag": "label", "each": "composeAttachments", "as": "attachment", "attrs": { "class": "mail-attachment mail-retained-attachment" }, "children": [
+                            { "tag": "input", "attrs": { "type": "checkbox", "name": "sourceAttachment", "value": "${attachment.part}", "checked": "true", "aria-label": "Conservar ${attachment.name}" } },
                             { "tag": "span", "attrs": { "class": "fas fa-paperclip", "aria-hidden": "true" } },
-                            { "tag": "span", "text": "${attachment.name}" }, { "tag": "small", "text": "${attachment.size}" }
+                            { "tag": "a", "attrs": { "href": "${attachment.href}", "target": "_blank", "rel": "noopener noreferrer", "title": "Abrir ${attachment.name}" }, "text": "${attachment.name}" },
+                            { "tag": "small", "text": "${attachment.size}" }
                           ] }
                         ] },
                         { "tag": "div", "attrs": { "class": "mail-file-fields" }, "children": [

@@ -238,12 +238,23 @@
     const contactPicker = document.querySelector("#mail-contact-picker");
     const contactSearch = document.querySelector("#mail-contact-search");
     let contactTarget = null;
+    let replaceContactToken = false;
+    const filterContacts = query => {
+        let matches = 0;
+        document.querySelectorAll(".mail-contact-item").forEach(contact => {
+            contact.hidden = query && !contact.textContent.toLowerCase().includes(query);
+            if (!contact.hidden) matches++;
+        });
+        return matches;
+    };
     const closeContacts = () => {
         contactPicker?.classList.remove("open");
         document.querySelectorAll(".mail-contact-open").forEach(button => button.setAttribute("aria-expanded", "false"));
     };
     document.querySelectorAll(".mail-contact-open").forEach(button => button.addEventListener("click", () => {
         contactTarget = document.querySelector(`#${button.dataset.contactTarget}`);
+        replaceContactToken = false;
+        filterContacts("");
         document.querySelectorAll(".mail-contact-open").forEach(item => item.setAttribute("aria-expanded", "false"));
         button.setAttribute("aria-expanded", "true");
         contactPicker.classList.add("open");
@@ -253,17 +264,26 @@
     document.querySelectorAll(".mail-contact-item").forEach(contact => contact.addEventListener("click", () => {
         if (!contactTarget) return;
         const values = contactTarget.value.split(",").map(value => value.trim()).filter(Boolean);
+        if (replaceContactToken && values.length) values.pop();
         if (!values.some(value => value.toLowerCase() === contact.dataset.contactEmail.toLowerCase()))
             values.push(contact.dataset.contactEmail);
         contactTarget.value = values.join(", ");
+        replaceContactToken = false;
+        closeContacts();
         contactTarget.focus();
     }));
     contactSearch?.addEventListener("input", () => {
         const query = contactSearch.value.toLowerCase().trim();
-        document.querySelectorAll(".mail-contact-item").forEach(contact => {
-            contact.hidden = query && !contact.textContent.toLowerCase().includes(query);
-        });
+        filterContacts(query);
     });
+    document.querySelectorAll(".mail-recipient-input").forEach(input => input.addEventListener("input", () => {
+        const query = input.value.split(",").pop().trim().toLowerCase();
+        contactTarget = input;
+        replaceContactToken = Boolean(query);
+        contactSearch.value = query;
+        const matches = query ? filterContacts(query) : 0;
+        contactPicker?.classList.toggle("open", matches > 0);
+    }));
     document.addEventListener("keydown", event => {
         if (event.key === "Escape") closeContacts();
     });

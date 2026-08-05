@@ -66,6 +66,12 @@ body { min-height: 100vh; margin: 0; color: var(--gator-ink); background: var(--
 .mail-admin-status { align-self: center; padding: .35rem .55rem; border-radius: 999px; background: #eef5f8; color: var(--gator-blue-dark); font-size: .72rem; white-space: nowrap; }
 .mail-admin-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; }
 .mail-admin-user .mail-admin-actions { grid-column: 1 / -1; justify-content: flex-end; }
+.mail-user-summary { margin: .2rem 0 0; color: var(--gator-muted); font-size: .78rem; }
+.mail-user-create { border-color: #b9dce9; background: linear-gradient(135deg, #f4fbfe, #fff); box-shadow: 0 8px 24px #173c5412; }
+.mail-user-create-heading { grid-column: 1 / -1; display: flex; align-items: center; gap: .75rem; padding-bottom: .25rem; color: var(--gator-blue-dark); }
+.mail-user-create-heading > span { display: grid; place-items: center; width: 2.5rem; height: 2.5rem; border-radius: 10px; background: #dff3fb; }
+.mail-user-create-heading div { display: grid; gap: .1rem; }
+.mail-user-create-heading small { color: var(--gator-muted); }
 .mail-safe-list-status { background: #e9f7ee; color: #257244; }
 .mail-filter-status { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; padding: 1rem; border-bottom: 1px solid var(--gator-line); background: #f7fbfd; font-size: .78rem; }
 .mail-filter-note { margin: 0; padding: 1rem 1rem 0; color: var(--gator-muted); font-size: .8rem; }
@@ -226,6 +232,8 @@ body { min-height: 100vh; margin: 0; color: var(--gator-ink); background: var(--
 .mail-attachments > strong { width: 100%; font-size: .8rem; }
 .mail-attachment { display: inline-flex; align-items: center; gap: .4rem; padding: .45rem .65rem; border: 1px solid var(--gator-line); border-radius: 8px; color: var(--gator-blue-dark); text-decoration: none; }
 .mail-attachment small { color: var(--gator-muted); }
+.mail-retained-attachment input { margin: 0; }
+.mail-retained-attachment a { color: inherit; font-weight: 650; }
 
 .mail-compose-form { display: grid; gap: .55rem; padding: 1.4rem; }
 .mail-compose-form .form-label { margin: .25rem 0 0; color: #344b5d; font-size: .8rem; font-weight: 700; }

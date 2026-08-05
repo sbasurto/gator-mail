@@ -12,6 +12,12 @@ declare resultado json;
 declare contacto text;
 declare password_anterior text;
 begin
+    resultado := mail_fn_admin_usuario_crear('{"actor":"mail-admin-test@soft-gator.com",'
+        '"user":"mail-new-test","name":"Usuario nuevo","email":"mail-new-test@soft-gator.com",'
+        '"password":"Abcd_1234-Efgh_5678-Ijkl","sessionTimeoutMinutes":90}')::json;
+    assert resultado ->> 'codigo' = '0', 'No se creó el usuario';
+    assert exists (select 1 from app_usuario_email where usuario_id = 'mail-new-test'
+                    and usuario_email_email = 'mail-new-test@soft-gator.com'), 'No se creó el correo';
     resultado := mail_fn_admin_usuario_guardar('{"actor":"mail-admin-test@soft-gator.com",'
         '"user":"mail-user-test","name":"Usuario actualizado","enabled":false,'
         '"phone":"+525512345678"}')::json;

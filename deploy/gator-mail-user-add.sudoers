@@ -1,0 +1,1 @@
+tomcat ALL=(root) NOPASSWD: /usr/local/sbin/gator-mail-user-add *

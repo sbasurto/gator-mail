@@ -142,6 +142,11 @@ public final class AccessCodeSelfCheck {
         try { MailServlet.uids(new String[]{"0"}); }
         catch (IllegalArgumentException expected) { rejectedUid = true; }
         assert rejectedUid;
+        assert "/home/softgatorcom/jperez".equals(MailServlet.linuxHome("jperez", "jperez@soft-gator.com"));
+        boolean rejectedLinuxUser = false;
+        try { MailServlet.linuxHome("JPerez;", "jperez@soft-gator.com"); }
+        catch (IllegalArgumentException expected) { rejectedLinuxUser = true; }
+        assert rejectedLinuxUser;
 
         Map<String, Object> model = new HashMap<>();
         for (String key : new String[]{"challenge", "codeChallenge", "phoneCorrection", "composeView", "mailboxView", "messageView", "mailContent", "empty",
@@ -255,6 +260,8 @@ public final class AccessCodeSelfCheck {
                 "email", "usuario@example.com", "enabled", true, "phone", "+525512345678",
                 "safeListed", true, "sessionTimeoutMinutes", 180,
                 "status", "Activo", "toggleLabel", "Desactivar")));
+        model.put("configurationUserCount", 1);
+        model.put("configurationActiveUserCount", 1);
         model.put("configurationContacts", List.of(Map.of("id", "contacto", "name", "Contacto Uno",
                 "email", "uno@example.com", "owner", "usuario", "group", "2")));
         List<Map<String, Object>> filterFields = List.of(
@@ -290,7 +297,8 @@ public final class AccessCodeSelfCheck {
         model.put("attachmentsAvailable", true);
         model.put("attachments", List.of(Map.of("name", "documento.pdf", "size", "10 KB", "href", "mail?action=attachment")));
         model.put("composeAttachmentsAvailable", true);
-        model.put("composeAttachments", List.of(Map.of("name", "documento.pdf", "size", "10 KB")));
+        model.put("composeAttachments", List.of(Map.of("name", "documento.pdf", "size", "10 KB", "part", "2",
+                "href", "mail?action=attachment&folder=INBOX&uid=1&part=2")));
         model.put("composeSourceFolder", "INBOX");
         model.put("composeSourceUid", "1");
         model.put("messageUid", "1");
@@ -312,9 +320,9 @@ public final class AccessCodeSelfCheck {
         try {
             String html = new GatorJsonView().renderResource("gator-mail/screens/mail.json", model);
             assert html.contains("Sesión cerrada");
-            assert html.contains("/gator-mail/css/gator-mail.css?v=38");
+            assert html.contains("/gator-mail/css/gator-mail.css?v=39");
             assert html.contains("/elib/js/sweetalert2.all.min.js");
-            assert html.contains("/gator-mail/js/gator-mail.js?v=16");
+            assert html.contains("/gator-mail/js/gator-mail.js?v=17");
             assert html.contains("Nueva subcarpeta");
             assert html.contains("href=\"/gator-mail/oauth/password\"");
             assert html.contains("fontawesome-free-5.13.0-web/css/all.min.css");
@@ -345,6 +353,8 @@ public final class AccessCodeSelfCheck {
             assert html.contains("name=\"sourceFolder\" value=\"INBOX\"");
             assert html.contains("name=\"sourceUid\" value=\"1\"");
             assert html.contains("Adjuntos conservados");
+            assert html.contains("name=\"sourceAttachment\" value=\"2\" checked");
+            assert html.contains("title=\"Abrir documento.pdf\"");
             assert html.contains("documento.pdf");
             assert html.contains("title=\"Descargar documento.pdf\"");
             assert html.contains("Reunión de proyecto");
@@ -409,6 +419,10 @@ public final class AccessCodeSelfCheck {
             assert html.contains("no pudo sincronizarse con el calendario externo");
             assert html.contains("class=\"mail-agenda-day is-today\"");
             assert html.contains("value=\"userSave\"");
+            assert html.contains("value=\"userCreate\"");
+            assert html.contains("Directorio de usuarios");
+            assert html.contains("1 activos de 1 usuarios");
+            assert html.contains("mail-recipient-input");
             assert html.contains("value=\"userReset\"");
             assert html.contains("name=\"phone\"");
             assert html.contains("name=\"sessionTimeoutMinutes\"");

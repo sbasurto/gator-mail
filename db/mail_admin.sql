@@ -128,6 +128,41 @@ exception when others then
 end;
 $$;
 
+create or replace function mail_fn_admin_usuario_crear(v_json text)
+returns text language plpgsql security definer set search_path = public as $$
+declare
+    v jsonb := v_json::jsonb;
+    actor text := trim(v ->> 'actor');
+    correo text := lower(trim(v ->> 'email'));
+    nombre text := trim(v ->> 'name');
+    password text := v ->> 'password';
+    session_timeout_minutes integer := coalesce((v ->> 'sessionTimeoutMinutes')::integer, 180);
+    usuario text := lower(trim(v ->> 'user'));
+begin
+    if not mail_fn_es_admin(actor) then raise exception 'Acceso administrativo denegado'; end if;
+    if usuario !~ '^[a-z_][a-z0-9_.-]{0,31}$'
+            or correo !~ '^[a-z0-9.!#$%&''*+/=?^_`{|}~-]+@[a-z0-9.-]+\.[a-z]{2,63}$'
+            or nombre = '' or length(nombre) > 200
+            or password !~ '^[A-Za-z0-9_-]{24}$'
+            or session_timeout_minutes not between 1 and 10080 then
+        raise exception 'Datos del usuario inválidos';
+    end if;
+    if exists (select 1 from app_usuarios where lower(usuario_id) = usuario)
+            or exists (select 1 from app_usuario_email where lower(usuario_email_email) = correo
+                       and coalesce(usuario_email_estado, 0) >= 0) then
+        raise exception 'El usuario o correo ya existe';
+    end if;
+    insert into app_usuarios(usuario_id, usuario_password, usuario_nombre, usuario_estado,
+                             usuario_hash_auth, usuario_sesion_timeout)
+    values (usuario, password, nombre, '1', 'UPDATE_PASSWORD', session_timeout_minutes * 60000);
+    insert into app_usuario_email(usuario_email_email, usuario_email_estado, usuario_id, usuario_email_por_defecto)
+    values (correo, 1, usuario, 1);
+    return json_build_object('codigo', '0')::text;
+exception when others then
+    return json_build_object('codigo', '-1', 'mensaje', sqlerrm)::text;
+end;
+$$;
+
 create or replace function mail_fn_admin_usuario_safe_list(v_json text)
 returns text language plpgsql security definer set search_path = public as $$
 declare

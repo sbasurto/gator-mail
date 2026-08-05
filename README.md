@@ -45,6 +45,8 @@ El proceso de Tomcat puede recibir estas variables de entorno:
 - `GATOR_MAIL_SMS_SECRET` (secreto Bearer compartido con ese proveedor)
 - `GATOR_MAIL_EVENT_ENDPOINT` (opcional; URL HTTPS para sincronizar eventos)
 - `GATOR_MAIL_EVENT_SECRET` (secreto Bearer compartido con ese endpoint)
+- `GATOR_MAIL_USER_PROVISIONER` (opcional; por defecto
+  `/usr/local/sbin/gator-mail-user-add`)
 
 El cliente público `gator-mail` debe habilitar Authorization Code con PKCE S256
 y registrar exactamente los URI de retorno usados por cada entorno.
@@ -158,15 +160,29 @@ con el formulario del tema de Gator Mail; no abre la consola de cuenta de
 Keycloak. Los cambios usan el proveedor Gator existente, que sincroniza
 `app_usuarios` mediante `app_fn_admon_tablas_all`.
 
-## Aprovisionamiento de buzones
+## Aprovisionamiento de usuarios y buzones
+
+El alta administrativa crea primero la cuenta Linux y después registra el
+usuario en PostgreSQL. Instale el helper y su regla limitada de `sudo` en el
+servidor de correo:
+
+```bash
+sudo install -o root -g root -m 0755 deploy/gator-mail-user-add /usr/local/sbin/
+sudo install -o root -g root -m 0440 deploy/gator-mail-user-add.sudoers /etc/sudoers.d/gator-mail-user-add
+sudo visudo -cf /etc/sudoers.d/gator-mail-user-add
+```
+
+El directorio base del dominio debe existir. Por ejemplo,
+`jperez@soft-gator.com` se crea como `/home/softgatorcom/jperez`; el helper es
+idempotente, prepara `.maildir/{cur,new,tmp}` y rechaza reutilizar un usuario
+ubicado en otro directorio.
 
 - Si el correo ya existe en `softmail_users`, se reutilizan su identidad,
   directorio y mensajes; Gator Mail no cambia su contraseña.
 - Si existe como usuario Unix heredado, debe registrarse como buzón virtual
   apuntando al Maildir actual antes de retirar la compatibilidad PAM.
-- Si no existe, se crea un buzón virtual en `softmail_users`; no se crea una
-  cuenta del sistema operativo. La operación debe ser idempotente y validar el
-  dominio, UID/GID, directorio y cuota.
+- Si no existe, el administrador crea la cuenta Unix en el directorio del
+  dominio y registra el acceso de Gator Mail con contraseña temporal.
 - Hasta que el aprovisionamiento termine, la aplicación muestra el estado
   `Tu buzón está pendiente` y permite comprobarlo nuevamente.
 
