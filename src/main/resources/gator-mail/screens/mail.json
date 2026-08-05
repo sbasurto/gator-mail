@@ -14,9 +14,9 @@
           { "tag": "link", "attrs": { "rel": "stylesheet", "href": "/elib/css2/fontawesome-free-5.13.0-web/css/all.min.css" } },
           { "tag": "link", "attrs": { "rel": "stylesheet", "href": "/elib/css/colors.css" } },
           { "tag": "link", "attrs": { "rel": "stylesheet", "href": "/elib/css2/sweetalert2.min.css?v=11.23.0" } },
-          { "tag": "link", "attrs": { "rel": "stylesheet", "href": "${contextPath}/css/gator-mail.css?v=39" } },
+          { "tag": "link", "attrs": { "rel": "stylesheet", "href": "${contextPath}/css/gator-mail.css?v=40" } },
           { "tag": "script", "attrs": { "src": "/elib/js/sweetalert2.all.min.js", "defer": "true" } },
-          { "tag": "script", "attrs": { "src": "${contextPath}/js/gator-mail.js?v=17", "defer": "true" } }
+          { "tag": "script", "attrs": { "src": "${contextPath}/js/gator-mail.js?v=18", "defer": "true" } }
         ]
       },
       {
@@ -982,6 +982,9 @@
                             ] },
                             { "tag": "a", "attrs": { "class": "btn btn-sm btn-outline-primary", "href": "${forwardHref}" }, "children": [
                               { "tag": "span", "attrs": { "class": "fas fa-share", "aria-hidden": "true" } }, { "tag": "span", "text": "Reenviar" }
+                            ] },
+                            { "tag": "button", "attrs": { "class": "btn btn-sm btn-outline-secondary", "id": "mail-print-message", "type": "button" }, "children": [
+                              { "tag": "span", "attrs": { "class": "fas fa-print", "aria-hidden": "true" } }, { "tag": "span", "text": "Imprimir" }
                             ] },
                             { "tag": "form", "attrs": { "class": "mail-message-delete-form", "method": "post", "action": "${contextPath}/mail" }, "children": [
                               { "tag": "input", "attrs": { "type": "hidden", "name": "action", "value": "messageDelete" } },

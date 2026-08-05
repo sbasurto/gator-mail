@@ -320,9 +320,9 @@ public final class AccessCodeSelfCheck {
         try {
             String html = new GatorJsonView().renderResource("gator-mail/screens/mail.json", model);
             assert html.contains("Sesión cerrada");
-            assert html.contains("/gator-mail/css/gator-mail.css?v=39");
+            assert html.contains("/gator-mail/css/gator-mail.css?v=40");
             assert html.contains("/elib/js/sweetalert2.all.min.js");
-            assert html.contains("/gator-mail/js/gator-mail.js?v=17");
+            assert html.contains("/gator-mail/js/gator-mail.js?v=18");
             assert html.contains("Nueva subcarpeta");
             assert html.contains("href=\"/gator-mail/oauth/password\"");
             assert html.contains("fontawesome-free-5.13.0-web/css/all.min.css");
@@ -367,6 +367,8 @@ public final class AccessCodeSelfCheck {
             assert html.contains("Sesión cerrada correctamente");
             assert html.contains(">Responder a todos</span>");
             assert html.contains(">Reenviar</span>");
+            assert html.contains("id=\"mail-print-message\"");
+            assert html.contains(">Imprimir</span>");
             assert html.contains("class=\"mail-message-delete-form\"");
             assert html.contains(">Eliminar</span>");
             assert html.contains("Guardar borrador");

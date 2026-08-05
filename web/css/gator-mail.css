@@ -347,3 +347,20 @@ body { min-height: 100vh; margin: 0; color: var(--gator-ink); background: var(--
     .mail-event-detail { grid-template-columns: 1fr; }
     .mail-event-detail dt { margin-top: .35rem; }
 }
+
+@media print {
+    @page { margin: 16mm; }
+    body { min-height: 0; background: #fff; color: #111; }
+    .mail-topbar, .mail-sidebar, .mail-message-actions, .mail-invitation-actions, .mail-action-bar { display: none !important; }
+    .mail-workspace, .mail-content { display: block; min-height: 0; padding: 0; }
+    .mail-panel { overflow: visible; border: 0; border-radius: 0; box-shadow: none; }
+    .mail-panel-header { min-height: 0; padding: 0 0 .75rem; border: 0; background: #fff; }
+    .mail-panel-header .mail-toolbar-action { display: none; }
+    .mail-message { padding: 0; }
+    .mail-message-title { font-size: 20pt; }
+    .mail-headers { margin: 1rem 0; color: #333; }
+    .mail-body, .mail-html-body { margin-top: 1rem; border-color: #ccc; color: #111; }
+    .mail-html-body { min-height: 0; border-width: 1px 0 0; border-radius: 0; }
+    .mail-invitation, .mail-attachment { break-inside: avoid; box-shadow: none; }
+    .mail-attachment { color: #111; }
+}
