@@ -47,6 +47,8 @@ El proceso de Tomcat puede recibir estas variables de entorno:
 - `GATOR_MAIL_EVENT_SECRET` (secreto Bearer compartido con ese endpoint)
 - `GATOR_MAIL_USER_PROVISIONER` (opcional; por defecto
   `/usr/local/sbin/gator-mail-user-add`)
+- `GATOR_MAIL_USER_DELETER` (opcional; por defecto
+  `/usr/local/sbin/gator-mail-user-delete`)
 
 El cliente público `gator-mail` debe habilitar Authorization Code con PKCE S256
 y registrar exactamente los URI de retorno usados por cada entorno.
@@ -128,11 +130,12 @@ fallback para evitar depender del mismo buzón que se está intentando abrir.
 ## Filtros IMAP
 
 Los filtros no dependen de Sieve ni se ejecutan dentro de Tomcat. El servicio
-independiente `gator-mail-filter` obtiene las reglas de `db_gatormail`, espera
-correo nuevo mediante IMAP IDLE y mueve la primera coincidencia con UID MOVE.
+independiente `gator-mail-filter` obtiene las reglas de `db_gatormail`, revisa
+Entrada cada 15 segundos y mueve la primera coincidencia con UID MOVE.
 El checkpoint `(mailbox, UIDVALIDITY, UID)`, los reintentos y las últimas 50
 decisiones se consultan en **Configuración > Filtros**. El primer arranque de
-cada buzón toma como línea base su UID actual: no reorganiza correo histórico.
+cada buzón toma como línea base su UID actual; la interfaz permite solicitar
+explícitamente que las reglas también revisen los mensajes históricos de Entrada.
 
 Instale primero `db/mail_filters.sql` y después el servicio. En servidores
 systemd use `deploy/gator-mail-filter.service`; para Gentoo/OpenRC se incluye
@@ -168,14 +171,21 @@ servidor de correo:
 
 ```bash
 sudo install -o root -g root -m 0755 deploy/gator-mail-user-add /usr/local/sbin/
+sudo install -o root -g root -m 0755 deploy/gator-mail-user-delete /usr/local/sbin/
 sudo install -o root -g root -m 0440 deploy/gator-mail-user-add.sudoers /etc/sudoers.d/gator-mail-user-add
+sudo install -o root -g root -m 0440 deploy/gator-mail-user-delete.sudoers /etc/sudoers.d/gator-mail-user-delete
 sudo visudo -cf /etc/sudoers.d/gator-mail-user-add
+sudo visudo -cf /etc/sudoers.d/gator-mail-user-delete
 ```
 
 El directorio base del dominio debe existir. Por ejemplo,
 `jperez@soft-gator.com` se crea como `/home/softgatorcom/jperez`; el helper es
 idempotente, prepara `.maildir/{cur,new,tmp}` y rechaza reutilizar un usuario
 ubicado en otro directorio.
+
+La baja bloquea el acceso Linux, importa el Maildir en `Revisión/<usuario>` de
+la cuenta seleccionada y conserva una copia recuperable en
+`/var/lib/gator-mail/deleted` antes de eliminar la identidad.
 
 - Si el correo ya existe en `softmail_users`, se reutilizan su identidad,
   directorio y mensajes; Gator Mail no cambia su contraseña.

@@ -57,8 +57,11 @@ public final class AccessCodeSelfCheck {
         String richHtml = ImapMailbox.sanitizeHtml("<a href=\"https://example.com\">Enlace</a>"
                 + "<table><tr><th>A</th></tr><tr><td>B</td></tr></table><img src=\"cid:logo\">");
         assert richHtml.contains("href=\"https://example.com\"");
+        assert richHtml.contains("target=\"_blank\"");
+        assert richHtml.contains("noopener") && richHtml.contains("noreferrer");
         assert richHtml.contains("<table>");
         assert richHtml.contains("cid:logo");
+        assert !ImapMailbox.sanitizeHtml("<a href=\"javascript:alert(1)\">Peligro</a>").contains("javascript:");
         String calendarText = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nMETHOD:REQUEST\r\nBEGIN:VEVENT\r\n"
                 + "UID:demo@example.com\r\nSEQUENCE:2\r\nDTSTART:20260724T160000Z\r\n"
                 + "DTEND:20260724T170000Z\r\nORGANIZER:mailto:organizer@example.com\r\n"
@@ -126,6 +129,9 @@ public final class AccessCodeSelfCheck {
         assert "Spam".equals(pagedFolders.get(2).get("label"));
         assert Boolean.TRUE.equals(pagedFolders.get(2).get("leaf"));
         assert "mail?folder=Archive&page=1&size=60".equals(pagedFolders.get(3).get("href"));
+        assert String.valueOf(MailServlet.folderGroups(List.of(
+                new ImapMailbox.FolderInfo("Trash", "Papelera", "", "Trash", 0, 0, 3)), "", 20)
+                .get(0).get("className")).contains("mail-folder-trash");
         List<Map<String, Object>> folderMenus = MailServlet.folderMenus(List.of(
                 new ImapMailbox.FolderInfo("INBOX", "Entrada", "", "INBOX", 0, 0, 1),
                 new ImapMailbox.FolderInfo("Sent", "Enviados", "", "Sent", 0, 0, 4),
@@ -165,7 +171,8 @@ public final class AccessCodeSelfCheck {
                 "dashboardView", "eventsAvailable", "eventFormView", "eventCreated", "eventUpdated", "eventSyncFailed",
                 "eventCanComplete", "eventCompleted", "eventCompletedState",
                 "invitationAvailable", "invitationCanReply", "invitationCancelled", "invitationReplyNotice",
-                "invitationSyncFailed", "smsAdminAvailable", "userAdminNotice"}) model.put(key, true);
+                "invitationSyncFailed", "smsAdminAvailable", "userAdminNotice", "filterNotice",
+                "filterRulesAvailable"}) model.put(key, true);
         model.put("invitationCannotReply", false);
         model.put("smsAuthenticationEnabled", true);
         model.put("configurationOptionsClass", "active");
@@ -173,6 +180,7 @@ public final class AccessCodeSelfCheck {
         model.put("passwordReset", true);
         model.put("temporaryPassword", "Abcd_1234-Efgh_5678-Ijkl");
         model.put("userAdminMessage", "Teléfono agregado");
+        model.put("filterNoticeMessage", "Filtros programados");
         model.put("body", "<script>parent.alert('bad')</script>");
         model.put("originalHtml", "<script>alert('original')</script><p>Hola</p>");
         model.put("contextPath", "/gator-mail");
@@ -328,16 +336,16 @@ public final class AccessCodeSelfCheck {
         try {
             String html = new GatorJsonView().renderResource("gator-mail/screens/mail.json", model);
             assert html.contains("Sesión cerrada");
-            assert html.contains("/gator-mail/css/gator-mail.css?v=40");
+            assert html.contains("/gator-mail/css/gator-mail.css?v=41");
             assert html.contains("/elib/js/sweetalert2.all.min.js");
-            assert html.contains("/gator-mail/js/gator-mail.js?v=19");
+            assert html.contains("/gator-mail/js/gator-mail.js?v=20");
             assert html.contains("Nueva subcarpeta");
             assert html.contains("href=\"/gator-mail/oauth/password\"");
             assert html.contains("fontawesome-free-5.13.0-web/css/all.min.css");
             assert html.contains("&lt;user@example.com&gt;");
             assert html.contains("pattern=\"[A-Za-z0-9]{8,12}\"");
             assert html.contains("maxlength=\"12\"");
-            assert html.contains("sandbox=\"\"");
+            assert html.contains("sandbox=\"allow-popups allow-popups-to-escape-sandbox\"");
             assert html.contains("srcdoc=\"&lt;script&gt;parent.alert(&#39;bad&#39;)&lt;/script&gt;\"");
             assert html.contains("Ver HTML original");
             assert html.contains("&lt;script&gt;alert(&#39;original&#39;)&lt;/script&gt;&lt;p&gt;Hola&lt;/p&gt;");
@@ -399,7 +407,7 @@ public final class AccessCodeSelfCheck {
             assert html.contains("value=\"Authentication-Results\"");
             assert html.contains(">Resultado de autenticación</option>");
             assert html.contains("Facturas");
-            assert html.contains("Último UID: 42");
+            assert html.contains("Última revisión: 2026-07-24 10:00:00");
             assert html.contains("value=\"folderCreate\"");
             assert html.contains("3 mensajes");
             assert html.contains(">Correo</span>");

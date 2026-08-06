@@ -53,9 +53,23 @@ begin
     assert (select usuario_password <> password_anterior and usuario_hash_auth = 'UPDATE_PASSWORD'
               from app_usuarios where usuario_id = 'mail-user-test'), 'Restablecimiento incorrecto';
 
+    resultado := mail_fn_admin_usuario_eliminar('{"actor":"mail-admin-test@soft-gator.com",'
+        '"user":"mail-user-test","destination":"mail-new-test"}')::json;
+    assert resultado ->> 'codigo' = '0' and resultado ->> 'token' is not null,
+        'No se autorizó la eliminación';
+    assert (mail_fn_admin_usuario_eliminar(json_build_object(
+        'actor', 'mail-admin-test@soft-gator.com', 'user', 'mail-admin-test',
+        'destination', 'mail-new-test')::text)::json ->> 'codigo') = '-1',
+        'Se permitió eliminar la cuenta propia';
+    resultado := mail_fn_admin_usuario_eliminar(json_build_object(
+        'actor', 'mail-admin-test@soft-gator.com', 'user', 'mail-user-test',
+        'destination', 'mail-new-test', 'token', resultado ->> 'token', 'confirmed', true)::text)::json;
+    assert resultado ->> 'codigo' = '0' and not exists (
+        select 1 from app_usuarios where usuario_id = 'mail-user-test'), 'No se eliminó el usuario autorizado';
+
     resultado := mail_fn_admin_contacto_guardar('{"actor":"mail-admin-test@soft-gator.com",'
         '"name":"Contacto de prueba","email":"contacto-admin-test@example.com",'
-        '"owner":"mail-user-test","group":""}')::json;
+        '"owner":"mail-new-test","group":""}')::json;
     assert resultado ->> 'codigo' = '0', 'No se creó el contacto';
     contacto := resultado ->> 'id';
     assert position('contacto-admin-test@example.com' in

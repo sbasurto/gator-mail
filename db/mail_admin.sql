@@ -11,6 +11,19 @@ create table if not exists mail_usuario_telefonos (
     global_safe_list boolean not null default false
 );
 
+create table if not exists mail_usuario_eliminaciones (
+    eliminacion_id uuid primary key default uuid_generate_v4(),
+    usuario_id text not null,
+    destino_id text not null,
+    actor text not null,
+    estado text not null default 'PENDING' check (estado in ('PENDING', 'COMPLETED')),
+    fecha timestamp without time zone not null default now(),
+    fecha_completada timestamp without time zone
+);
+
+create unique index if not exists mail_usuario_eliminaciones_pendiente
+    on mail_usuario_eliminaciones(usuario_id) where estado = 'PENDING';
+
 insert into mail_administradores(usuario_id)
 select distinct u.usuario_id
   from app_usuarios u
@@ -181,6 +194,58 @@ exception when others then
 end;
 $$;
 
+create or replace function mail_fn_admin_usuario_eliminar(v_json text)
+returns text language plpgsql security definer set search_path = public as $$
+declare
+    v jsonb := v_json::jsonb;
+    actor_email text := lower(trim(v ->> 'actor'));
+    destino text := trim(v ->> 'destination');
+    token uuid;
+    usuario text := trim(v ->> 'user');
+begin
+    if not mail_fn_es_admin(actor_email) then raise exception 'Acceso administrativo denegado'; end if;
+    if usuario is null or usuario = '' or destino is null or destino = '' or usuario = destino then
+        raise exception 'Selecciona una cuenta genérica distinta';
+    end if;
+    if exists (select 1 from app_usuario_email where usuario_id = usuario
+                and lower(usuario_email_email) = actor_email and coalesce(usuario_email_estado, 0) >= 0) then
+        raise exception 'No puedes eliminar tu propia cuenta';
+    end if;
+    if not exists (select 1 from app_usuarios where usuario_id = usuario) then
+        raise exception 'Usuario inexistente';
+    end if;
+    if not exists (select 1 from app_usuarios u join app_usuario_email e using (usuario_id)
+                    where u.usuario_id = destino and u.usuario_estado = '1'
+                      and coalesce(e.usuario_email_estado, 0) >= 0) then
+        raise exception 'La cuenta genérica debe estar activa y tener correo';
+    end if;
+    if coalesce((v ->> 'confirmed')::boolean, false) then
+        token := nullif(v ->> 'token', '')::uuid;
+        if not exists (select 1 from mail_usuario_eliminaciones where eliminacion_id = token
+                        and usuario_id = usuario and destino_id = destino and estado = 'PENDING') then
+            raise exception 'El traslado del buzón no está autorizado';
+        end if;
+        delete from app_usuarios where usuario_id = usuario;
+        update mail_usuario_eliminaciones set estado = 'COMPLETED', fecha_completada = now()
+         where eliminacion_id = token;
+        return json_build_object('codigo', '0')::text;
+    end if;
+    select eliminacion_id into token from mail_usuario_eliminaciones
+     where usuario_id = usuario and destino_id = destino and estado = 'PENDING';
+    if token is null and exists (select 1 from mail_usuario_eliminaciones
+                                 where usuario_id = usuario and estado = 'PENDING') then
+        raise exception 'Ya existe un traslado pendiente hacia otra cuenta';
+    end if;
+    if token is null then
+        insert into mail_usuario_eliminaciones(usuario_id, destino_id, actor)
+        values (usuario, destino, actor_email) returning eliminacion_id into token;
+    end if;
+    return json_build_object('codigo', '0', 'token', token)::text;
+exception when others then
+    return json_build_object('codigo', '-1', 'mensaje', sqlerrm)::text;
+end;
+$$;
+
 create or replace function mail_fn_admin_usuario_reset(v_json text)
 returns text language plpgsql security definer set search_path = public as $$
 declare
@@ -302,6 +367,7 @@ $$;
 
 revoke all on function mail_fn_es_admin(text), mail_fn_admin_access(text), mail_fn_admin_usuarios(text),
     mail_fn_admin_usuario_guardar(text), mail_fn_admin_usuario_safe_list(text),
-    mail_fn_admin_usuario_reset(text), mail_fn_admin_contactos(text),
+    mail_fn_admin_usuario_reset(text), mail_fn_admin_usuario_eliminar(text), mail_fn_admin_contactos(text),
     mail_fn_admin_contacto_guardar(text), mail_fn_admin_contacto_eliminar(text) from public;
 grant execute on function mail_fn_admin_usuario_reset(text) to w3apps;
+grant execute on function mail_fn_admin_usuario_eliminar(text) to w3apps;

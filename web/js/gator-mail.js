@@ -21,6 +21,91 @@
         if (result.isConfirmed) button.form.requestSubmit(button);
     }));
 
+    document.querySelectorAll(".mail-user-delete").forEach(button => button.addEventListener("click", async event => {
+        event.preventDefault();
+        if (!button.form.reportValidity()) return;
+        const result = await Swal.fire({
+            title: `¿Eliminar a ${button.dataset.user}?`,
+            text: "Primero se copiará todo su buzón a la cuenta genérica seleccionada. Después se eliminarán su acceso y cuenta Linux.",
+            icon: "warning",
+            showCancelButton: true,
+            confirmButtonColor: "#b52f3a",
+            confirmButtonText: "Trasladar y eliminar",
+            cancelButtonText: "Cancelar"
+        });
+        if (result.isConfirmed) button.form.requestSubmit(button);
+    }));
+
+    document.querySelectorAll(".mail-filter-rule-form").forEach(form => {
+        const field = form.elements.field;
+        const operator = form.elements.operator;
+        const header = form.elements.header;
+        const headerLabel = form.querySelector(".mail-filter-header");
+        const value = form.querySelector(".mail-filter-value");
+        const update = () => {
+            const size = field.value === "SIZE";
+            const customHeader = field.value === "HEADER";
+            const allowed = size ? ["GT", "LT"] : ["CONTAINS", "EQUALS", "STARTS_WITH", "ENDS_WITH"];
+            [...operator.options].forEach(option => {
+                option.hidden = option.disabled = !allowed.includes(option.value);
+            });
+            if (!allowed.includes(operator.value)) operator.value = allowed[0];
+            headerLabel.hidden = !customHeader;
+            header.required = customHeader;
+            if (!customHeader) header.value = "";
+            value.inputMode = size ? "numeric" : "text";
+            value.pattern = size ? "[0-9]{1,12}" : "";
+            value.placeholder = size ? "1048576" : "Texto, dirección o asunto";
+        };
+        field.addEventListener("change", update);
+        update();
+        form.addEventListener("submit", async event => {
+            if (event.submitter?.value !== "filterSave" || !form.elements.applyExisting?.checked
+                    || form.dataset.replayConfirmed) return;
+            event.preventDefault();
+            const result = await Swal.fire({
+                title: "¿Revisar mensajes existentes?",
+                text: "Se volverán a evaluar los mensajes que permanecen en Entrada y podrían moverse de carpeta.",
+                icon: "question",
+                showCancelButton: true,
+                confirmButtonText: "Guardar y revisar",
+                cancelButtonText: "Cancelar"
+            });
+            if (result.isConfirmed) {
+                form.dataset.replayConfirmed = "true";
+                form.requestSubmit(event.submitter);
+            }
+        });
+    });
+
+    document.querySelectorAll(".mail-filter-delete").forEach(button => button.addEventListener("click", async event => {
+        event.preventDefault();
+        const result = await Swal.fire({
+            title: "¿Eliminar este filtro?",
+            text: "Los mensajes que ya fueron movidos no cambiarán.",
+            icon: "warning",
+            showCancelButton: true,
+            confirmButtonText: "Eliminar",
+            cancelButtonText: "Cancelar",
+            confirmButtonColor: "#b52f3a"
+        });
+        if (result.isConfirmed) button.form.requestSubmit(button);
+    }));
+
+    document.querySelector(".mail-filter-apply")?.addEventListener("click", async event => {
+        event.preventDefault();
+        const button = event.currentTarget;
+        const result = await Swal.fire({
+            title: "¿Aplicar filtros a Entrada?",
+            text: "Se revisarán los mensajes existentes y podrían moverse según el orden de las reglas activas.",
+            icon: "question",
+            showCancelButton: true,
+            confirmButtonText: "Aplicar filtros",
+            cancelButtonText: "Cancelar"
+        });
+        if (result.isConfirmed) button.form.requestSubmit(button);
+    });
+
     document.querySelectorAll(".mail-event-complete-form").forEach(form => form.addEventListener("submit", async event => {
         event.preventDefault();
         const result = await Swal.fire({
@@ -170,14 +255,36 @@
             post("folderDelete", { folder: remove.dataset.folder }, remove.dataset.csrf);
     });
 
+    const emptyTrash = document.querySelector("#mail-folder-empty-trash");
+    emptyTrash?.addEventListener("click", async () => {
+        const result = await Swal.fire({
+            title: "¿Vaciar la Papelera?",
+            text: "Todos los mensajes se eliminarán definitivamente.",
+            icon: "warning",
+            showCancelButton: true,
+            confirmButtonText: "Vaciar Papelera",
+            cancelButtonText: "Cancelar",
+            confirmButtonColor: "#b52f3a"
+        });
+        if (result.isConfirmed)
+            post("folderEmptyTrash", { folder: emptyTrash.dataset.folder }, emptyTrash.dataset.csrf);
+    });
+
     const folderMenu = document.querySelector("#mail-folder-menu");
     const closeFolderMenu = () => folderMenu?.classList.remove("open");
     document.querySelectorAll(".mail-folder[data-folder]").forEach(folder => {
         folder.addEventListener("contextmenu", event => {
             if (folder.dataset.folder.toUpperCase() === "INBOX") return;
+            if (folder.classList.contains("mail-folder-system") && !folder.classList.contains("mail-folder-trash")) return;
             event.preventDefault();
             child.dataset.folder = rename.dataset.folder = remove.dataset.folder = folder.dataset.folder;
             child.dataset.csrf = rename.dataset.csrf = remove.dataset.csrf = folderMenu.dataset.csrf;
+            const trash = folder.classList.contains("mail-folder-trash");
+            const system = folder.classList.contains("mail-folder-system");
+            child.hidden = rename.hidden = remove.hidden = system;
+            emptyTrash.hidden = !trash;
+            emptyTrash.dataset.folder = folder.dataset.folder;
+            emptyTrash.dataset.csrf = folderMenu.dataset.csrf;
             folderMenu.classList.add("open");
             folderMenu.style.left = `${Math.min(event.clientX, window.innerWidth - 200)}px`;
             folderMenu.style.top = `${Math.min(event.clientY, window.innerHeight - 100)}px`;
@@ -223,6 +330,7 @@
     });
     document.querySelector(".mail-message-delete-form")?.addEventListener("submit", async event => {
         event.preventDefault();
+        const form = event.currentTarget;
         const result = await Swal.fire({
             title: "¿Eliminar este mensaje?",
             text: "En Papelera la eliminación será definitiva.",
@@ -232,7 +340,7 @@
             cancelButtonText: "Cancelar",
             confirmButtonColor: "#b52f3a"
         });
-        if (result.isConfirmed) event.currentTarget.submit();
+        if (result.isConfirmed) form.submit();
     });
 
     const contactPicker = document.querySelector("#mail-contact-picker");

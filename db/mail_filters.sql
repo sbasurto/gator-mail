@@ -149,6 +149,27 @@ exception when others then
 end;
 $$;
 
+create or replace function mail_fn_filtros_aplicar(v_email text)
+returns text language plpgsql security definer set search_path = public as $$
+declare correo text := lower(trim(v_email));
+begin
+    if correo !~ '^[^@[:space:]]+@[^@[:space:]]+[.][^@[:space:]]+$'
+            or not exists (select 1 from mail_filtro_reglas where mailbox = correo and habilitada) then
+        return json_build_object('codigo', '-1', 'mensaje', 'No hay filtros activos para aplicar')::text;
+    end if;
+    delete from mail_filtro_auditoria where mailbox = correo and estado <> 'MOVIDO';
+    insert into mail_filtro_estado(mailbox, uidvalidity, ultimo_uid, estado, ultimo_error, reintentos)
+    values (correo, null, 0, 'REPROCESAR', null, 0)
+    on conflict (mailbox) do update set ultimo_uid = 0, estado = 'REPROCESAR', ultimo_error = null,
+        reintentos = 0, fecha_heartbeat = current_timestamp, fecha_actualizacion = current_timestamp;
+    return json_build_object('codigo', '0')::text;
+exception when others then
+    return json_build_object('codigo', '-1', 'mensaje', sqlerrm)::text;
+end;
+$$;
+
 revoke all on mail_filtro_reglas, mail_filtro_estado, mail_filtro_auditoria from public;
-revoke all on function mail_fn_filtros(text), mail_fn_filtro_guardar(text), mail_fn_filtro_eliminar(text) from public;
-grant execute on function mail_fn_filtros(text), mail_fn_filtro_guardar(text), mail_fn_filtro_eliminar(text) to w3apps;
+revoke all on function mail_fn_filtros(text), mail_fn_filtro_guardar(text), mail_fn_filtro_eliminar(text),
+    mail_fn_filtros_aplicar(text) from public;
+grant execute on function mail_fn_filtros(text), mail_fn_filtro_guardar(text), mail_fn_filtro_eliminar(text),
+    mail_fn_filtros_aplicar(text) to w3apps;

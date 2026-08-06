@@ -62,6 +62,8 @@ public final class MailServlet extends HttpServlet {
     private static final String EVENT_SECRET = System.getenv("GATOR_MAIL_EVENT_SECRET");
     private static final String USER_PROVISIONER = System.getenv().getOrDefault(
             "GATOR_MAIL_USER_PROVISIONER", "/usr/local/sbin/gator-mail-user-add");
+    private static final String USER_DELETER = System.getenv().getOrDefault(
+            "GATOR_MAIL_USER_DELETER", "/usr/local/sbin/gator-mail-user-delete");
     private static final HttpClient HTTP = HttpClient.newHttpClient();
     private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")
             .withZone(ZoneId.systemDefault());
@@ -1218,6 +1220,11 @@ public final class MailServlet extends HttpServlet {
                     syncFolders(mailbox, accessToken);
                     response.sendRedirect(folderReturn(request, "INBOX"));
                 }
+                case "folderEmptyTrash" -> {
+                    imap.emptyTrash(mailbox, folder, accessToken);
+                    syncFolder(mailbox, folder, accessToken);
+                    response.sendRedirect("mail?folder=" + url(folder));
+                }
                 default -> response.sendError(HttpServletResponse.SC_BAD_REQUEST);
             }
         } catch (IllegalArgumentException error) {
@@ -1426,9 +1433,10 @@ public final class MailServlet extends HttpServlet {
         String action = request.getParameter("action");
         boolean requested = "settings".equals(action) || "optionsSave".equals(action)
                 || "userCreate".equals(action) || "userSave".equals(action) || "userToggle".equals(action)
-                || "userReset".equals(action) || "userSafeList".equals(action)
+                || "userReset".equals(action) || "userSafeList".equals(action) || "userDelete".equals(action)
                 || "contactSave".equals(action) || "contactDelete".equals(action)
-                || "filterSave".equals(action) || "filterDelete".equals(action);
+                || "filterSave".equals(action) || "filterDelete".equals(action)
+                || "filterApply".equals(action);
         if (!requested) return false;
         boolean personalAction = action.startsWith("filter") || "optionsSave".equals(action)
                 || "settings".equals(action)
@@ -1452,6 +1460,13 @@ public final class MailServlet extends HttpServlet {
                 checked(mailDbCall("mail_fn_usuario_opciones_guardar", gson.toJson(value)));
                 response.sendRedirect("mail?action=settings&section=options");
             } else if (action.startsWith("filter")) {
+                if ("filterApply".equals(action)) {
+                    checked(mailDbCall("mail_fn_filtros_aplicar", mailbox));
+                    session.setAttribute("mail.filter.notice",
+                            "Los filtros se aplicarán a los mensajes que ya están en Entrada.");
+                    response.sendRedirect("mail?action=settings&section=filters");
+                    return true;
+                }
                 value.addProperty("mailbox", mailbox);
                 value.addProperty("id", request.getParameter("id"));
                 if ("filterDelete".equals(action)) {
@@ -1475,6 +1490,11 @@ public final class MailServlet extends HttpServlet {
                     value.addProperty("value", request.getParameter("value"));
                     value.addProperty("destination", destination);
                     checked(mailDbCall("mail_fn_filtro_guardar", gson.toJson(value)));
+                    if (request.getParameter("applyExisting") != null) {
+                        checked(mailDbCall("mail_fn_filtros_aplicar", mailbox));
+                        session.setAttribute("mail.filter.notice",
+                                "Filtro guardado y programado para revisar los mensajes existentes.");
+                    }
                 }
                 response.sendRedirect("mail?action=settings&section=filters");
             } else if (action.startsWith("user")) {
@@ -1489,6 +1509,16 @@ public final class MailServlet extends HttpServlet {
                     checked(mailDbCall("mail_fn_admin_usuario_crear", gson.toJson(value)));
                     session.setAttribute("mail.password.reset", password);
                     session.setAttribute("mail.user.admin.notice", "Usuario y cuenta Linux creados correctamente");
+                } else if ("userDelete".equals(action)) {
+                    value.addProperty("destination", request.getParameter("destination"));
+                    JsonObject pending = checked(mailDbCall("mail_fn_admin_usuario_eliminar", gson.toJson(value)));
+                    retireLinuxUser(request.getParameter("user"), request.getParameter("destination"),
+                            pending.get("token").getAsString());
+                    value.addProperty("token", pending.get("token").getAsString());
+                    value.addProperty("confirmed", true);
+                    checked(mailDbCall("mail_fn_admin_usuario_eliminar", gson.toJson(value)));
+                    session.setAttribute("mail.user.admin.notice",
+                            "Usuario eliminado; su correo quedó en Revisión/" + request.getParameter("user"));
                 } else if ("userReset".equals(action)) {
                     String password = temporaryPassword();
                     value.addProperty("password", password);
@@ -1598,19 +1628,37 @@ public final class MailServlet extends HttpServlet {
             model.put("configurationFolders", folders);
             model.put("configurationFoldersEmpty", folders.isEmpty());
         } else if ("filters".equals(section)) {
-            filtersModel(model, mailbox, mailFolders);
+            filtersModel(model, session, mailbox, mailFolders);
         } else if ("users".equals(section)) {
             JsonObject result = checked(mailDbCall("mail_fn_admin_usuarios", String.valueOf(model.get("mailbox"))));
             List<Map<String, Object>> users = new ArrayList<>();
-            for (JsonElement element : result.getAsJsonArray("usuarios")) {
-                JsonObject user = element.getAsJsonObject();
+            List<JsonObject> directory = new ArrayList<>();
+            result.getAsJsonArray("usuarios").forEach(element -> directory.add(element.getAsJsonObject()));
+            for (JsonObject user : directory) {
                 boolean enabled = user.get("enabled").getAsBoolean();
                 boolean safeListed = user.get("safeListed").getAsBoolean();
-                users.add(Map.of("id", user.get("id").getAsString(), "name", user.get("name").getAsString(),
-                        "email", user.get("email").getAsString(), "enabled", enabled,
-                        "phone", user.get("phone").getAsString(), "safeListed", safeListed,
-                        "sessionTimeoutMinutes", user.get("sessionTimeoutMinutes").getAsInt(),
-                        "status", enabled ? "Activo" : "Inactivo", "toggleLabel", enabled ? "Desactivar" : "Activar"));
+                String id = user.get("id").getAsString();
+                List<Map<String, String>> destinations = directory.stream()
+                        .filter(candidate -> candidate.get("enabled").getAsBoolean()
+                                && !candidate.get("email").getAsString().isBlank()
+                                && !id.equals(candidate.get("id").getAsString()))
+                        .map(candidate -> Map.of("value", candidate.get("id").getAsString(),
+                                "label", candidate.get("name").getAsString() + " — "
+                                        + candidate.get("email").getAsString()))
+                        .toList();
+                Map<String, Object> item = new LinkedHashMap<>();
+                item.put("id", id);
+                item.put("name", user.get("name").getAsString());
+                item.put("email", user.get("email").getAsString());
+                item.put("enabled", enabled);
+                item.put("phone", user.get("phone").getAsString());
+                item.put("safeListed", safeListed);
+                item.put("sessionTimeoutMinutes", user.get("sessionTimeoutMinutes").getAsInt());
+                item.put("status", enabled ? "Activo" : "Inactivo");
+                item.put("toggleLabel", enabled ? "Desactivar" : "Activar");
+                item.put("deleteTargets", destinations);
+                item.put("deleteAvailable", !destinations.isEmpty());
+                users.add(item);
             }
             model.put("configurationUsers", users);
             model.put("configurationUserCount", users.size());
@@ -1646,6 +1694,18 @@ public final class MailServlet extends HttpServlet {
             throw new IllegalStateException(output.isBlank() ? "No fue posible crear la cuenta Linux" : output);
     }
 
+    private static void retireLinuxUser(String user, String destination, String token) throws Exception {
+        Process process = new ProcessBuilder("/usr/bin/sudo", "-n", USER_DELETER, user, destination, token)
+                .redirectErrorStream(true).start();
+        if (!process.waitFor(30, TimeUnit.MINUTES)) {
+            process.destroyForcibly();
+            throw new IllegalStateException("El traslado del buzón excedió el tiempo permitido");
+        }
+        String output = new String(process.getInputStream().readNBytes(4096), StandardCharsets.UTF_8).strip();
+        if (process.exitValue() != 0)
+            throw new IllegalStateException(output.isBlank() ? "No fue posible trasladar el buzón" : output);
+    }
+
     static String linuxHome(String user, String email) {
         String account = user == null ? "" : user.strip().toLowerCase(Locale.ROOT);
         String address = email == null ? "" : email.strip().toLowerCase(Locale.ROOT);
@@ -1656,7 +1716,7 @@ public final class MailServlet extends HttpServlet {
         return "/home/" + domain + "/" + account;
     }
 
-    private void filtersModel(Map<String, Object> model, String mailbox,
+    private void filtersModel(Map<String, Object> model, HttpSession session, String mailbox,
             List<ImapMailbox.FolderInfo> mailFolders) {
         List<Map<String, Object>> destinations = mailFolders.stream()
                 .filter(folder -> !"INBOX".equalsIgnoreCase(folder.name()))
@@ -1667,6 +1727,10 @@ public final class MailServlet extends HttpServlet {
         model.put("filterFields", filterFields(""));
         model.put("filterOperators", filterOperators(""));
         model.put("filterHeaders", filterHeaders(""));
+        Object filterNotice = session.getAttribute("mail.filter.notice");
+        model.put("filterNotice", filterNotice != null);
+        model.put("filterNoticeMessage", filterNotice == null ? "" : filterNotice);
+        session.removeAttribute("mail.filter.notice");
         JsonObject result = checked(mailDbCall("mail_fn_filtros", mailbox));
         List<Map<String, Object>> rules = new ArrayList<>();
         for (JsonElement element : result.getAsJsonArray("reglas")) {
@@ -1685,8 +1749,9 @@ public final class MailServlet extends HttpServlet {
         }
         model.put("filterRules", rules);
         model.put("filterRulesEmpty", rules.isEmpty());
+        model.put("filterRulesAvailable", !rules.isEmpty());
         JsonObject state = result.getAsJsonObject("estado");
-        model.put("filterStatus", state.get("status").getAsString());
+        model.put("filterStatus", filterStatus(state.get("status").getAsString()));
         model.put("filterHeartbeat", state.get("heartbeat").getAsString());
         model.put("filterLastUid", state.get("lastUid").getAsLong());
         model.put("filterRetries", state.get("retries").getAsInt());
@@ -1702,6 +1767,16 @@ public final class MailServlet extends HttpServlet {
         }
         model.put("filterAudit", audit);
         model.put("filterAuditEmpty", audit.isEmpty());
+    }
+
+    private static String filterStatus(String status) {
+        return switch (status) {
+            case "ACTIVO", "IDLE" -> "Filtros activos";
+            case "DETENIDO" -> "Sin reglas activas";
+            case "REPROCESAR" -> "Revisión de Entrada pendiente";
+            case "ERROR" -> "Requiere atención";
+            default -> "Aún no se han procesado mensajes";
+        };
     }
 
     private static List<Map<String, Object>> filterFields(String selected) {
@@ -1822,6 +1897,8 @@ public final class MailServlet extends HttpServlet {
         Map<String, Object> model = new HashMap<>();
         model.put("className", (folder.name().equals(selected) ? "active " : "")
                 + (child ? "mail-folder-child " : "")
+                + (systemFolder(folder) ? "mail-folder-system " : "")
+                + ("Papelera".equals(folder.label()) ? "mail-folder-trash " : "")
                 + "mail-folder-depth-" + Math.min(8, folder.depth() + 1));
         model.put("href", mailboxHref(folder.name(), "", 1, size));
         model.put("label", folder.label());

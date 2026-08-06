@@ -1,0 +1,56 @@
+#!/bin/bash
+set -euo pipefail
+
+source_user=${1:-}
+target_user=${2:-}
+token=${3:-}
+[[ $EUID -eq 0 ]] || { echo "El eliminador requiere root" >&2; exit 1; }
+[[ $source_user =~ ^[a-z_][a-z0-9_.-]{0,31}$ ]] || { echo "Usuario origen inválido" >&2; exit 1; }
+[[ $target_user =~ ^[a-z_][a-z0-9_.-]{0,31}$ ]] || { echo "Cuenta de revisión inválida" >&2; exit 1; }
+[[ $source_user != "$target_user" ]] || { echo "La cuenta de revisión debe ser distinta" >&2; exit 1; }
+[[ $token =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$ ]] || {
+    echo "Autorización inválida" >&2; exit 1;
+}
+
+archive=/var/lib/gator-mail/deleted/$token-$source_user
+imported=$archive/.gator-mail-imported
+complete=$archive/.gator-mail-complete
+folder=Revisión/$source_user
+[[ ! -f $complete ]] || exit 0
+/usr/bin/doveadm user "$target_user" >/dev/null 2>&1 || { echo "La cuenta de revisión no tiene buzón Dovecot" >&2; exit 1; }
+
+source_home=
+restore() {
+    if [[ ! -f $imported && -n $source_home ]] && getent passwd "$source_user" >/dev/null; then
+        [[ -d $archive/home && ! -e $source_home ]] && /usr/bin/mv "$archive/home" "$source_home"
+        /usr/sbin/usermod --unlock "$source_user"
+    fi
+}
+trap restore ERR
+
+if [[ ! -d $archive/home/.maildir ]]; then
+    entry=$(getent passwd "$source_user") || { echo "El usuario Linux origen no existe" >&2; exit 1; }
+    source_home=$(cut -d: -f6 <<<"$entry")
+    [[ $source_home =~ ^/home/[a-z0-9._-]+/[a-z0-9._-]+$ && -d $source_home/.maildir ]] || {
+        echo "El Maildir origen no es válido" >&2; exit 1;
+    }
+    /usr/sbin/usermod --lock "$source_user"
+    /usr/bin/doveadm kick "$source_user" >/dev/null 2>&1 || true
+    /usr/bin/install -d -o root -g root -m 0711 "$archive"
+    /usr/bin/mv "$source_home" "$archive/home"
+elif getent passwd "$source_user" >/dev/null; then
+    source_home=$(getent passwd "$source_user" | cut -d: -f6)
+elif [[ ! -f $imported ]]; then
+    echo "La importación quedó incompleta y el usuario Linux ya no existe" >&2
+    exit 1
+fi
+
+if [[ ! -f $imported ]]; then
+    /usr/bin/doveadm mailbox delete -u "$target_user" "$folder" >/dev/null 2>&1 || true
+    /usr/bin/doveadm import -s -u "$target_user" -U "$source_user" \
+        "maildir:$archive/home/.maildir" "$folder" all
+    /usr/bin/touch "$imported"
+fi
+getent passwd "$source_user" >/dev/null && /usr/sbin/userdel "$source_user"
+/usr/bin/touch "$complete"
+trap - ERR

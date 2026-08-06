@@ -61,8 +61,8 @@ public final class MailFilterService {
                 while (running && mailboxEnabled(config, mailbox)) {
                     process(config, mailbox, inbox);
                     reconnects = 0;
-                    heartbeat(config, mailbox, "IDLE", null, 0);
-                    inbox.idle();
+                    heartbeat(config, mailbox, "ACTIVO", null, 0);
+                    sleep(config.refreshSeconds());
                 }
             } catch (InterruptedException error) {
                 Thread.currentThread().interrupt();
@@ -94,13 +94,13 @@ public final class MailFilterService {
     private static void initialize(Config config, String mailbox, long uidValidity, long uidNext) throws Exception {
         try (Connection db = connection(config);
              PreparedStatement select = db.prepareStatement(
-                     "select uidvalidity from mail_filtro_estado where mailbox=?")) {
+                     "select uidvalidity,estado from mail_filtro_estado where mailbox=?")) {
             select.setString(1, mailbox);
             try (ResultSet rows = select.executeQuery()) {
                 if (rows.next() && rows.getLong(1) == uidValidity) return;
             }
         }
-        long baseline = Math.max(0, uidNext - 1);
+        long baseline = replayRequested(config, mailbox) ? 0 : Math.max(0, uidNext - 1);
         try (Connection db = connection(config);
              PreparedStatement statement = db.prepareStatement("""
                      insert into mail_filtro_estado(mailbox,uidvalidity,ultimo_uid,estado,ultimo_error,reintentos)
@@ -166,27 +166,44 @@ public final class MailFilterService {
                 long expected = Long.parseLong(rule.value());
                 return "GT".equals(rule.operator()) ? size > expected : size < expected;
             }
+            if ("FROM".equals(rule.field()))
+                return addressesMatch(message.getFrom(), rule.operator(), rule.value());
+            if ("TO".equals(rule.field()))
+                return addressesMatch(message.getRecipients(Message.RecipientType.TO), rule.operator(), rule.value());
+            if ("CC".equals(rule.field()))
+                return addressesMatch(message.getRecipients(Message.RecipientType.CC), rule.operator(), rule.value());
             String actual = switch (rule.field()) {
-                case "FROM" -> addresses(message.getFrom());
-                case "TO" -> addresses(message.getRecipients(Message.RecipientType.TO));
-                case "CC" -> addresses(message.getRecipients(Message.RecipientType.CC));
                 case "SUBJECT" -> value(message.getSubject());
                 case "HEADER" -> String.join(" ", message.getHeader(rule.header()) == null
                         ? new String[0] : message.getHeader(rule.header()));
                 default -> "";
             };
-            String left = actual.toLowerCase(Locale.ROOT);
-            String right = rule.value().toLowerCase(Locale.ROOT);
-            return switch (rule.operator()) {
+            return textMatches(actual, rule.operator(), rule.value());
+        } catch (Exception error) {
+            throw new IllegalStateException("No fue posible evaluar la regla", error);
+        }
+    }
+
+    private static boolean addressesMatch(Address[] addresses, String operator, String expected) {
+        if (addresses == null) return false;
+        for (Address address : addresses) {
+            if (textMatches(address.toString(), operator, expected)) return true;
+            if (address instanceof jakarta.mail.internet.InternetAddress internet
+                    && textMatches(internet.getAddress(), operator, expected)) return true;
+        }
+        return false;
+    }
+
+    private static boolean textMatches(String actual, String operator, String expected) {
+        String left = value(actual).toLowerCase(Locale.ROOT);
+        String right = value(expected).toLowerCase(Locale.ROOT);
+        return switch (operator) {
                 case "CONTAINS" -> left.contains(right);
                 case "EQUALS" -> left.equals(right);
                 case "STARTS_WITH" -> left.startsWith(right);
                 case "ENDS_WITH" -> left.endsWith(right);
                 default -> false;
-            };
-        } catch (Exception error) {
-            throw new IllegalStateException("No fue posible evaluar la regla", error);
-        }
+        };
     }
 
     private static String addresses(Address[] addresses) {
@@ -205,6 +222,17 @@ public final class MailFilterService {
             while (rows.next()) result.add(rows.getString(1));
         }
         return result;
+    }
+
+    private static boolean replayRequested(Config config, String mailbox) throws Exception {
+        try (Connection db = connection(config);
+             PreparedStatement statement = db.prepareStatement(
+                     "select coalesce(estado='REPROCESAR',false) from mail_filtro_estado where mailbox=?")) {
+            statement.setString(1, mailbox);
+            try (ResultSet row = statement.executeQuery()) {
+                return row.next() && row.getBoolean(1);
+            }
+        }
     }
 
     private static void disableInactive(Config config) throws Exception {

@@ -45,9 +45,17 @@ import jakarta.mail.search.SubjectTerm;
 final class ImapMailbox {
     private static final Logger LOG = Logger.getLogger(ImapMailbox.class.getName());
     private static final PolicyFactory HTML = Sanitizers.FORMATTING.and(Sanitizers.BLOCKS)
-            .and(Sanitizers.TABLES).and(Sanitizers.LINKS).and(Sanitizers.STYLES).and(new HtmlPolicyBuilder()
-                    .allowElements("img").allowAttributes("src", "alt", "title").onElements("img")
-                    .allowUrlProtocols("cid").toFactory());
+            .and(Sanitizers.TABLES).and(Sanitizers.STYLES).and(new HtmlPolicyBuilder()
+                    .allowElements((name, attributes) -> {
+                        attributes.add("target");
+                        attributes.add("_blank");
+                        return name;
+                    }, "a")
+                    .allowAttributes("href").onElements("a")
+                    .allowAttributes("target").matching("_blank"::equals).onElements("a")
+                    .allowStandardUrlProtocols().requireRelsOnLinks("noopener", "noreferrer")
+                    .allowElements("img").allowAttributes("src", "alt", "title", "width", "height")
+                    .onElements("img").allowUrlProtocols("cid").toFactory());
     private static final int MAX_FILE_BYTES = 25 * 1024 * 1024;
     record FolderInfo(String name, String label, String parent, String root, int depth, int unread, int total) {
     }
@@ -348,6 +356,22 @@ final class ImapMailbox {
                 if (source.isOpen()) source.close(expunge);
             }
             return expunge ? folderName : trash.getFullName();
+        }
+    }
+
+    int emptyTrash(String mailbox, String folderName, String accessToken) throws Exception {
+        try (Store store = connect(mailbox, accessToken)) {
+            Folder trash = trash(store);
+            if (folderName == null || !trash.getFullName().equalsIgnoreCase(folderName))
+                throw new IllegalArgumentException("Sólo se puede vaciar la Papelera");
+            trash.open(Folder.READ_WRITE);
+            try {
+                Message[] messages = trash.getMessages();
+                if (messages.length > 0) trash.setFlags(messages, new Flags(Flags.Flag.DELETED), true);
+                return messages.length;
+            } finally {
+                if (trash.isOpen()) trash.close(true);
+            }
         }
     }
 

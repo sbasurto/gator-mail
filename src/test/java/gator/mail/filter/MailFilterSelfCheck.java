@@ -20,6 +20,7 @@ public final class MailFilterSelfCheck {
         message.saveChanges();
 
         assert MailFilterService.matches(rule("FROM", "ENDS_WITH", "example.com", null), message);
+        assert MailFilterService.matches(rule("FROM", "EQUALS", "facturas@example.com", null), message);
         assert MailFilterService.matches(rule("SUBJECT", "CONTAINS", "factura", null), message);
         assert MailFilterService.matches(rule("HEADER", "EQUALS", "yes", "X-Spam-Flag"), message);
         assert !MailFilterService.matches(rule("TO", "CONTAINS", "otro@example.com", null), message);
