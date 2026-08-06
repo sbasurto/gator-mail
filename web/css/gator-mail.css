@@ -83,6 +83,7 @@ body { min-height: 100vh; margin: 0; color: var(--gator-ink); background: var(--
 .mail-filter-form.mail-admin-new { margin: 1rem; background: #f7fbfd; }
 .mail-filter-enabled { align-self: center; grid-template-columns: auto 1fr; align-items: center; }
 .mail-filter-existing { grid-column: 1 / -1; padding: .55rem .7rem; border-radius: 7px; background: #f1f7fa; }
+.mail-filter-preset { grid-column: 1 / -1; display: flex; align-items: center; gap: .5rem; margin: 0; padding: .7rem; border-radius: 7px; background: #eaf6fb; color: var(--gator-blue-dark); }
 .mail-filter-header[hidden] { display: none; }
 .mail-filter-audit-title { margin: 1.2rem 1rem .5rem; font-size: 1rem; }
 .mail-filter-audit { margin: 0; font-size: .76rem; }

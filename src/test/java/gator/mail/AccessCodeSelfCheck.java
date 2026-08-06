@@ -113,6 +113,8 @@ public final class AccessCodeSelfCheck {
         assert "&lt;b&gt;&amp;<br>Hola".equals(MailServlet.htmlText("<b>&\nHola"));
         assert "otro@example.com".equals(MailServlet.replyAllCc("yo@example.com", "autor@example.com",
                 "yo@example.com, otro@example.com", "autor@example.com"));
+        assert "facturas@example.com".equals(MailServlet.filterSender("Proveedor <FACTURAS@example.com>"));
+        assert MailServlet.filterSender("dirección inválida").isEmpty();
         assert "Junk".equals(ImapMailbox.promotedName("INBOX.Junk", '.'));
         assert "inline-1@gator-mail".equals(ImapMailbox.inlineCid(0));
         assert "Spam".equals(ImapMailbox.promotedName("INBOX.Spam", '.'));
@@ -322,6 +324,8 @@ public final class AccessCodeSelfCheck {
         model.put("replyAllHref", "mail?action=replyAll&uid=1");
         model.put("forwardHref", "mail?action=forward&uid=1");
         model.put("printHref", "mail?action=print&folder=INBOX&uid=1");
+        model.put("filterFromAvailable", true);
+        model.put("filterHref", "mail?action=settings&section=filters&sender=facturas%40example.com");
         model.put("composeAction", true);
         model.put("query", "urgente");
         model.put("emptyText", "No se encontraron mensajes.");
@@ -336,7 +340,7 @@ public final class AccessCodeSelfCheck {
         try {
             String html = new GatorJsonView().renderResource("gator-mail/screens/mail.json", model);
             assert html.contains("Sesión cerrada");
-            assert html.contains("/gator-mail/css/gator-mail.css?v=41");
+            assert html.contains("/gator-mail/css/gator-mail.css?v=42");
             assert html.contains("/elib/js/sweetalert2.all.min.js");
             assert html.contains("/gator-mail/js/gator-mail.js?v=20");
             assert html.contains("Nueva subcarpeta");
@@ -348,6 +352,7 @@ public final class AccessCodeSelfCheck {
             assert html.contains("sandbox=\"allow-popups allow-popups-to-escape-sandbox\"");
             assert html.contains("srcdoc=\"&lt;script&gt;parent.alert(&#39;bad&#39;)&lt;/script&gt;\"");
             assert html.contains("Ver HTML original");
+            assert html.contains(">Crear filtro</span>");
             assert html.contains("&lt;script&gt;alert(&#39;original&#39;)&lt;/script&gt;&lt;p&gt;Hola&lt;/p&gt;");
             assert !html.contains("<script>alert('original')</script>");
             assert html.contains("mail-compose-body");

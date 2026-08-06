@@ -196,6 +196,8 @@ public final class MailServlet extends HttpServlet {
         model.put("composeSourceFolder", "");
         model.put("composeSourceUid", "");
         model.put("messageUid", "");
+        model.put("filterFromAvailable", false);
+        model.put("filterHref", "");
         model.put("composeAction", false);
         model.put("folderActionsDisabled", true);
         model.put("selectedFolder", "");
@@ -809,6 +811,9 @@ public final class MailServlet extends HttpServlet {
             model.put("replyAllHref", "mail?action=replyAll" + source);
             model.put("forwardHref", "mail?action=forward" + source);
             model.put("printHref", "mail?action=print" + source);
+            String sender = filterSender(mail.from());
+            model.put("filterFromAvailable", !sender.isBlank());
+            model.put("filterHref", "mail?action=settings&section=filters&sender=" + url(sender));
             return;
         }
 
@@ -1628,7 +1633,7 @@ public final class MailServlet extends HttpServlet {
             model.put("configurationFolders", folders);
             model.put("configurationFoldersEmpty", folders.isEmpty());
         } else if ("filters".equals(section)) {
-            filtersModel(model, session, mailbox, mailFolders);
+            filtersModel(model, request, session, mailbox, mailFolders);
         } else if ("users".equals(section)) {
             JsonObject result = checked(mailDbCall("mail_fn_admin_usuarios", String.valueOf(model.get("mailbox"))));
             List<Map<String, Object>> users = new ArrayList<>();
@@ -1716,16 +1721,21 @@ public final class MailServlet extends HttpServlet {
         return "/home/" + domain + "/" + account;
     }
 
-    private void filtersModel(Map<String, Object> model, HttpSession session, String mailbox,
+    private void filtersModel(Map<String, Object> model, HttpServletRequest request, HttpSession session,
+            String mailbox,
             List<ImapMailbox.FolderInfo> mailFolders) {
+        String sender = filterSender(request.getParameter("sender"));
         List<Map<String, Object>> destinations = mailFolders.stream()
                 .filter(folder -> !"INBOX".equalsIgnoreCase(folder.name()))
                 .map(folder -> Map.<String, Object>of("value", folder.name(), "label", folder.label()))
                 .toList();
         model.put("filterDestinations", destinations);
         model.put("filterDestinationAvailable", !destinations.isEmpty());
-        model.put("filterFields", filterFields(""));
-        model.put("filterOperators", filterOperators(""));
+        model.put("filterNewName", sender.isBlank() ? "" : limited("Correo de " + sender, 100));
+        model.put("filterNewValue", sender);
+        model.put("filterPreset", !sender.isBlank());
+        model.put("filterFields", filterFields(sender.isBlank() ? "" : "FROM"));
+        model.put("filterOperators", filterOperators(sender.isBlank() ? "" : "EQUALS"));
         model.put("filterHeaders", filterHeaders(""));
         Object filterNotice = session.getAttribute("mail.filter.notice");
         model.put("filterNotice", filterNotice != null);
@@ -1777,6 +1787,21 @@ public final class MailServlet extends HttpServlet {
             case "ERROR" -> "Requiere atención";
             default -> "Aún no se han procesado mensajes";
         };
+    }
+
+    static String filterSender(String value) {
+        try {
+            InternetAddress[] addresses = InternetAddress.parse(value == null ? "" : value, false);
+            if (addresses.length == 0 || addresses[0].getAddress() == null) return "";
+            String address = addresses[0].getAddress().strip().toLowerCase(Locale.ROOT);
+            return address.matches("[^@\\s]+@[^@\\s]+\\.[^@\\s]+") && address.length() <= 320 ? address : "";
+        } catch (Exception ignored) {
+            return "";
+        }
+    }
+
+    private static String limited(String value, int length) {
+        return value.length() <= length ? value : value.substring(0, length);
     }
 
     private static List<Map<String, Object>> filterFields(String selected) {

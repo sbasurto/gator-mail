@@ -14,7 +14,7 @@
           { "tag": "link", "attrs": { "rel": "stylesheet", "href": "/elib/css2/fontawesome-free-5.13.0-web/css/all.min.css" } },
           { "tag": "link", "attrs": { "rel": "stylesheet", "href": "/elib/css/colors.css" } },
           { "tag": "link", "attrs": { "rel": "stylesheet", "href": "/elib/css2/sweetalert2.min.css?v=11.23.0" } },
-          { "tag": "link", "attrs": { "rel": "stylesheet", "href": "${contextPath}/css/gator-mail.css?v=41" } },
+          { "tag": "link", "attrs": { "rel": "stylesheet", "href": "${contextPath}/css/gator-mail.css?v=42" } },
           { "tag": "script", "attrs": { "src": "/elib/js/sweetalert2.all.min.js", "defer": "true" } },
           { "tag": "script", "attrs": { "src": "${contextPath}/js/gator-mail.js?v=20", "defer": "true" } }
         ]
@@ -352,18 +352,19 @@
                       { "tag": "form", "if": "filterDestinationAvailable", "attrs": { "class": "mail-filter-form mail-filter-rule-form mail-admin-new", "method": "post", "action": "${contextPath}/mail" }, "children": [
                         { "tag": "input", "attrs": { "type": "hidden", "name": "csrf", "value": "${csrf}" } },
                         { "tag": "input", "attrs": { "type": "hidden", "name": "id", "value": "" } },
-                        { "tag": "label", "children": [{ "tag": "small", "text": "Nombre de la regla" }, { "tag": "input", "attrs": { "class": "form-control", "name": "name", "maxlength": "100", "required": "true", "placeholder": "Facturas de proveedores" } }] },
+                        { "tag": "p", "if": "filterPreset", "attrs": { "class": "mail-filter-preset" }, "children": [{ "tag": "span", "attrs": { "class": "fas fa-envelope", "aria-hidden": "true" } }, { "tag": "span", "text": "Filtro preparado desde el mensaje. Sólo elige la carpeta destino y guarda." }] },
+                        { "tag": "label", "children": [{ "tag": "small", "text": "Nombre de la regla" }, { "tag": "input", "attrs": { "class": "form-control", "name": "name", "value": "${filterNewName}", "maxlength": "100", "required": "true", "placeholder": "Facturas de proveedores" } }] },
                         { "tag": "label", "children": [{ "tag": "small", "text": "Orden" }, { "tag": "input", "attrs": { "class": "form-control", "name": "priority", "type": "number", "value": "100", "min": "1", "max": "9999", "required": "true" } }] },
                         { "tag": "label", "children": [{ "tag": "small", "text": "Buscar en" }, { "tag": "select", "attrs": { "class": "form-select", "name": "field" }, "children": [
-                          { "tag": "option", "each": "filterFields", "as": "choice", "attrs": { "value": "${choice.value}" }, "text": "${choice.label}" }
+                          { "tag": "option", "each": "filterFields", "as": "choice", "attrs": { "value": "${choice.value}", "selected": "${choice.selected}" }, "text": "${choice.label}" }
                         ] }] },
                         { "tag": "label", "children": [{ "tag": "small", "text": "Condición" }, { "tag": "select", "attrs": { "class": "form-select", "name": "operator" }, "children": [
-                          { "tag": "option", "each": "filterOperators", "as": "choice", "attrs": { "value": "${choice.value}" }, "text": "${choice.label}" }
+                          { "tag": "option", "each": "filterOperators", "as": "choice", "attrs": { "value": "${choice.value}", "selected": "${choice.selected}" }, "text": "${choice.label}" }
                         ] }] },
                         { "tag": "label", "attrs": { "class": "mail-filter-header" }, "children": [{ "tag": "small", "text": "Encabezado" }, { "tag": "select", "attrs": { "class": "form-select", "name": "header" }, "children": [
                           { "tag": "option", "each": "filterHeaders", "as": "choice", "attrs": { "value": "${choice.value}", "selected": "${choice.selected}" }, "text": "${choice.label}" }
                         ] }] },
-                        { "tag": "label", "children": [{ "tag": "small", "text": "Valor a comparar" }, { "tag": "input", "attrs": { "class": "form-control mail-filter-value", "name": "value", "maxlength": "500", "required": "true", "placeholder": "facturas@proveedor.com" } }] },
+                        { "tag": "label", "children": [{ "tag": "small", "text": "Valor a comparar" }, { "tag": "input", "attrs": { "class": "form-control mail-filter-value", "name": "value", "value": "${filterNewValue}", "maxlength": "500", "required": "true", "placeholder": "facturas@proveedor.com" } }] },
                         { "tag": "label", "children": [{ "tag": "small", "text": "Mover a" }, { "tag": "select", "attrs": { "class": "form-select", "name": "destination" }, "children": [
                           { "tag": "option", "each": "filterDestinations", "as": "folder", "attrs": { "value": "${folder.value}" }, "text": "${folder.label}" }
                         ] }] },
@@ -1009,6 +1010,9 @@
                             ] },
                             { "tag": "a", "attrs": { "class": "btn btn-sm btn-outline-secondary", "id": "mail-print-message", "href": "${printHref}", "target": "_blank", "rel": "noopener noreferrer" }, "children": [
                               { "tag": "span", "attrs": { "class": "fas fa-print", "aria-hidden": "true" } }, { "tag": "span", "text": "Imprimir" }
+                            ] },
+                            { "tag": "a", "if": "filterFromAvailable", "attrs": { "class": "btn btn-sm btn-outline-secondary", "href": "${filterHref}" }, "children": [
+                              { "tag": "span", "attrs": { "class": "fas fa-filter", "aria-hidden": "true" } }, { "tag": "span", "text": "Crear filtro" }
                             ] },
                             { "tag": "form", "attrs": { "class": "mail-message-delete-form", "method": "post", "action": "${contextPath}/mail" }, "children": [
                               { "tag": "input", "attrs": { "type": "hidden", "name": "action", "value": "messageDelete" } },
