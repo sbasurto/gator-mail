@@ -84,6 +84,12 @@ public final class AccessCodeSelfCheck {
                 "%PDF".getBytes(), true);
         assert !arbitraryFile.inline();
         assert "application/octet-stream".equals(arbitraryFile.type());
+        for (String archive : List.of("respaldo.zip", "respaldo.tar", "respaldo.tar.gz", "respaldo.7z", "respaldo.rar")) {
+            ImapMailbox.Upload compressed = MailServlet.upload(archive, "application/octet-stream", new byte[]{1}, true);
+            assert archive.equals(compressed.name());
+            assert !compressed.inline();
+            assert "application/octet-stream".equals(compressed.type());
+        }
         String logout = OAuthServlet.endSession("id token");
         assert logout.contains("id_token_hint=id+token");
         assert !logout.contains("post_logout_redirect_uri");
@@ -370,6 +376,8 @@ public final class AccessCodeSelfCheck {
             assert html.contains("class=\"mail-compose-form\" method=\"post\" action=\"/gator-mail/mail\"");
             assert html.contains("enctype=\"multipart/form-data\"");
             assert html.contains("name=\"attachments\"");
+            assert html.contains("Adjuntar archivos (ZIP, TAR y otros)");
+            assert html.contains("Insertar imágenes");
             assert html.contains("name=\"images\"");
             assert html.contains("name=\"sourceFolder\" value=\"INBOX\"");
             assert html.contains("name=\"sourceUid\" value=\"1\"");

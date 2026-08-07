@@ -878,11 +878,11 @@
                         ] },
                         { "tag": "div", "attrs": { "class": "mail-file-fields" }, "children": [
                           { "tag": "label", "attrs": { "class": "mail-file-field", "for": "mail-compose-attachments" }, "children": [
-                            { "tag": "span", "attrs": { "class": "fas fa-paperclip", "aria-hidden": "true" } }, { "tag": "span", "text": "Adjuntar archivos" },
+                            { "tag": "span", "attrs": { "class": "fas fa-paperclip", "aria-hidden": "true" } }, { "tag": "span", "text": "Adjuntar archivos (ZIP, TAR y otros)" },
                             { "tag": "input", "attrs": { "id": "mail-compose-attachments", "name": "attachments", "type": "file", "multiple": "true" } }
                           ] },
                           { "tag": "label", "attrs": { "class": "mail-file-field", "for": "mail-compose-images" }, "children": [
-                            { "tag": "span", "attrs": { "class": "fas fa-image", "aria-hidden": "true" } }, { "tag": "span", "text": "Incluir imágenes o archivos" },
+                            { "tag": "span", "attrs": { "class": "fas fa-image", "aria-hidden": "true" } }, { "tag": "span", "text": "Insertar imágenes" },
                             { "tag": "input", "attrs": { "id": "mail-compose-images", "name": "images", "type": "file", "accept": "image/png,image/jpeg,image/gif", "multiple": "true" } }
                           ] }
                         ] },
