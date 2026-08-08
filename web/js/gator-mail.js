@@ -54,7 +54,8 @@
             header.required = customHeader;
             if (!customHeader) header.value = "";
             value.inputMode = size ? "numeric" : "text";
-            value.pattern = size ? "[0-9]{1,12}" : "";
+            if (size) value.setAttribute("pattern", "[0-9]{1,12}");
+            else value.removeAttribute("pattern");
             value.placeholder = size ? "1048576" : "Texto, dirección o asunto";
         };
         field.addEventListener("change", update);

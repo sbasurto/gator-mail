@@ -16,7 +16,7 @@
           { "tag": "link", "attrs": { "rel": "stylesheet", "href": "/elib/css2/sweetalert2.min.css?v=11.23.0" } },
           { "tag": "link", "attrs": { "rel": "stylesheet", "href": "${contextPath}/css/gator-mail.css?v=42" } },
           { "tag": "script", "attrs": { "src": "/elib/js/sweetalert2.all.min.js", "defer": "true" } },
-          { "tag": "script", "attrs": { "src": "${contextPath}/js/gator-mail.js?v=20", "defer": "true" } }
+          { "tag": "script", "attrs": { "src": "${contextPath}/js/gator-mail.js?v=21", "defer": "true" } }
         ]
       },
       {
