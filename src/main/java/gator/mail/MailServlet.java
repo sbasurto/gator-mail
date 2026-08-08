@@ -2042,7 +2042,7 @@ public final class MailServlet extends HttpServlet {
 
     static String applicationLabel(String application) {
         return applicationLabel(application,
-                System.getenv("GATOR_NODE_NAME"), System.getenv("HOSTNAME"));
+                System.getenv("GATOR_NODE_NAME"), System.getenv("HOSTNAME"), localHostName());
     }
 
     static String applicationLabel(String application, String... candidates) {
@@ -2068,6 +2068,14 @@ public final class MailServlet extends HttpServlet {
             if (!node.isEmpty()) return base.endsWith(" · " + node) ? base : base + " · " + node;
         }
         return base;
+    }
+
+    private static String localHostName() {
+        try {
+            return java.net.InetAddress.getLocalHost().getHostName();
+        } catch (Exception ignored) {
+            return "";
+        }
     }
 
     private static boolean smsConfigured() {
