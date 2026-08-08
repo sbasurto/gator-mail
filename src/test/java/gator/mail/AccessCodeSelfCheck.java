@@ -108,6 +108,12 @@ public final class AccessCodeSelfCheck {
         assert !temporaryPassword.equals(MailServlet.temporaryPassword());
         assert MailServlet.sessionTimeoutSeconds(JsonParser.parseString("{\"sessionTimeout\":10800000}").getAsJsonObject()) == 10800;
         assert MailServlet.sessionTimeoutSeconds(new JsonObject()) == 10800;
+        assert "Gator Mail · Artemisa".equals(
+                MailServlet.applicationLabel("Gator Mail", "10.100.0.1"));
+        assert "Gator Mail · Artemisa".equals(
+                MailServlet.applicationLabel("Gator Mail · Artemisa", "artemisa.soft-gator.local"));
+        assert "Gator Mail".equals(
+                MailServlet.applicationLabel("Gator Mail", "unknown-container"));
         assert Arrays.equals(new long[]{1, 42}, MailServlet.uids(new String[]{"1", "42"}));
         assert "asunto urgente".equals(MailServlet.searchQuery("  asunto urgente  "));
         assert MailServlet.page(null) == 1;

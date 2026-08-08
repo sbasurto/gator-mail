@@ -327,7 +327,7 @@ public final class MailServlet extends HttpServlet {
             JsonObject requestJson = json("usuario", user);
             requestJson.addProperty("action", "correct");
             requestJson.addProperty("telefono", phone(request.getParameter("phone")));
-            requestJson.addProperty("application", "Gator Mail");
+            requestJson.addProperty("application", applicationLabel("Gator Mail"));
             requestJson.addProperty("userHint", userHint(user));
             JsonObject result = sms(requestJson);
             session.setAttribute("mail.phone.correction.used", true);
@@ -359,7 +359,7 @@ public final class MailServlet extends HttpServlet {
             JsonObject requestJson = json("usuario", user);
             requestJson.addProperty("action", "send");
             requestJson.addProperty("smsOnly", true);
-            requestJson.addProperty("application", "Gator Mail");
+            requestJson.addProperty("application", applicationLabel("Gator Mail"));
             requestJson.addProperty("userHint", userHint(user));
             requestJson.addProperty("requestToken", token);
             requestJson.addProperty("fallback", resend || fallback);
@@ -2038,6 +2038,36 @@ public final class MailServlet extends HttpServlet {
     static int sessionTimeoutSeconds(JsonObject access) {
         int milliseconds = access.has("sessionTimeout") ? access.get("sessionTimeout").getAsInt() : 10_800_000;
         return milliseconds > 0 ? Math.max(1, milliseconds / 1000) : 10_800;
+    }
+
+    static String applicationLabel(String application) {
+        return applicationLabel(application,
+                System.getenv("GATOR_NODE_NAME"), System.getenv("HOSTNAME"));
+    }
+
+    static String applicationLabel(String application, String... candidates) {
+        String base = application == null || application.isBlank() ? "Gator" : application.strip();
+        for (String candidate : candidates) {
+            if (candidate == null) continue;
+            String normalized = candidate.strip().toLowerCase(Locale.ROOT);
+            String node = switch (normalized) {
+                case "artemisa", "10.100.0.1" -> "Artemisa";
+                case "apolo", "10.100.0.40" -> "Apolo";
+                case "quetzal", "10.100.0.7" -> "Quetzal";
+                case "hera", "10.100.0.33" -> "Hera";
+                case "poseidon", "10.100.0.34" -> "Poseidon";
+                default -> {
+                    if (normalized.startsWith("artemisa.")) yield "Artemisa";
+                    if (normalized.startsWith("apolo.")) yield "Apolo";
+                    if (normalized.startsWith("quetzal.")) yield "Quetzal";
+                    if (normalized.startsWith("hera.")) yield "Hera";
+                    if (normalized.startsWith("poseidon.")) yield "Poseidon";
+                    yield "";
+                }
+            };
+            if (!node.isEmpty()) return base.endsWith(" · " + node) ? base : base + " · " + node;
+        }
+        return base;
     }
 
     private static boolean smsConfigured() {
