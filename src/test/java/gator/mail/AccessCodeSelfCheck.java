@@ -285,10 +285,13 @@ public final class AccessCodeSelfCheck {
         model.put("events", List.of(Map.of("summary", "Evento Uno", "description", "Descripción",
                 "place", "Oficina", "startDate", "21/07/2026", "startTime", "10:00",
                 "status", "A tiempo", "statusClass", "is-on-time")));
-        model.put("configurationUsers", List.of(Map.of("id", "usuario", "name", "Usuario Uno",
-                "email", "usuario@example.com", "enabled", true, "phone", "+525512345678",
-                "safeListed", true, "sessionTimeoutMinutes", 180,
-                "status", "Activo", "toggleLabel", "Desactivar")));
+        model.put("configurationUsers", List.of(Map.ofEntries(
+                Map.entry("id", "usuario"), Map.entry("name", "Usuario Uno"),
+                Map.entry("email", "usuario@example.com"), Map.entry("enabled", true),
+                Map.entry("phone", "+525512345678"), Map.entry("safeListed", true),
+                Map.entry("sessionTimeoutMinutes", 180), Map.entry("status", "Activo"),
+                Map.entry("toggleLabel", "Desactivar"), Map.entry("deleteAvailable", true),
+                Map.entry("deleteTargets", List.of(Map.of("value", "revision", "label", "Revisión"))))));
         model.put("configurationUserCount", 1);
         model.put("configurationActiveUserCount", 1);
         model.put("configurationContacts", List.of(Map.of("id", "contacto", "name", "Contacto Uno",
@@ -354,7 +357,7 @@ public final class AccessCodeSelfCheck {
             assert html.contains("Sesión cerrada");
             assert html.contains("/gator-mail/css/gator-mail.css?v=42");
             assert html.contains("/elib/js/sweetalert2.all.min.js");
-            assert html.contains("/gator-mail/js/gator-mail.js?v=21");
+            assert html.contains("/gator-mail/js/gator-mail.js?v=22");
             assert html.contains("Nueva subcarpeta");
             assert html.contains("href=\"/gator-mail/oauth/password\"");
             assert html.contains("fontawesome-free-5.13.0-web/css/all.min.css");
@@ -467,6 +470,9 @@ public final class AccessCodeSelfCheck {
             assert html.contains("value=\"+525512345678\"");
             assert html.contains("value=\"userSafeList\"");
             assert html.contains(">En Global Safe List</span>");
+            assert html.contains("value=\"userDelete\"");
+            assert html.contains("value=\"revision\"");
+            assert !html.contains("data-user=");
             assert html.contains("class=\"mail-admin-row mail-admin-user\" method=\"post\" action=\"/gator-mail/mail\"");
             assert html.contains("Contraseña temporal: Abcd_1234-Efgh_5678-Ijkl");
             assert html.contains("value=\"contactSave\"");

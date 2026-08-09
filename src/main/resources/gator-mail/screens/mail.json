@@ -16,7 +16,7 @@
           { "tag": "link", "attrs": { "rel": "stylesheet", "href": "/elib/css2/sweetalert2.min.css?v=11.23.0" } },
           { "tag": "link", "attrs": { "rel": "stylesheet", "href": "${contextPath}/css/gator-mail.css?v=42" } },
           { "tag": "script", "attrs": { "src": "/elib/js/sweetalert2.all.min.js", "defer": "true" } },
-          { "tag": "script", "attrs": { "src": "${contextPath}/js/gator-mail.js?v=21", "defer": "true" } }
+          { "tag": "script", "attrs": { "src": "${contextPath}/js/gator-mail.js?v=22", "defer": "true" } }
         ]
       },
       {
@@ -742,7 +742,7 @@
                                 { "tag": "option", "each": "user.deleteTargets", "as": "target", "attrs": { "value": "${target.value}" }, "text": "${target.label}" }
                               ] }
                             ] },
-                            { "tag": "button", "if": "user.deleteAvailable", "attrs": { "class": "btn btn-outline-danger btn-sm mail-user-delete", "type": "submit", "name": "action", "value": "userDelete", "data-user": "${user.id}" }, "children": [
+                            { "tag": "button", "if": "user.deleteAvailable", "attrs": { "class": "btn btn-outline-danger btn-sm mail-user-delete", "type": "submit", "name": "action", "value": "userDelete" }, "children": [
                               { "tag": "span", "attrs": { "class": "fas fa-user-xmark", "aria-hidden": "true" } }, { "tag": "span", "text": "Eliminar usuario" }
                             ] }
                           ] }
