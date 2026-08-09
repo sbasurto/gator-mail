@@ -23,7 +23,11 @@
 
     document.querySelectorAll(".mail-user-delete").forEach(button => button.addEventListener("click", async event => {
         event.preventDefault();
-        if (!button.form.reportValidity()) return;
+        const destination = button.form.elements.destination;
+        destination.required = true;
+        const valid = button.form.reportValidity();
+        destination.required = false;
+        if (!valid) return;
         const user = button.form.elements.user.value;
         const result = await Swal.fire({
             title: `¿Eliminar a ${user}?`,

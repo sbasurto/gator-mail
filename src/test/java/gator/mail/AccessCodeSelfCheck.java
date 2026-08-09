@@ -357,7 +357,7 @@ public final class AccessCodeSelfCheck {
             assert html.contains("Sesión cerrada");
             assert html.contains("/gator-mail/css/gator-mail.css?v=42");
             assert html.contains("/elib/js/sweetalert2.all.min.js");
-            assert html.contains("/gator-mail/js/gator-mail.js?v=22");
+            assert html.contains("/gator-mail/js/gator-mail.js?v=23");
             assert html.contains("Nueva subcarpeta");
             assert html.contains("href=\"/gator-mail/oauth/password\"");
             assert html.contains("fontawesome-free-5.13.0-web/css/all.min.css");
@@ -472,6 +472,7 @@ public final class AccessCodeSelfCheck {
             assert html.contains(">En Global Safe List</span>");
             assert html.contains("value=\"userDelete\"");
             assert html.contains("value=\"revision\"");
+            assert html.contains("class=\"form-select form-select-sm\" name=\"destination\">");
             assert !html.contains("data-user=");
             assert html.contains("class=\"mail-admin-row mail-admin-user\" method=\"post\" action=\"/gator-mail/mail\"");
             assert html.contains("Contraseña temporal: Abcd_1234-Efgh_5678-Ijkl");
