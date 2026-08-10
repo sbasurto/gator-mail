@@ -147,6 +147,10 @@ declare
     v jsonb := v_json::jsonb;
     actor text := trim(v ->> 'actor');
     correo text := lower(trim(v ->> 'email'));
+    mail_domain text := lower(trim(v ->> 'mailDomain'));
+    mail_home text := trim(v ->> 'mailHome');
+    mail_os_gid text := trim(v ->> 'mailOsGid');
+    mail_os_uid text := trim(v ->> 'mailOsUid');
     nombre text := trim(v ->> 'name');
     password text := v ->> 'password';
     session_timeout_minutes integer := coalesce((v ->> 'sessionTimeoutMinutes')::integer, 180);
@@ -157,7 +161,10 @@ begin
             or correo !~ '^[a-z0-9.!#$%&''*+/=?^_`{|}~-]+@[a-z0-9.-]+\.[a-z]{2,63}$'
             or nombre = '' or length(nombre) > 200
             or password !~ '^[A-Za-z0-9_-]{24}$'
-            or session_timeout_minutes not between 1 and 10080 then
+            or session_timeout_minutes not between 1 and 10080
+            or mail_domain <> split_part(correo, '@', 2)
+            or mail_os_uid !~ '^[0-9]+$' or mail_os_gid !~ '^[0-9]+$'
+            or mail_home <> '/home/' || regexp_replace(mail_domain, '[^a-z0-9]', '', 'g') || '/' || usuario then
         raise exception 'Datos del usuario inválidos';
     end if;
     if exists (select 1 from app_usuarios where lower(usuario_id) = usuario)
@@ -170,6 +177,8 @@ begin
     values (usuario, password, nombre, '1', 'UPDATE_PASSWORD', session_timeout_minutes * 60000);
     insert into app_usuario_email(usuario_email_email, usuario_email_estado, usuario_id, usuario_email_por_defecto)
     values (correo, 1, usuario, 1);
+    insert into app_usuario_mail(usuario_id, mail_domain, mail_os_uid, mail_os_gid, mail_home)
+    values (usuario, mail_domain, mail_os_uid, mail_os_gid, mail_home);
     return json_build_object('codigo', '0')::text;
 exception when others then
     return json_build_object('codigo', '-1', 'mensaje', sqlerrm)::text;

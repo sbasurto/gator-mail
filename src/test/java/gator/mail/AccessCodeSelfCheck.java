@@ -103,6 +103,12 @@ public final class AccessCodeSelfCheck {
         try { MailServlet.phone("5511186677"); }
         catch (IllegalArgumentException expected) { rejectedPhone = true; }
         assert rejectedPhone;
+        MailServlet.LinuxMailbox linux = MailServlet.linuxMailbox(
+                "appreview", "appreview@soft-gator.com", "1100", "1101", "/home/softgatorcom/appreview");
+        assert "soft-gator.com".equals(linux.domain());
+        assert "1100".equals(linux.uid());
+        assert "1101".equals(linux.gid());
+        assert "/home/softgatorcom/appreview".equals(linux.home());
         String temporaryPassword = MailServlet.temporaryPassword();
         assert temporaryPassword.matches("[A-Za-z0-9_-]{24}");
         assert !temporaryPassword.equals(MailServlet.temporaryPassword());

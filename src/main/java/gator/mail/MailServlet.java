@@ -1510,7 +1510,11 @@ public final class MailServlet extends HttpServlet {
                     value.addProperty("email", request.getParameter("email"));
                     value.addProperty("password", password);
                     value.addProperty("sessionTimeoutMinutes", request.getParameter("sessionTimeoutMinutes"));
-                    provisionLinuxUser(request.getParameter("user"), request.getParameter("email"));
+                    LinuxMailbox linux = provisionLinuxUser(request.getParameter("user"), request.getParameter("email"));
+                    value.addProperty("mailDomain", linux.domain());
+                    value.addProperty("mailOsUid", linux.uid());
+                    value.addProperty("mailOsGid", linux.gid());
+                    value.addProperty("mailHome", linux.home());
                     checked(mailDbCall("mail_fn_admin_usuario_crear", gson.toJson(value)));
                     session.setAttribute("mail.password.reset", password);
                     session.setAttribute("mail.user.admin.notice", "Usuario y cuenta Linux creados correctamente");
@@ -1686,8 +1690,8 @@ public final class MailServlet extends HttpServlet {
         return checked(mailDbCall("mail_fn_usuario_opciones", user)).get("smsEnabled").getAsBoolean();
     }
 
-    private static void provisionLinuxUser(String user, String email) throws Exception {
-        linuxHome(user, email);
+    private static LinuxMailbox provisionLinuxUser(String user, String email) throws Exception {
+        String home = linuxHome(user, email);
         Process process = new ProcessBuilder("/usr/bin/sudo", "-n", USER_PROVISIONER, user, email)
                 .redirectErrorStream(true).start();
         if (!process.waitFor(20, TimeUnit.SECONDS)) {
@@ -1697,6 +1701,19 @@ public final class MailServlet extends HttpServlet {
         String output = new String(process.getInputStream().readNBytes(4096), StandardCharsets.UTF_8).strip();
         if (process.exitValue() != 0)
             throw new IllegalStateException(output.isBlank() ? "No fue posible crear la cuenta Linux" : output);
+        return linuxMailbox(user, email, linuxId(user, "-u"), linuxId(user, "-g"), home);
+    }
+
+    private static String linuxId(String user, String option) throws Exception {
+        Process process = new ProcessBuilder("/usr/bin/id", option, user).redirectErrorStream(true).start();
+        if (!process.waitFor(5, TimeUnit.SECONDS)) {
+            process.destroyForcibly();
+            throw new IllegalStateException("No fue posible consultar la identidad Linux");
+        }
+        String value = new String(process.getInputStream().readNBytes(128), StandardCharsets.UTF_8).strip();
+        if (process.exitValue() != 0 || !value.matches("[0-9]+"))
+            throw new IllegalStateException("La identidad Linux creada no es válida");
+        return value;
     }
 
     private static void retireLinuxUser(String user, String destination, String token) throws Exception {
@@ -1720,6 +1737,17 @@ public final class MailServlet extends HttpServlet {
         String domain = address.substring(address.indexOf('@') + 1).replaceAll("[^a-z0-9]", "");
         return "/home/" + domain + "/" + account;
     }
+
+    static LinuxMailbox linuxMailbox(String user, String email, String uid, String gid, String home) {
+        String address = email == null ? "" : email.strip().toLowerCase(Locale.ROOT);
+        String expectedHome = linuxHome(user, address);
+        if (uid == null || !uid.matches("[0-9]+") || gid == null || !gid.matches("[0-9]+")
+                || !expectedHome.equals(home))
+            throw new IllegalArgumentException("La identidad Linux creada no es válida");
+        return new LinuxMailbox(address.substring(address.indexOf('@') + 1), uid, gid, home);
+    }
+
+    record LinuxMailbox(String domain, String uid, String gid, String home) { }
 
     private void filtersModel(Map<String, Object> model, HttpServletRequest request, HttpSession session,
             String mailbox,
