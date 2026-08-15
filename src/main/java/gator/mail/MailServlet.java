@@ -358,7 +358,7 @@ public final class MailServlet extends HttpServlet {
         if ((!mobilePending && session.getAttribute("mail.challenge.hash") == null) || resend || fallback) {
             JsonObject requestJson = json("usuario", user);
             requestJson.addProperty("action", "send");
-            requestJson.addProperty("smsOnly", true);
+            requestJson.addProperty("smsOnly", false);
             requestJson.addProperty("application", applicationLabel("Gator Mail"));
             requestJson.addProperty("userHint", userHint(user));
             requestJson.addProperty("requestToken", token);

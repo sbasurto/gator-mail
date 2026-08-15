@@ -126,6 +126,9 @@ Con la integración Soft Gator, el endpoint intenta primero una autorización en
 Gator Mobile y utiliza SMS sólo cuando no hay un dispositivo conectado, vence
 la solicitud o el usuario elige **Usar SMS**. Gator Mail nunca usa correo como
 fallback para evitar depender del mismo buzón que se está intentando abrir.
+Para habilitar este orden en el proveedor de Soft Gator, configure
+`GATOR_MOBILE_AUTH_MODE=first`; Gator Mail envía `smsOnly=false` en la solicitud
+inicial y reserva `fallback=true` para la acción explícita **Usar SMS**.
 
 ## Filtros IMAP
 
