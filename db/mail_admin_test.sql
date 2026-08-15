@@ -10,6 +10,7 @@ insert into mail_administradores(usuario_id) values ('mail-admin-test');
 do $$
 declare resultado json;
 declare contacto text;
+declare contacto_usuario text;
 declare password_anterior text;
 begin
     resultado := mail_fn_admin_usuario_crear('{"actor":"mail-admin-test@soft-gator.com",'
@@ -69,11 +70,26 @@ begin
 
     resultado := mail_fn_admin_contacto_guardar('{"actor":"mail-admin-test@soft-gator.com",'
         '"name":"Contacto de prueba","email":"contacto-admin-test@example.com",'
-        '"owner":"mail-new-test","group":""}')::json;
+        '"owner":"mail-admin-test","group":""}')::json;
     assert resultado ->> 'codigo' = '0', 'No se creó el contacto';
     contacto := resultado ->> 'id';
     assert position('contacto-admin-test@example.com' in
         mail_fn_admin_contactos('mail-admin-test@soft-gator.com')) > 0, 'No se listó el contacto';
+    resultado := mail_fn_admin_contacto_guardar(json_build_object(
+        'actor', 'mail-new-test@soft-gator.com', 'name', 'Contacto personal',
+        'email', 'contacto-personal-test@example.com', 'owner', 'mail-admin-test', 'group', '2')::text)::json;
+    assert resultado ->> 'codigo' = '0', 'El usuario no pudo crear su contacto';
+    contacto_usuario := resultado ->> 'id';
+    assert (select usuario_id = 'mail-new-test' from app_contactos where contacto_id = contacto_usuario),
+        'El usuario pudo asignar el contacto a otra cuenta';
+    assert position('contacto-personal-test@example.com' in
+        mail_fn_admin_contactos('mail-new-test@soft-gator.com')) > 0, 'No se listó el contacto personal';
+    assert (mail_fn_admin_contacto_eliminar(json_build_object(
+        'actor', 'mail-new-test@soft-gator.com', 'id', contacto)::text)::json ->> 'codigo') = '-1',
+        'El usuario eliminó un contacto ajeno';
+    assert (mail_fn_admin_contacto_eliminar(json_build_object(
+        'actor', 'mail-new-test@soft-gator.com', 'id', contacto_usuario)::text)::json ->> 'codigo') = '0',
+        'El usuario no pudo eliminar su contacto';
     assert (mail_fn_admin_contacto_eliminar(json_build_object(
         'actor', 'mail-admin-test@soft-gator.com', 'id', contacto)::text)::json ->> 'codigo') = '0',
         'No se eliminó el contacto';

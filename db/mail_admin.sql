@@ -269,10 +269,17 @@ end;
 $$;
 
 create or replace function mail_fn_admin_contactos(v_email text)
-returns text language plpgsql stable security definer set search_path = public as $$
-declare resultado json;
+returns text language plpgsql security definer set search_path = public as $$
+declare
+    resultado json;
+    v_admin boolean := mail_fn_es_admin(v_email);
+    v_usuario text;
 begin
-    if not mail_fn_es_admin(v_email) then raise exception 'Acceso administrativo denegado'; end if;
+    select usuario_id into v_usuario
+      from app_usuario_email
+     where lower(usuario_email_email) = lower(trim(v_email)) and coalesce(usuario_email_estado, 0) >= 0
+     order by usuario_email_por_defecto desc nulls last, rowid limit 1;
+    if v_usuario is null then raise exception 'Usuario de correo inexistente'; end if;
     with emails as (
         select distinct on (contacto_id) contacto_id, contacto_email_email
           from app_contacto_email where coalesce(contacto_email_estado, 0) >= 0
@@ -291,7 +298,8 @@ begin
       into resultado
       from app_contactos c
       left join emails e using (contacto_id)
-      left join grupos g using (contacto_id);
+      left join grupos g using (contacto_id)
+     where v_admin or c.usuario_id = v_usuario;
     return json_build_object('codigo', '0', 'contactos', resultado)::text;
 exception when others then
     return json_build_object('codigo', '-1', 'mensaje', sqlerrm)::text;
@@ -308,8 +316,18 @@ declare
     grupo text := nullif(trim(v ->> 'group'), '');
     nombre text := trim(v ->> 'name');
     propietario text := nullif(trim(v ->> 'owner'), '');
+    actor_usuario text;
+    es_admin boolean := mail_fn_es_admin(actor);
 begin
-    if not mail_fn_es_admin(actor) then raise exception 'Acceso administrativo denegado'; end if;
+    select usuario_id into actor_usuario
+      from app_usuario_email
+     where lower(usuario_email_email) = lower(actor) and coalesce(usuario_email_estado, 0) >= 0
+     order by usuario_email_por_defecto desc nulls last, rowid limit 1;
+    if actor_usuario is null then raise exception 'Usuario de correo inexistente'; end if;
+    if not es_admin then
+        propietario := actor_usuario;
+        grupo := null;
+    end if;
     if nombre is null or nombre = '' or length(nombre) > 200
             or correo !~ '^[^@[:space:]]+@[^@[:space:]]+[.][^@[:space:]]+$'
             or length(correo) > 320 or (propietario is null and grupo is null) then
@@ -332,7 +350,8 @@ begin
         values (correo, 1, contacto);
     else
         update app_contactos set contacto_nombre = nombre, contacto_apellido_p = null,
-               contacto_apellido_m = null, usuario_id = propietario where contacto_id = contacto;
+               contacto_apellido_m = null, usuario_id = propietario
+         where contacto_id = contacto and (es_admin or usuario_id = actor_usuario);
         if not found then raise exception 'Contacto inexistente'; end if;
         update app_contacto_email set contacto_email_email = correo, contacto_email_estado = 1
          where rowid = (select min(rowid) from app_contacto_email where contacto_id = contacto);
@@ -354,10 +373,19 @@ $$;
 
 create or replace function mail_fn_admin_contacto_eliminar(v_json text)
 returns text language plpgsql security definer set search_path = public as $$
-declare v jsonb := v_json::jsonb;
+declare
+    v jsonb := v_json::jsonb;
+    actor text := trim(v ->> 'actor');
+    actor_usuario text;
+    es_admin boolean := mail_fn_es_admin(actor);
 begin
-    if not mail_fn_es_admin(trim(v ->> 'actor')) then raise exception 'Acceso administrativo denegado'; end if;
-    delete from app_contactos where contacto_id = trim(v ->> 'id');
+    select usuario_id into actor_usuario
+      from app_usuario_email
+     where lower(usuario_email_email) = lower(actor) and coalesce(usuario_email_estado, 0) >= 0
+     order by usuario_email_por_defecto desc nulls last, rowid limit 1;
+    if actor_usuario is null then raise exception 'Usuario de correo inexistente'; end if;
+    delete from app_contactos
+     where contacto_id = trim(v ->> 'id') and (es_admin or usuario_id = actor_usuario);
     if not found then raise exception 'Contacto inexistente'; end if;
     return json_build_object('codigo', '0')::text;
 exception when others then

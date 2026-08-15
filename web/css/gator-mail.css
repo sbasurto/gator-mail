@@ -53,6 +53,7 @@ body { min-height: 100vh; margin: 0; color: var(--gator-ink); background: var(--
 .mail-folder-menu-item { display: flex; align-items: center; gap: .55rem; padding: .55rem .7rem; border: 0; border-radius: 6px; background: transparent; color: var(--gator-ink); font-size: .85rem; text-align: left; }
 .mail-folder-menu-item:hover { background: #f1f6f8; }
 .mail-folder-menu-danger { color: #b52f3a; }
+.mail-contact-source { cursor: context-menu; }
 .mail-configuration { margin-top: 1rem; padding-top: .75rem; border-top: 1px solid var(--gator-line); }
 
 .mail-admin-list { display: grid; gap: .55rem; padding: 1rem; }

@@ -124,6 +124,10 @@ public final class AccessCodeSelfCheck {
                 "yo@example.com, otro@example.com", "autor@example.com"));
         assert "facturas@example.com".equals(MailServlet.filterSender("Proveedor <FACTURAS@example.com>"));
         assert MailServlet.filterSender("dirección inválida").isEmpty();
+        assert "Proveedor".equals(MailServlet.contactName(
+                "Proveedor <FACTURAS@example.com>", "facturas@example.com"));
+        assert "facturas@example.com".equals(MailServlet.contactName(
+                "facturas@example.com", "facturas@example.com"));
         assert "Junk".equals(ImapMailbox.promotedName("INBOX.Junk", '.'));
         assert "inline-1@gator-mail".equals(ImapMailbox.inlineCid(0));
         assert "Spam".equals(ImapMailbox.promotedName("INBOX.Spam", '.'));
@@ -235,6 +239,8 @@ public final class AccessCodeSelfCheck {
         model.put("contactsAvailable", true);
         model.put("contactsEmpty", true);
         model.put("contacts", List.of(Map.of("name", "Contacto Uno", "email", "uno@example.com")));
+        model.put("contactName", "Proveedor");
+        model.put("contactEmail", "facturas@example.com");
         model.put("configurationOpen", true);
         model.put("mailOpen", true);
         model.put("mailFoldersMenu", true);
@@ -344,14 +350,17 @@ public final class AccessCodeSelfCheck {
         model.put("hasPrevious", false);
         model.put("hasNext", false);
         model.put("pageSizes", List.of(Map.of("label", 20, "href", "mail?size=20", "className", "active")));
-        model.put("messages", List.of(Map.of("href", "mail?uid=1", "from", "Equipo", "subject", "Hola", "sent", "Hoy",
-                "uid", 1L, "folder", "INBOX", "state", "No leído", "stateClass", "is-unread", "icon", "fa-envelope")));
+        model.put("messages", List.of(Map.ofEntries(Map.entry("href", "mail?uid=1"), Map.entry("from", "Equipo"),
+                Map.entry("subject", "Hola"), Map.entry("sent", "Hoy"), Map.entry("uid", 1L),
+                Map.entry("folder", "INBOX"), Map.entry("state", "No leído"), Map.entry("stateClass", "is-unread"),
+                Map.entry("icon", "fa-envelope"), Map.entry("contactName", "Equipo"),
+                Map.entry("contactEmail", "equipo@example.com"))));
         try {
             String html = new GatorJsonView().renderResource("gator-mail/screens/mail.json", model);
             assert html.contains("Sesión cerrada");
-            assert html.contains("/gator-mail/css/gator-mail.css?v=42");
+            assert html.contains("/gator-mail/css/gator-mail.css?v=43");
             assert html.contains("/elib/js/sweetalert2.all.min.js");
-            assert html.contains("/gator-mail/js/gator-mail.js?v=21");
+            assert html.contains("/gator-mail/js/gator-mail.js?v=22");
             assert html.contains("Nueva subcarpeta");
             assert html.contains("href=\"/gator-mail/oauth/password\"");
             assert html.contains("fontawesome-free-5.13.0-web/css/all.min.css");
@@ -474,6 +483,8 @@ public final class AccessCodeSelfCheck {
             assert html.contains("id=\"mail-select-all\"");
             assert html.contains("value=\"messageDelete\"");
             assert html.contains("id=\"mail-folder-menu\"");
+            assert html.contains("id=\"mail-contact-menu\"");
+            assert html.contains("data-contact-email=\"equipo@example.com\"");
             assert html.contains("value=\"urgente\"");
             assert html.contains("class=\"mail-action-bar\"");
             assert html.contains("class=\"mail-action-pager\"");
@@ -493,6 +504,11 @@ public final class AccessCodeSelfCheck {
             assert readOnlyEvent.contains("Calendario · Solo lectura");
             assert readOnlyEvent.contains(">Invitados</dt>");
             assert !readOnlyEvent.contains("value=\"eventSave\"");
+            model.put("configurationAdminAvailable", false);
+            String regularUser = new GatorJsonView().renderResource("gator-mail/screens/mail.json", model);
+            assert regularUser.contains(">Contactos</span>");
+            assert regularUser.contains("value=\"contactSave\"");
+            assert !regularUser.contains(">Usuario propietario</small>");
             model.put("smsAdminAvailable", false);
             String withoutSms = new GatorJsonView().renderResource("gator-mail/screens/mail.json", model);
             assert !withoutSms.contains("value=\"userSafeList\"");

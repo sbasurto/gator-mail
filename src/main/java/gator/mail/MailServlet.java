@@ -198,6 +198,8 @@ public final class MailServlet extends HttpServlet {
         model.put("messageUid", "");
         model.put("filterFromAvailable", false);
         model.put("filterHref", "");
+        model.put("contactEmail", "");
+        model.put("contactName", "");
         model.put("composeAction", false);
         model.put("folderActionsDisabled", true);
         model.put("selectedFolder", "");
@@ -814,6 +816,8 @@ public final class MailServlet extends HttpServlet {
             String sender = filterSender(mail.from());
             model.put("filterFromAvailable", !sender.isBlank());
             model.put("filterHref", "mail?action=settings&section=filters&sender=" + url(sender));
+            model.put("contactEmail", sender);
+            model.put("contactName", contactName(mail.from(), sender));
             return;
         }
 
@@ -841,12 +845,20 @@ public final class MailServlet extends HttpServlet {
         List<Map<String, Object>> messageModels = new ArrayList<>();
         for (ImapMailbox.Summary mail : messages) {
             String state = mail.seen() ? "Leído" : "No leído";
-            messageModels.add(Map.of(
-                    "href", mailboxHref(folderName, query, result.page(), result.size()) + "&uid=" + mail.uid(),
-                    "from", mail.from(), "subject", mail.subject(), "sent", DATE.format(mail.sent()),
-                    "uid", mail.uid(), "folder", folderName, "state", state,
-                    "stateClass", mail.seen() ? "is-read" : "is-unread",
-                    "icon", mail.seen() ? "fa-envelope-open" : "fa-envelope"));
+            String sender = filterSender(mail.from());
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("href", mailboxHref(folderName, query, result.page(), result.size()) + "&uid=" + mail.uid());
+            item.put("from", mail.from());
+            item.put("subject", mail.subject());
+            item.put("sent", DATE.format(mail.sent()));
+            item.put("uid", mail.uid());
+            item.put("folder", folderName);
+            item.put("state", state);
+            item.put("stateClass", mail.seen() ? "is-read" : "is-unread");
+            item.put("icon", mail.seen() ? "fa-envelope-open" : "fa-envelope");
+            item.put("contactEmail", sender);
+            item.put("contactName", contactName(mail.from(), sender));
+            messageModels.add(item);
         }
         model.put("messages", messageModels);
     }
@@ -1443,10 +1455,12 @@ public final class MailServlet extends HttpServlet {
                 || "filterSave".equals(action) || "filterDelete".equals(action)
                 || "filterApply".equals(action);
         if (!requested) return false;
-        boolean personalAction = action.startsWith("filter") || "optionsSave".equals(action)
+        boolean personalAction = action.startsWith("filter") || action.startsWith("contact")
+                || "optionsSave".equals(action)
                 || "settings".equals(action)
                 && ("filters".equals(request.getParameter("section"))
                     || "folders".equals(request.getParameter("section"))
+                    || "contacts".equals(request.getParameter("section"))
                     || "options".equals(request.getParameter("section")));
         if (!admin && !personalAction) {
             response.sendError(HttpServletResponse.SC_FORBIDDEN);
@@ -1797,6 +1811,15 @@ public final class MailServlet extends HttpServlet {
             return address.matches("[^@\\s]+@[^@\\s]+\\.[^@\\s]+") && address.length() <= 320 ? address : "";
         } catch (Exception ignored) {
             return "";
+        }
+    }
+
+    static String contactName(String value, String email) {
+        try {
+            String name = InternetAddress.parse(value == null ? "" : value, false)[0].getPersonal();
+            return name == null || name.isBlank() ? email : name.strip();
+        } catch (Exception ignored) {
+            return email;
         }
     }
 

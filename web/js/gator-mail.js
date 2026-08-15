@@ -278,6 +278,7 @@
             if (folder.dataset.folder.toUpperCase() === "INBOX") return;
             if (folder.classList.contains("mail-folder-system") && !folder.classList.contains("mail-folder-trash")) return;
             event.preventDefault();
+            document.querySelector("#mail-contact-menu")?.classList.remove("open");
             child.dataset.folder = rename.dataset.folder = remove.dataset.folder = folder.dataset.folder;
             child.dataset.csrf = rename.dataset.csrf = remove.dataset.csrf = folderMenu.dataset.csrf;
             const trash = folder.classList.contains("mail-folder-trash");
@@ -296,6 +297,30 @@
         if (event.key === "Escape") closeFolderMenu();
     });
     window.addEventListener("scroll", closeFolderMenu, true);
+
+    const contactMenu = document.querySelector("#mail-contact-menu");
+    const createContact = document.querySelector("#mail-contact-create");
+    const closeContactMenu = () => contactMenu?.classList.remove("open");
+    document.querySelectorAll(".mail-contact-source[data-contact-email]").forEach(contact => {
+        contact.addEventListener("contextmenu", event => {
+            if (!contact.dataset.contactEmail) return;
+            event.preventDefault();
+            closeFolderMenu();
+            createContact.dataset.name = contact.getAttribute("aria-label");
+            createContact.dataset.email = contact.dataset.contactEmail;
+            contactMenu.classList.add("open");
+            contactMenu.style.left = `${Math.min(event.clientX, window.innerWidth - 200)}px`;
+            contactMenu.style.top = `${Math.min(event.clientY, window.innerHeight - 60)}px`;
+        });
+    });
+    createContact?.addEventListener("click", () => post("contactSave", {
+        id: "", name: createContact.dataset.name, email: createContact.dataset.email
+    }, contactMenu.dataset.csrf));
+    document.addEventListener("click", closeContactMenu);
+    document.addEventListener("keydown", event => {
+        if (event.key === "Escape") closeContactMenu();
+    });
+    window.addEventListener("scroll", closeContactMenu, true);
 
     const bulkForm = document.querySelector("#mail-bulk-form");
     const selectAll = document.querySelector("#mail-select-all");

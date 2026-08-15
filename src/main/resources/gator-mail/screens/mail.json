@@ -14,9 +14,9 @@
           { "tag": "link", "attrs": { "rel": "stylesheet", "href": "/elib/css2/fontawesome-free-5.13.0-web/css/all.min.css" } },
           { "tag": "link", "attrs": { "rel": "stylesheet", "href": "/elib/css/colors.css" } },
           { "tag": "link", "attrs": { "rel": "stylesheet", "href": "/elib/css2/sweetalert2.min.css?v=11.23.0" } },
-          { "tag": "link", "attrs": { "rel": "stylesheet", "href": "${contextPath}/css/gator-mail.css?v=42" } },
+          { "tag": "link", "attrs": { "rel": "stylesheet", "href": "${contextPath}/css/gator-mail.css?v=43" } },
           { "tag": "script", "attrs": { "src": "/elib/js/sweetalert2.all.min.js", "defer": "true" } },
-          { "tag": "script", "attrs": { "src": "${contextPath}/js/gator-mail.js?v=21", "defer": "true" } }
+          { "tag": "script", "attrs": { "src": "${contextPath}/js/gator-mail.js?v=22", "defer": "true" } }
         ]
       },
       {
@@ -136,7 +136,7 @@
                         { "tag": "span", "text": "Usuarios" }
                       ] }
                     ] },
-                    { "tag": "a", "if": "configurationAdminAvailable", "attrs": { "class": "mail-folder mail-folder-child ${configurationContactsClass}", "href": "${contextPath}/mail?action=settings&section=contacts" }, "children": [
+                    { "tag": "a", "attrs": { "class": "mail-folder mail-folder-child ${configurationContactsClass}", "href": "${contextPath}/mail?action=settings&section=contacts" }, "children": [
                       { "tag": "strong", "children": [
                         { "tag": "span", "attrs": { "class": "mail-folder-icon fas fa-address-book", "aria-hidden": "true" } },
                         { "tag": "span", "text": "Contactos" }
@@ -167,6 +167,11 @@
                     ] },
                     { "tag": "button", "attrs": { "class": "mail-folder-menu-item mail-folder-menu-danger", "id": "mail-folder-empty-trash", "type": "button", "role": "menuitem" }, "children": [
                       { "tag": "span", "attrs": { "class": "fas fa-trash-can-arrow-up", "aria-hidden": "true" } }, { "tag": "span", "text": "Vaciar Papelera" }
+                    ] }
+                  ] },
+                  { "tag": "div", "attrs": { "class": "mail-folder-menu", "id": "mail-contact-menu", "data-csrf": "${csrf}", "role": "menu" }, "children": [
+                    { "tag": "button", "attrs": { "class": "mail-folder-menu-item", "id": "mail-contact-create", "type": "button", "role": "menuitem" }, "children": [
+                      { "tag": "span", "attrs": { "class": "fas fa-user-plus", "aria-hidden": "true" } }, { "tag": "span", "text": "Agregar a contactos" }
                     ] }
                   ] }
                 ]
@@ -767,8 +772,8 @@
                         { "tag": "input", "attrs": { "type": "hidden", "name": "id", "value": "" } },
                         { "tag": "label", "children": [{ "tag": "small", "text": "Nombre" }, { "tag": "input", "attrs": { "class": "form-control", "name": "name", "maxlength": "200", "required": "true" } }] },
                         { "tag": "label", "children": [{ "tag": "small", "text": "Correo" }, { "tag": "input", "attrs": { "class": "form-control", "name": "email", "type": "email", "maxlength": "320", "required": "true" } }] },
-                        { "tag": "label", "children": [{ "tag": "small", "text": "Usuario propietario" }, { "tag": "input", "attrs": { "class": "form-control", "name": "owner" } }] },
-                        { "tag": "label", "children": [{ "tag": "small", "text": "Grupos (IDs)" }, { "tag": "input", "attrs": { "class": "form-control", "name": "group", "placeholder": "2, 3" } }] },
+                        { "tag": "label", "if": "configurationAdminAvailable", "children": [{ "tag": "small", "text": "Usuario propietario" }, { "tag": "input", "attrs": { "class": "form-control", "name": "owner" } }] },
+                        { "tag": "label", "if": "configurationAdminAvailable", "children": [{ "tag": "small", "text": "Grupos (IDs)" }, { "tag": "input", "attrs": { "class": "form-control", "name": "group", "placeholder": "2, 3" } }] },
                         { "tag": "button", "attrs": { "class": "btn btn-primary btn-sm", "type": "submit", "name": "action", "value": "contactSave" }, "text": "Agregar contacto" }
                       ] },
                       { "tag": "div", "attrs": { "class": "mail-admin-list" }, "children": [
@@ -777,8 +782,8 @@
                           { "tag": "input", "attrs": { "type": "hidden", "name": "id", "value": "${contact.id}" } },
                           { "tag": "label", "children": [{ "tag": "small", "text": "Nombre" }, { "tag": "input", "attrs": { "class": "form-control", "name": "name", "value": "${contact.name}", "maxlength": "200", "required": "true" } }] },
                           { "tag": "label", "children": [{ "tag": "small", "text": "Correo" }, { "tag": "input", "attrs": { "class": "form-control", "name": "email", "type": "email", "value": "${contact.email}", "maxlength": "320", "required": "true" } }] },
-                          { "tag": "label", "children": [{ "tag": "small", "text": "Usuario propietario" }, { "tag": "input", "attrs": { "class": "form-control", "name": "owner", "value": "${contact.owner}" } }] },
-                          { "tag": "label", "children": [{ "tag": "small", "text": "Grupos (IDs)" }, { "tag": "input", "attrs": { "class": "form-control", "name": "group", "value": "${contact.group}", "placeholder": "2, 3" } }] },
+                          { "tag": "label", "if": "configurationAdminAvailable", "children": [{ "tag": "small", "text": "Usuario propietario" }, { "tag": "input", "attrs": { "class": "form-control", "name": "owner", "value": "${contact.owner}" } }] },
+                          { "tag": "label", "if": "configurationAdminAvailable", "children": [{ "tag": "small", "text": "Grupos (IDs)" }, { "tag": "input", "attrs": { "class": "form-control", "name": "group", "value": "${contact.group}", "placeholder": "2, 3" } }] },
                           { "tag": "div", "attrs": { "class": "mail-admin-actions" }, "children": [
                             { "tag": "button", "attrs": { "class": "btn btn-primary btn-sm", "type": "submit", "name": "action", "value": "contactSave" }, "text": "Guardar" },
                             { "tag": "button", "attrs": { "class": "btn btn-outline-danger btn-sm", "type": "submit", "name": "action", "value": "contactDelete" }, "text": "Eliminar" }
@@ -958,7 +963,7 @@
                                 { "tag": "span", "attrs": { "class": "mail-message-icon fas ${message.icon}", "aria-hidden": "true" } },
                                 { "tag": "div", "attrs": { "class": "mail-message-copy" }, "children": [
                                   { "tag": "div", "attrs": { "class": "mail-message-meta" }, "children": [
-                                    { "tag": "strong", "text": "${message.from}" },
+                                    { "tag": "strong", "attrs": { "class": "mail-contact-source", "data-contact-email": "${message.contactEmail}", "aria-label": "${message.contactName}", "title": "Clic derecho para agregar a contactos" }, "text": "${message.from}" },
                                     { "tag": "time", "attrs": { "class": "text-muted" }, "text": "${message.sent}" },
                                     { "tag": "span", "attrs": { "class": "mail-message-state ${message.stateClass}" }, "text": "${message.state}" }
                                   ] },
@@ -994,7 +999,7 @@
                         "children": [
                           { "tag": "h1", "attrs": { "class": "mail-message-title" }, "text": "${subject}" },
                           { "tag": "dl", "attrs": { "class": "mail-headers" }, "children": [
-                            { "tag": "dt", "text": "De" }, { "tag": "dd", "text": "${from}" },
+                            { "tag": "dt", "text": "De" }, { "tag": "dd", "attrs": { "class": "mail-contact-source", "data-contact-email": "${contactEmail}", "aria-label": "${contactName}", "title": "Clic derecho para agregar a contactos" }, "text": "${from}" },
                             { "tag": "dt", "text": "Para" }, { "tag": "dd", "text": "${to}" },
                             { "tag": "dt", "text": "CC" }, { "tag": "dd", "text": "${cc}" }
                           ] },
