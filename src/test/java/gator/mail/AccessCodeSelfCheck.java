@@ -23,6 +23,9 @@ public final class AccessCodeSelfCheck {
                 OAuthServlet.challenge("dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"));
         assert OAuthServlet.isLocal("localhost:8080");
         assert !OAuthServlet.isLocal("erp.soft-gator.com");
+        assert OAuthServlet.validState("fresh-state", "fresh-state");
+        assert !OAuthServlet.validState("fresh-state", "expired-state");
+        assert !OAuthServlet.validState("null", "null");
         assert "Entrada".equals(ImapMailbox.label("INBOX"));
         assert "Enviados".equals(ImapMailbox.label("Sent Messages"));
         assert "Papelera".equals(ImapMailbox.label("Trash"));

@@ -18,6 +18,8 @@ public final class OAuthServlet extends HttpServlet {
     private static final HttpClient HTTP = HttpClient.newHttpClient();
 
     @Override protected void doGet(HttpServletRequest req, HttpServletResponse res) throws IOException {
+        res.setHeader("Cache-Control", "no-store");
+        res.setHeader("Pragma", "no-cache");
         if ("/callback".equals(req.getPathInfo())) callback(req, res);
         else if ("/logout".equals(req.getPathInfo())) logout(req, res);
         else if ("/logged-out".equals(req.getPathInfo())) loggedOut(req, res);
@@ -51,7 +53,10 @@ public final class OAuthServlet extends HttpServlet {
     }
     private void callback(HttpServletRequest req, HttpServletResponse res) throws IOException {
         HttpSession s = req.getSession(false);
-        if (s == null || !constant(String.valueOf(s.getAttribute("oidc.state")), req.getParameter("state"))) { res.sendError(400); return; }
+        if (s == null || !validState(String.valueOf(s.getAttribute("oidc.state")), req.getParameter("state"))) {
+            res.sendRedirect(req.getContextPath() + "/oauth/login");
+            return;
+        }
         try {
             JsonObject token = token("grant_type=authorization_code&client_id=gator-mail&code=" + enc(req.getParameter("code"))
                     + "&redirect_uri=" + enc(redirect(req)) + "&code_verifier=" + enc(String.valueOf(s.getAttribute("oidc.verifier"))));
@@ -131,9 +136,12 @@ public final class OAuthServlet extends HttpServlet {
         return value.equals("localhost") || value.startsWith("localhost:") || value.startsWith("127.")
                 || value.equals("[::1]") || value.startsWith("[::1]:") || value.equals("::1");
     }
+    static boolean validState(String expected, String returned) {
+        return returned != null && !"null".equals(expected)
+                && MessageDigest.isEqual(expected.getBytes(StandardCharsets.UTF_8), returned.getBytes(StandardCharsets.UTF_8));
+    }
     private static String random(int n) { byte[] b=new byte[n]; new SecureRandom().nextBytes(b); return Base64.getUrlEncoder().withoutPadding().encodeToString(b); }
     static String challenge(String v) { try { return Base64.getUrlEncoder().withoutPadding().encodeToString(MessageDigest.getInstance("SHA-256").digest(v.getBytes(StandardCharsets.US_ASCII))); } catch(Exception e){throw new IllegalStateException(e);} }
-    private static boolean constant(String a,String b){return b!=null&&MessageDigest.isEqual(a.getBytes(StandardCharsets.UTF_8),b.getBytes(StandardCharsets.UTF_8));}
     private static String enc(String v){return URLEncoder.encode(v,StandardCharsets.UTF_8);}
     private static String env(String n,String d){String v=System.getenv(n);return v==null||v.isBlank()?d:v;}
 
