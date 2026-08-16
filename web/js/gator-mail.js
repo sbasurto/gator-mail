@@ -23,9 +23,14 @@
 
     document.querySelectorAll(".mail-user-delete").forEach(button => button.addEventListener("click", async event => {
         event.preventDefault();
-        if (!button.form.reportValidity()) return;
+        const destination = button.form.elements.destination;
+        destination.required = true;
+        const valid = button.form.reportValidity();
+        destination.required = false;
+        if (!valid) return;
+        const user = button.form.elements.user.value;
         const result = await Swal.fire({
-            title: `¿Eliminar a ${button.dataset.user}?`,
+            title: `¿Eliminar a ${user}?`,
             text: "Primero se copiará todo su buzón a la cuenta genérica seleccionada. Después se eliminarán su acceso y cuenta Linux.",
             icon: "warning",
             showCancelButton: true,

@@ -15,10 +15,16 @@ declare password_anterior text;
 begin
     resultado := mail_fn_admin_usuario_crear('{"actor":"mail-admin-test@soft-gator.com",'
         '"user":"mail-new-test","name":"Usuario nuevo","email":"mail-new-test@soft-gator.com",'
-        '"password":"Abcd_1234-Efgh_5678-Ijkl","sessionTimeoutMinutes":90}')::json;
+        '"password":"Abcd_1234-Efgh_5678-Ijkl","sessionTimeoutMinutes":90,'
+        '"mailDomain":"soft-gator.com","mailOsUid":"1234","mailOsGid":"1235",'
+        '"mailHome":"/home/softgatorcom/mail-new-test"}')::json;
     assert resultado ->> 'codigo' = '0', 'No se creó el usuario';
     assert exists (select 1 from app_usuario_email where usuario_id = 'mail-new-test'
                     and usuario_email_email = 'mail-new-test@soft-gator.com'), 'No se creó el correo';
+    assert exists (select 1 from app_usuario_mail where usuario_id = 'mail-new-test'
+                    and mail_domain = 'soft-gator.com' and mail_os_uid = '1234'
+                    and mail_os_gid = '1235' and mail_home = '/home/softgatorcom/mail-new-test'),
+        'No se asoció el buzón';
     resultado := mail_fn_admin_usuario_guardar('{"actor":"mail-admin-test@soft-gator.com",'
         '"user":"mail-user-test","name":"Usuario actualizado","enabled":false,'
         '"phone":"+525512345678"}')::json;

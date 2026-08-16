@@ -329,7 +329,7 @@ public final class MailServlet extends HttpServlet {
             JsonObject requestJson = json("usuario", user);
             requestJson.addProperty("action", "correct");
             requestJson.addProperty("telefono", phone(request.getParameter("phone")));
-            requestJson.addProperty("application", "Gator Mail");
+            requestJson.addProperty("application", applicationLabel("Gator Mail"));
             requestJson.addProperty("userHint", userHint(user));
             JsonObject result = sms(requestJson);
             session.setAttribute("mail.phone.correction.used", true);
@@ -360,8 +360,8 @@ public final class MailServlet extends HttpServlet {
         if ((!mobilePending && session.getAttribute("mail.challenge.hash") == null) || resend || fallback) {
             JsonObject requestJson = json("usuario", user);
             requestJson.addProperty("action", "send");
-            requestJson.addProperty("smsOnly", true);
-            requestJson.addProperty("application", "Gator Mail");
+            requestJson.addProperty("smsOnly", false);
+            requestJson.addProperty("application", applicationLabel("Gator Mail"));
             requestJson.addProperty("userHint", userHint(user));
             requestJson.addProperty("requestToken", token);
             requestJson.addProperty("fallback", resend || fallback);
@@ -1524,7 +1524,11 @@ public final class MailServlet extends HttpServlet {
                     value.addProperty("email", request.getParameter("email"));
                     value.addProperty("password", password);
                     value.addProperty("sessionTimeoutMinutes", request.getParameter("sessionTimeoutMinutes"));
-                    provisionLinuxUser(request.getParameter("user"), request.getParameter("email"));
+                    LinuxMailbox linux = provisionLinuxUser(request.getParameter("user"), request.getParameter("email"));
+                    value.addProperty("mailDomain", linux.domain());
+                    value.addProperty("mailOsUid", linux.uid());
+                    value.addProperty("mailOsGid", linux.gid());
+                    value.addProperty("mailHome", linux.home());
                     checked(mailDbCall("mail_fn_admin_usuario_crear", gson.toJson(value)));
                     session.setAttribute("mail.password.reset", password);
                     session.setAttribute("mail.user.admin.notice", "Usuario y cuenta Linux creados correctamente");
@@ -1700,8 +1704,8 @@ public final class MailServlet extends HttpServlet {
         return checked(mailDbCall("mail_fn_usuario_opciones", user)).get("smsEnabled").getAsBoolean();
     }
 
-    private static void provisionLinuxUser(String user, String email) throws Exception {
-        linuxHome(user, email);
+    private static LinuxMailbox provisionLinuxUser(String user, String email) throws Exception {
+        String home = linuxHome(user, email);
         Process process = new ProcessBuilder("/usr/bin/sudo", "-n", USER_PROVISIONER, user, email)
                 .redirectErrorStream(true).start();
         if (!process.waitFor(20, TimeUnit.SECONDS)) {
@@ -1711,6 +1715,19 @@ public final class MailServlet extends HttpServlet {
         String output = new String(process.getInputStream().readNBytes(4096), StandardCharsets.UTF_8).strip();
         if (process.exitValue() != 0)
             throw new IllegalStateException(output.isBlank() ? "No fue posible crear la cuenta Linux" : output);
+        return linuxMailbox(user, email, linuxId(user, "-u"), linuxId(user, "-g"), home);
+    }
+
+    private static String linuxId(String user, String option) throws Exception {
+        Process process = new ProcessBuilder("/usr/bin/id", option, user).redirectErrorStream(true).start();
+        if (!process.waitFor(5, TimeUnit.SECONDS)) {
+            process.destroyForcibly();
+            throw new IllegalStateException("No fue posible consultar la identidad Linux");
+        }
+        String value = new String(process.getInputStream().readNBytes(128), StandardCharsets.UTF_8).strip();
+        if (process.exitValue() != 0 || !value.matches("[0-9]+"))
+            throw new IllegalStateException("La identidad Linux creada no es válida");
+        return value;
     }
 
     private static void retireLinuxUser(String user, String destination, String token) throws Exception {
@@ -1734,6 +1751,17 @@ public final class MailServlet extends HttpServlet {
         String domain = address.substring(address.indexOf('@') + 1).replaceAll("[^a-z0-9]", "");
         return "/home/" + domain + "/" + account;
     }
+
+    static LinuxMailbox linuxMailbox(String user, String email, String uid, String gid, String home) {
+        String address = email == null ? "" : email.strip().toLowerCase(Locale.ROOT);
+        String expectedHome = linuxHome(user, address);
+        if (uid == null || !uid.matches("[0-9]+") || gid == null || !gid.matches("[0-9]+")
+                || !expectedHome.equals(home))
+            throw new IllegalArgumentException("La identidad Linux creada no es válida");
+        return new LinuxMailbox(address.substring(address.indexOf('@') + 1), uid, gid, home);
+    }
+
+    record LinuxMailbox(String domain, String uid, String gid, String home) { }
 
     private void filtersModel(Map<String, Object> model, HttpServletRequest request, HttpSession session,
             String mailbox,
@@ -2061,6 +2089,44 @@ public final class MailServlet extends HttpServlet {
     static int sessionTimeoutSeconds(JsonObject access) {
         int milliseconds = access.has("sessionTimeout") ? access.get("sessionTimeout").getAsInt() : 10_800_000;
         return milliseconds > 0 ? Math.max(1, milliseconds / 1000) : 10_800;
+    }
+
+    static String applicationLabel(String application) {
+        return applicationLabel(application,
+                System.getenv("GATOR_NODE_NAME"), System.getenv("HOSTNAME"), localHostName());
+    }
+
+    static String applicationLabel(String application, String... candidates) {
+        String base = application == null || application.isBlank() ? "Gator" : application.strip();
+        for (String candidate : candidates) {
+            if (candidate == null) continue;
+            String normalized = candidate.strip().toLowerCase(Locale.ROOT);
+            String node = switch (normalized) {
+                case "artemisa", "10.100.0.1" -> "Artemisa";
+                case "apolo", "10.100.0.40" -> "Apolo";
+                case "quetzal", "10.100.0.7" -> "Quetzal";
+                case "hera", "10.100.0.33" -> "Hera";
+                case "poseidon", "10.100.0.34" -> "Poseidon";
+                default -> {
+                    if (normalized.startsWith("artemisa.")) yield "Artemisa";
+                    if (normalized.startsWith("apolo.")) yield "Apolo";
+                    if (normalized.startsWith("quetzal.")) yield "Quetzal";
+                    if (normalized.startsWith("hera.")) yield "Hera";
+                    if (normalized.startsWith("poseidon.")) yield "Poseidon";
+                    yield "";
+                }
+            };
+            if (!node.isEmpty()) return base.endsWith(" · " + node) ? base : base + " · " + node;
+        }
+        return base;
+    }
+
+    private static String localHostName() {
+        try {
+            return java.net.InetAddress.getLocalHost().getHostName();
+        } catch (Exception ignored) {
+            return "";
+        }
     }
 
     private static boolean smsConfigured() {
