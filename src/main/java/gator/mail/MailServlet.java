@@ -394,12 +394,19 @@ public final class MailServlet extends HttpServlet {
             requestJson.addProperty("userHint", userHint(user));
             requestJson.addProperty("requestToken", mobileRequestToken(session));
             requestJson.addProperty("fallback", resend || fallback);
+            requestJson.addProperty("mobileOnly", retryMobile);
             JsonObject result = sms(requestJson);
             if (bool(result, "mobilePending") && result.has("authorizationId") && result.has("expiresAt")) {
                 session.setAttribute("mail.challenge.mobile.id", result.get("authorizationId").getAsString());
                 session.setAttribute("mail.challenge.expires", result.get("expiresAt").getAsLong());
                 session.setAttribute("mail.challenge.sent", now);
                 return "Aprueba este acceso desde Gator Mobile";
+            }
+            if (retryMobile) {
+                clearMobileAuthorization(session);
+                session.setAttribute("mail.challenge.denied", true);
+                return result.has("mensaje") ? result.get("mensaje").getAsString()
+                        : "No hay un iPhone registrado para esta cuenta. Abre Gator Mobile con la misma cuenta o usa SMS.";
             }
             if (bool(result, "smsDisabled")) {
                 session.setAttribute("mail.challenge.verified", true);

@@ -117,6 +117,10 @@ Cancelar, rechazar, expirar o fallar una solicitud sólo termina ese intento: la
 misma sesión permite crear una autorización móvil nueva con un `requestToken`
 distinto o cambiar a SMS. Los identificadores de solicitudes cerradas nunca se
 reutilizan.
+La acción explícita **Intentar autorización en el iPhone** envía
+`mobileOnly=true`: si la cuenta no tiene un dispositivo registrado o el canal
+móvil no está disponible, el proveedor debe devolver un error descriptivo y
+nunca sustituir esa acción por un SMS silencioso.
 La administración de usuarios muestra el teléfono y la acción **Agregar a
 Global Safe List** sólo cuando ese endpoint y su secreto están configurados.
 Para actualizar un teléfono envía `action: sync`, `usuario`, `email`, `name` y
