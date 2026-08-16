@@ -328,6 +328,9 @@ begin
         propietario := actor_usuario;
         grupo := null;
     end if;
+    if propietario is null and grupo is null then
+        propietario := actor_usuario;
+    end if;
     if nombre is null or nombre = '' or length(nombre) > 200
             or correo !~ '^[^@[:space:]]+@[^@[:space:]]+[.][^@[:space:]]+$'
             or length(correo) > 320 or (propietario is null and grupo is null) then

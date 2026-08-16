@@ -69,10 +69,11 @@ begin
         select 1 from app_usuarios where usuario_id = 'mail-user-test'), 'No se eliminó el usuario autorizado';
 
     resultado := mail_fn_admin_contacto_guardar('{"actor":"mail-admin-test@soft-gator.com",'
-        '"name":"Contacto de prueba","email":"contacto-admin-test@example.com",'
-        '"owner":"mail-admin-test","group":""}')::json;
-    assert resultado ->> 'codigo' = '0', 'No se creó el contacto';
+        '"name":"Contacto de prueba","email":"contacto-admin-test@example.com"}')::json;
+    assert resultado ->> 'codigo' = '0', 'El administrador no pudo crear un contacto rápido';
     contacto := resultado ->> 'id';
+    assert (select usuario_id = 'mail-admin-test' from app_contactos where contacto_id = contacto),
+        'El contacto rápido no quedó asignado al administrador';
     assert position('contacto-admin-test@example.com' in
         mail_fn_admin_contactos('mail-admin-test@soft-gator.com')) > 0, 'No se listó el contacto';
     resultado := mail_fn_admin_contacto_guardar(json_build_object(
