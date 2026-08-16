@@ -122,6 +122,9 @@ Una instalación sin soporte de lista segura puede omitir el endpoint completo;
 Gator Mail no incluye credenciales ni dependencias de Twilio.
 La preferencia se guarda en `app_usuarios.usuario_sms_auth`; una instalación
 que implemente el endpoint debe omitir el desafío cuando ese valor sea falso.
+Si el proveedor confirma `smsDisabled: true`, Gator Mail considera satisfecho
+el flujo sin crear un desafío; una respuesta incompleta nunca debe provocar un
+error de aplicación.
 Con la integración Soft Gator, el endpoint intenta primero una autorización en
 Gator Mobile y utiliza SMS sólo cuando no hay un dispositivo conectado, vence
 la solicitud o el usuario elige **Cancelar y usar SMS**. Mientras espera, la

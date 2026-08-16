@@ -349,7 +349,7 @@ public final class MailServlet extends HttpServlet {
             JsonObject result = sms(requestJson);
             session.setAttribute("mail.phone.correction.used", true);
             session.removeAttribute("mail.phone.correction");
-            if (!"0".equals(result.get("codigo").getAsString()) || !result.get("phoneSent").getAsBoolean())
+            if (!"0".equals(string(result, "codigo")) || !bool(result, "phoneSent"))
                 return result.has("mensaje") ? result.get("mensaje").getAsString() : "No fue posible enviar la clave por SMS";
             saveChallenge(session, result, now);
             return "Guardamos el teléfono y enviamos una clave temporal por SMS";
@@ -381,13 +381,17 @@ public final class MailServlet extends HttpServlet {
             requestJson.addProperty("requestToken", token);
             requestJson.addProperty("fallback", resend || fallback);
             JsonObject result = sms(requestJson);
-            if (result.has("mobilePending") && result.get("mobilePending").getAsBoolean()) {
+            if (bool(result, "mobilePending") && result.has("authorizationId") && result.has("expiresAt")) {
                 session.setAttribute("mail.challenge.mobile.id", result.get("authorizationId").getAsString());
                 session.setAttribute("mail.challenge.expires", result.get("expiresAt").getAsLong());
                 session.setAttribute("mail.challenge.sent", now);
                 return "Aprueba este acceso desde Gator Mobile";
             }
-            if (!"0".equals(result.get("codigo").getAsString()) || !result.get("phoneSent").getAsBoolean()) {
+            if (bool(result, "smsDisabled")) {
+                session.setAttribute("mail.challenge.verified", true);
+                return "";
+            }
+            if (!"0".equals(string(result, "codigo")) || !bool(result, "phoneSent")) {
                 if (!Boolean.TRUE.equals(session.getAttribute("mail.phone.correction.used"))
                         && result.has("phoneCorrectionAllowed") && result.get("phoneCorrectionAllowed").getAsBoolean())
                     session.setAttribute("mail.phone.correction", true);
@@ -622,6 +626,10 @@ public final class MailServlet extends HttpServlet {
 
     private static String string(JsonObject value, String name) {
         return value.has(name) && !value.get(name).isJsonNull() ? value.get(name).getAsString() : "";
+    }
+
+    private static boolean bool(JsonObject value, String name) {
+        return value.has(name) && !value.get(name).isJsonNull() && value.get(name).getAsBoolean();
     }
 
     private static String webLink(String value) {
