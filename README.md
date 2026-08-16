@@ -113,6 +113,10 @@ con autenticación `Bearer`: `action` (`send`, `status`, `cancel` o `correct`), 
 `codigo`, `phoneSent`, `challengeHash`, `expiresAt` y, en errores de envío,
 `mensaje` y `phoneCorrectionAllowed`. Cada instalación puede reemplazarlo por
 su propio proveedor; sin endpoint, el correo abre sin solicitar clave.
+Cancelar, rechazar, expirar o fallar una solicitud sólo termina ese intento: la
+misma sesión permite crear una autorización móvil nueva con un `requestToken`
+distinto o cambiar a SMS. Los identificadores de solicitudes cerradas nunca se
+reutilizan.
 La administración de usuarios muestra el teléfono y la acción **Agregar a
 Global Safe List** sólo cuando ese endpoint y su secreto están configurados.
 Para actualizar un teléfono envía `action: sync`, `usuario`, `email`, `name` y

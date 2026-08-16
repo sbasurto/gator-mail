@@ -36,8 +36,12 @@
                 }
                 if (result.status === "REJECTED") {
                     polling = false;
-                    mobileChallenge.classList.add("is-rejected");
-                    status.textContent = result.message || "El acceso fue rechazado.";
+                    if (result.redirect) {
+                        window.location.replace(result.redirect);
+                    } else {
+                        mobileChallenge.classList.add("is-rejected");
+                        status.textContent = result.message || "El acceso fue rechazado.";
+                    }
                     return;
                 }
                 status.textContent = "Esperando autorización en Gator Mobile…";
