@@ -125,6 +125,10 @@ public final class MailServlet extends HttpServlet {
             String mailbox = access.get("email").getAsString();
             model.put("mailbox", mailbox);
             String notice = challenge(request, session, user);
+            if (mobileChallengePoll(request)) {
+                mobileChallengeResponse(request, response, session, notice);
+                return;
+            }
             if (!Boolean.TRUE.equals(session.getAttribute("mail.challenge.verified"))) {
                 challengeModel(model, session, notice);
             } else if (configuration(request, response, session, model, mailbox, OAuthServlet.accessToken(request))) {
@@ -294,6 +298,17 @@ public final class MailServlet extends HttpServlet {
         long now = System.currentTimeMillis();
         boolean mobilePending = session.getAttribute("mail.challenge.mobile.id") != null;
         boolean fallback = false;
+        if (mobilePending && "cancelMobile".equals(request.getParameter("action"))) {
+            if (!token.equals(request.getParameter("token"))) return "Solicitud inválida";
+            JsonObject cancellation = json("usuario", user);
+            cancellation.addProperty("action", "cancel");
+            cancellation.addProperty("authorizationId", String.valueOf(session.getAttribute("mail.challenge.mobile.id")));
+            cancellation.addProperty("requestToken", token);
+            sms(cancellation);
+            session.removeAttribute("mail.challenge.mobile.id");
+            mobilePending = false;
+            fallback = true;
+        }
         if (mobilePending && "checkMobile".equals(request.getParameter("action"))) {
             if (!token.equals(request.getParameter("token"))) return "Solicitud inválida";
             JsonObject status = json("usuario", user);
@@ -714,12 +729,39 @@ public final class MailServlet extends HttpServlet {
         model.put("phoneCorrection", correction);
         model.put("mobileChallenge", mobile);
         model.put("codeChallenge", !correction && !mobile);
-        model.put("resendChallenge", !correction);
+        model.put("resendChallenge", !correction && !mobile);
         model.put("token", String.valueOf(session.getAttribute("mail.challenge.token")));
         model.put("notice", notice);
-        model.put("noticeVisible", !notice.isBlank());
+        model.put("noticeVisible", !notice.isBlank() && !mobile);
         model.put("resendDisabled", remaining > 0);
         model.put("resendWait", remaining > 0 ? "Disponible en " + remaining + " s" : "");
+    }
+
+    private static boolean mobileChallengePoll(HttpServletRequest request) {
+        return "checkMobile".equals(request.getParameter("action"))
+                && "json".equals(request.getParameter("format"));
+    }
+
+    private void mobileChallengeResponse(HttpServletRequest request, HttpServletResponse response,
+            HttpSession session, String notice) throws IOException {
+        JsonObject result = new JsonObject();
+        if (Boolean.TRUE.equals(session.getAttribute("mail.challenge.verified"))) {
+            result.addProperty("status", "APPROVED");
+            result.addProperty("authorized", true);
+            result.addProperty("redirect", request.getContextPath() + "/mail");
+        } else if (Boolean.TRUE.equals(session.getAttribute("mail.challenge.denied"))) {
+            result.addProperty("status", "REJECTED");
+            result.addProperty("message", notice.isBlank() ? "El acceso fue rechazado" : notice);
+        } else if (session.getAttribute("mail.challenge.mobile.id") != null) {
+            result.addProperty("status", "PENDING");
+            result.addProperty("authorized", false);
+        } else {
+            result.addProperty("status", "FALLBACK");
+            result.addProperty("redirect", request.getContextPath() + "/mail");
+            if (!notice.isBlank()) result.addProperty("message", notice);
+        }
+        response.setContentType("application/json;charset=UTF-8");
+        response.getWriter().print(gson.toJson(result));
     }
 
     private void mailboxModel(Map<String, Object> model, HttpServletRequest request, String mailbox,

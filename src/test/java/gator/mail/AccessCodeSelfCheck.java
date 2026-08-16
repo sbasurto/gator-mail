@@ -373,9 +373,9 @@ public final class AccessCodeSelfCheck {
         try {
             String html = new GatorJsonView().renderResource("gator-mail/screens/mail.json", model);
             assert html.contains("Sesión cerrada");
-            assert html.contains("/gator-mail/css/gator-mail.css?v=43");
+            assert html.contains("/gator-mail/css/gator-mail.css?v=44");
             assert html.contains("/elib/js/sweetalert2.all.min.js");
-            assert html.contains("/gator-mail/js/gator-mail.js?v=24");
+            assert html.contains("/gator-mail/js/gator-mail.js?v=25");
             assert html.contains("Nueva subcarpeta");
             assert html.contains("href=\"/gator-mail/oauth/password\"");
             assert html.contains("fontawesome-free-5.13.0-web/css/all.min.css");
@@ -532,6 +532,22 @@ public final class AccessCodeSelfCheck {
             String withoutSms = new GatorJsonView().renderResource("gator-mail/screens/mail.json", model);
             assert !withoutSms.contains("value=\"userSafeList\"");
             assert !withoutSms.contains("value=\"+525512345678\"");
+            Map<String, Object> mobileModel = new HashMap<>(model);
+            mobileModel.put("challenge", true);
+            mobileModel.put("mobileChallenge", true);
+            mobileModel.put("codeChallenge", false);
+            mobileModel.put("phoneCorrection", false);
+            mobileModel.put("resendChallenge", false);
+            mobileModel.put("noticeVisible", false);
+            mobileModel.put("token", "mobile-token");
+            String mobileChallenge = new GatorJsonView().renderResource("gator-mail/screens/mail.json", mobileModel);
+            assert mobileChallenge.contains("id=\"mail-mobile-challenge\"");
+            assert mobileChallenge.contains("class=\"spinner-border text-primary\"");
+            assert mobileChallenge.contains("Esperando autorización en Gator Mobile…");
+            assert mobileChallenge.contains("name=\"format\" value=\"json\"");
+            assert mobileChallenge.contains("name=\"action\" value=\"cancelMobile\"");
+            assert mobileChallenge.contains("Cancelar y usar SMS");
+            assert !mobileChallenge.contains("Comprobar autorización");
             model.put("logoutTitle", "Tu sesión expiró");
             model.put("logoutCopy", "Por seguridad terminamos la sesión.");
             String expired = new GatorJsonView().renderResource("gator-mail/screens/mail.json", model);

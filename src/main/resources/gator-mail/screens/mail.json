@@ -14,9 +14,9 @@
           { "tag": "link", "attrs": { "rel": "stylesheet", "href": "/elib/css2/fontawesome-free-5.13.0-web/css/all.min.css" } },
           { "tag": "link", "attrs": { "rel": "stylesheet", "href": "/elib/css/colors.css" } },
           { "tag": "link", "attrs": { "rel": "stylesheet", "href": "/elib/css2/sweetalert2.min.css?v=11.23.0" } },
-          { "tag": "link", "attrs": { "rel": "stylesheet", "href": "${contextPath}/css/gator-mail.css?v=43" } },
+          { "tag": "link", "attrs": { "rel": "stylesheet", "href": "${contextPath}/css/gator-mail.css?v=44" } },
           { "tag": "script", "attrs": { "src": "/elib/js/sweetalert2.all.min.js", "defer": "true" } },
-          { "tag": "script", "attrs": { "src": "${contextPath}/js/gator-mail.js?v=24", "defer": "true" } }
+          { "tag": "script", "attrs": { "src": "${contextPath}/js/gator-mail.js?v=25", "defer": "true" } }
         ]
       },
       {
@@ -632,11 +632,25 @@
                           {
                             "tag": "form",
                             "if": "mobileChallenge",
-                            "attrs": { "method": "post", "class": "mail-challenge-form", "id": "mail-mobile-challenge" },
+                            "attrs": { "method": "post", "class": "mail-challenge-form mail-mobile-challenge", "id": "mail-mobile-challenge" },
                             "children": [
                               { "tag": "input", "attrs": { "type": "hidden", "name": "action", "value": "checkMobile" } },
                               { "tag": "input", "attrs": { "type": "hidden", "name": "token", "value": "${token}" } },
-                              { "tag": "button", "attrs": { "class": "btn btn-primary btn-lg w-100 mail-primary-action", "type": "submit" }, "text": "Comprobar autorización" }
+                              { "tag": "input", "attrs": { "type": "hidden", "name": "format", "value": "json" } },
+                              { "tag": "div", "attrs": { "class": "mail-mobile-wait", "role": "status" }, "children": [
+                                { "tag": "span", "attrs": { "class": "spinner-border text-primary", "aria-hidden": "true" } },
+                                { "tag": "span", "attrs": { "class": "mail-mobile-status" }, "text": "Esperando autorización en Gator Mobile…" }
+                              ] }
+                            ]
+                          },
+                          {
+                            "tag": "form",
+                            "if": "mobileChallenge",
+                            "attrs": { "method": "post", "class": "mail-mobile-cancel" },
+                            "children": [
+                              { "tag": "input", "attrs": { "type": "hidden", "name": "action", "value": "cancelMobile" } },
+                              { "tag": "input", "attrs": { "type": "hidden", "name": "token", "value": "${token}" } },
+                              { "tag": "button", "attrs": { "class": "btn btn-link", "type": "submit" }, "text": "Cancelar y usar SMS" }
                             ]
                           },
                           {

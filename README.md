@@ -108,7 +108,7 @@ configuración de identidad `pg_gatormail_identity`, una entrada `broker_db` con
 El segundo factor sólo se solicita cuando `GATOR_MAIL_SMS_ENABLED=true`,
 `GATOR_MAIL_SMS_ENDPOINT` y `GATOR_MAIL_SMS_SECRET` están configurados, y el usuario lo mantiene habilitado
 en **Configuración > Opciones de usuario**. El endpoint recibe JSON por `POST`
-con autenticación `Bearer`: `action` (`send` o `correct`), `usuario`,
+con autenticación `Bearer`: `action` (`send`, `status`, `cancel` o `correct`), `usuario`,
 `application`, `userHint` y, para corregir, `telefono`. Debe devolver
 `codigo`, `phoneSent`, `challengeHash`, `expiresAt` y, en errores de envío,
 `mensaje` y `phoneCorrectionAllowed`. Cada instalación puede reemplazarlo por
@@ -124,11 +124,15 @@ La preferencia se guarda en `app_usuarios.usuario_sms_auth`; una instalación
 que implemente el endpoint debe omitir el desafío cuando ese valor sea falso.
 Con la integración Soft Gator, el endpoint intenta primero una autorización en
 Gator Mobile y utiliza SMS sólo cuando no hay un dispositivo conectado, vence
-la solicitud o el usuario elige **Usar SMS**. Gator Mail nunca usa correo como
+la solicitud o el usuario elige **Cancelar y usar SMS**. Mientras espera, la
+interfaz consulta silenciosamente el estado y muestra un spinner; no recarga la
+página ni presenta alertas periódicas. La cancelación envía `authorizationId` y
+`requestToken`, marca la solicitud móvil como `CANCELLED` y continúa con el
+método alternativo. Gator Mail nunca usa correo como
 fallback para evitar depender del mismo buzón que se está intentando abrir.
 Para habilitar este orden en el proveedor de Soft Gator, configure
 `GATOR_MOBILE_AUTH_MODE=first`; Gator Mail envía `smsOnly=false` en la solicitud
-inicial y reserva `fallback=true` para la acción explícita **Usar SMS**.
+inicial y reserva `fallback=true` para la acción explícita **Cancelar y usar SMS**.
 
 ## Filtros IMAP
 
