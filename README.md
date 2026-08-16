@@ -128,8 +128,11 @@ Para actualizar un teléfono envía `action: sync`, `usuario`, `email`, `name` y
 `telefono`. El proveedor debe validar que el teléfono corresponda al usuario.
 Una instalación sin soporte de lista segura puede omitir el endpoint completo;
 Gator Mail no incluye credenciales ni dependencias de Twilio.
-La preferencia se guarda en `app_usuarios.usuario_sms_auth`; una instalación
-que implemente el endpoint debe omitir el desafío cuando ese valor sea falso.
+La preferencia se guarda en `app_usuarios.usuario_sms_auth` y su valor inicial
+es `false`: el segundo factor es opt-in. En producción sólo `sbasurto` y
+`appreview` se inicializan en `true`; cualquier otro usuario puede activarlo en
+**Configuración > Opciones de usuario**. Una instalación que implemente el
+endpoint debe omitir todos los canales del desafío cuando ese valor sea falso.
 Si el proveedor confirma `smsDisabled: true`, Gator Mail considera satisfecho
 el flujo sin crear un desafío; una respuesta incompleta nunca debe provocar un
 error de aplicación.

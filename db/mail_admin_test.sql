@@ -46,7 +46,7 @@ begin
               from mail_usuario_telefonos where usuario_id = 'mail-user-test'), 'No se reinició Global Safe List';
 
     resultado := mail_fn_usuario_opciones('mail-user-test')::json;
-    assert resultado ->> 'smsEnabled' = 'true', 'SMS debe iniciar habilitado';
+    assert resultado ->> 'smsEnabled' = 'false', 'El segundo factor debe iniciar deshabilitado';
     resultado := mail_fn_usuario_opciones_guardar('{"actor":"mail-admin-test@soft-gator.com",'
         '"user":"mail-admin-test","smsEnabled":false}')::json;
     assert resultado ->> 'codigo' = '0', 'No se guardó la preferencia SMS';

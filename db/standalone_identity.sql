@@ -45,12 +45,13 @@ create table if not exists app_usuarios (
     usuario_password_corto text,
     usuario_recover_hash text default uuid_generate_v4(),
     usuario_sesion_timeout integer default 10800000,
-    usuario_sms_auth boolean not null default true,
+    usuario_sms_auth boolean not null default false,
     usuario_publico integer default 0,
     usuario_hash_auth text
 );
 
-alter table app_usuarios add column if not exists usuario_sms_auth boolean not null default true;
+alter table app_usuarios add column if not exists usuario_sms_auth boolean not null default false;
+alter table app_usuarios alter column usuario_sms_auth set default false;
 
 create table if not exists app_usuario_email (
     rowid bigint not null default nextval('app_usuario_email_rowid_seq'),

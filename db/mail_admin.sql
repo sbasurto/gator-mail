@@ -3,7 +3,8 @@ create table if not exists mail_administradores (
 );
 
 alter table app_usuarios alter column usuario_sesion_timeout set default 10800000;
-alter table app_usuarios add column if not exists usuario_sms_auth boolean not null default true;
+alter table app_usuarios add column if not exists usuario_sms_auth boolean not null default false;
+alter table app_usuarios alter column usuario_sms_auth set default false;
 
 create table if not exists mail_usuario_telefonos (
     usuario_id text primary key references app_usuarios(usuario_id) on delete cascade,
@@ -53,7 +54,7 @@ $$;
 create or replace function mail_fn_usuario_opciones(v_usuario text)
 returns text language sql stable security definer set search_path = public as $$
     select json_build_object('codigo', case when count(*) = 1 then '0' else '-1' end,
-           'smsEnabled', coalesce(bool_or(usuario_sms_auth), true))::text
+           'smsEnabled', coalesce(bool_or(usuario_sms_auth), false))::text
       from app_usuarios where usuario_id = trim(v_usuario);
 $$;
 
