@@ -548,6 +548,16 @@ public final class AccessCodeSelfCheck {
             assert mobileChallenge.contains("name=\"action\" value=\"cancelMobile\"");
             assert mobileChallenge.contains("Cancelar y usar SMS");
             assert !mobileChallenge.contains("Comprobar autorización");
+            mobileModel.put("mobileChallenge", false);
+            mobileModel.put("factorChoice", true);
+            mobileModel.put("mobileRetryAvailable", true);
+            mobileModel.put("resendChallenge", true);
+            String factorChoice = new GatorJsonView().renderResource("gator-mail/screens/mail.json", mobileModel);
+            assert factorChoice.contains("Elige cómo continuar");
+            assert factorChoice.contains("name=\"action\" value=\"retryMobile\"");
+            assert factorChoice.contains("Intentar autorización en el iPhone");
+            assert factorChoice.contains("name=\"action\" value=\"resend\"");
+            assert factorChoice.contains("Enviar clave por SMS");
             model.put("logoutTitle", "Tu sesión expiró");
             model.put("logoutCopy", "Por seguridad terminamos la sesión.");
             String expired = new GatorJsonView().renderResource("gator-mail/screens/mail.json", model);
