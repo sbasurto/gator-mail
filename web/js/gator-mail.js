@@ -15,7 +15,10 @@
         const poll = async () => {
             try {
                 controller = new AbortController();
-                const response = await fetch(mobileChallenge.action || window.location.href, {
+                // A hidden input named "action" shadows HTMLFormElement.action in browsers.
+                // Read the attribute explicitly so status polling always targets this page.
+                const endpoint = mobileChallenge.getAttribute("action") || window.location.href;
+                const response = await fetch(endpoint, {
                     method: "POST",
                     body: new FormData(mobileChallenge),
                     credentials: "same-origin",

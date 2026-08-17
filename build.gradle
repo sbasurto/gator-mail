@@ -51,6 +51,14 @@ tasks.register('filterSelfTest', JavaExec) {
     enableAssertions = true
 }
 
+tasks.register('webSelfTest') {
+    doLast {
+        def script = file('web/js/gator-mail.js').getText('UTF-8')
+        assert script.contains('mobileChallenge.getAttribute("action")')
+        assert !script.contains('mobileChallenge.action ||')
+    }
+}
+
 tasks.named('test') { failOnNoDiscoveredTests = false }
-tasks.named('check') { dependsOn selfTest, filterSelfTest }
+tasks.named('check') { dependsOn selfTest, filterSelfTest, webSelfTest }
 tasks.named('clean') { delete 'dist' }
