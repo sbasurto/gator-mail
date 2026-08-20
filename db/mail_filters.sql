@@ -19,6 +19,21 @@ create table if not exists mail_filtro_reglas (
 create index if not exists mail_filtro_reglas_activas_idx
     on mail_filtro_reglas(mailbox, prioridad, regla_id) where habilitada;
 
+create table if not exists mail_spam_global (
+    spam_id bigserial primary key,
+    tipo text not null check (tipo in ('ADDRESS', 'DOMAIN')),
+    valor text not null check (valor = lower(valor) and length(valor) between 3 and 320),
+    actor text not null,
+    fecha timestamptz not null default current_timestamp,
+    unique (tipo, valor)
+);
+
+create table if not exists mail_spam_reprocesos (
+    mailbox text not null,
+    spam_id bigint not null references mail_spam_global(spam_id) on delete cascade,
+    primary key (mailbox, spam_id)
+);
+
 create table if not exists mail_filtro_estado (
     mailbox text primary key,
     uidvalidity bigint,
@@ -168,7 +183,8 @@ exception when others then
 end;
 $$;
 
-revoke all on mail_filtro_reglas, mail_filtro_estado, mail_filtro_auditoria from public;
+revoke all on mail_filtro_reglas, mail_filtro_estado, mail_filtro_auditoria, mail_spam_global,
+    mail_spam_reprocesos from public;
 revoke all on function mail_fn_filtros(text), mail_fn_filtro_guardar(text), mail_fn_filtro_eliminar(text),
     mail_fn_filtros_aplicar(text) from public;
 grant execute on function mail_fn_filtros(text), mail_fn_filtro_guardar(text), mail_fn_filtro_eliminar(text),

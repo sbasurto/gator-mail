@@ -172,8 +172,15 @@
                   { "tag": "div", "attrs": { "class": "mail-folder-menu", "id": "mail-contact-menu", "data-csrf": "${csrf}", "role": "menu" }, "children": [
                     { "tag": "button", "attrs": { "class": "mail-folder-menu-item", "id": "mail-contact-create", "type": "button", "role": "menuitem" }, "children": [
                       { "tag": "span", "attrs": { "class": "fas fa-user-plus", "aria-hidden": "true" } }, { "tag": "span", "text": "Agregar a contactos" }
+                    ] },
+                    { "tag": "button", "if": "configurationAdminAvailable", "attrs": { "class": "mail-folder-menu-item mail-folder-menu-danger", "id": "mail-spam-address", "type": "button", "role": "menuitem" }, "children": [
+                      { "tag": "span", "attrs": { "class": "fas fa-ban", "aria-hidden": "true" } }, { "tag": "span", "text": "Spam global: dirección" }
+                    ] },
+                    { "tag": "button", "if": "configurationAdminAvailable", "attrs": { "class": "mail-folder-menu-item mail-folder-menu-danger", "id": "mail-spam-domain", "type": "button", "role": "menuitem" }, "children": [
+                      { "tag": "span", "attrs": { "class": "fas fa-ban", "aria-hidden": "true" } }, { "tag": "span", "text": "Spam global: dominio" }
                     ] }
-                  ] }
+                  ] },
+                  { "tag": "span", "if": "spamGlobalNotice", "attrs": { "class": "d-none mail-swal mail-swal-success", "title": "Spam global actualizado" }, "text": "${spamGlobalMessage}" }
                 ]
               },
               {
@@ -352,6 +359,21 @@
                         ] }
                       ] },
                       { "tag": "span", "if": "filterNotice", "attrs": { "class": "d-none mail-swal mail-swal-success", "title": "Filtros actualizados" }, "text": "${filterNoticeMessage}" },
+                      { "tag": "section", "if": "configurationAdminAvailable", "attrs": { "class": "mail-global-spam" }, "children": [
+                        { "tag": "h2", "attrs": { "class": "mail-filter-audit-title" }, "text": "Spam global" },
+                        { "tag": "p", "attrs": { "class": "mail-filter-note" }, "text": "Estas direcciones y dominios se envían a Spam para todos. Al agregarlos también se revisan los mensajes que permanecen en Entrada." },
+                        { "tag": "p", "if": "globalSpamEmpty", "attrs": { "class": "mail-empty text-muted" }, "text": "No hay remitentes bloqueados globalmente." },
+                        { "tag": "div", "if": "globalSpamAvailable", "attrs": { "class": "mail-admin-list" }, "children": [
+                          { "tag": "form", "each": "globalSpam", "as": "blocked", "attrs": { "class": "mail-admin-row mail-global-spam-row", "method": "post", "action": "${contextPath}/mail" }, "children": [
+                            { "tag": "input", "attrs": { "type": "hidden", "name": "csrf", "value": "${csrf}" } },
+                            { "tag": "input", "attrs": { "type": "hidden", "name": "id", "value": "${blocked.id}" } },
+                            { "tag": "div", "children": [{ "tag": "small", "text": "${blocked.scope}" }, { "tag": "strong", "text": "${blocked.value}" }] },
+                            { "tag": "div", "children": [{ "tag": "small", "text": "Agregado por ${blocked.actor}" }, { "tag": "span", "text": "${blocked.date}" }] },
+                            { "tag": "span", "attrs": { "class": "mail-admin-status" }, "text": "${blocked.status}" },
+                            { "tag": "button", "attrs": { "class": "btn btn-outline-danger btn-sm mail-global-spam-delete", "type": "submit", "name": "action", "value": "spamGlobalDelete" }, "text": "Desbloquear" }
+                          ] }
+                        ] }
+                      ] },
                       { "tag": "p", "if": "filterRulesEmpty", "attrs": { "class": "mail-empty text-muted" }, "text": "No hay filtros. El primer filtro comenzará a observar sólo los mensajes nuevos." },
                       { "tag": "p", "if": "filterDestinationAvailable", "attrs": { "class": "mail-filter-note" }, "text": "La regla con el número de orden más bajo se evalúa primero. Al encontrar una coincidencia, el mensaje se mueve y las demás reglas ya no se ejecutan." },
                       { "tag": "form", "if": "filterDestinationAvailable", "attrs": { "class": "mail-filter-form mail-filter-rule-form mail-admin-new", "method": "post", "action": "${contextPath}/mail" }, "children": [
@@ -963,7 +985,7 @@
                                 { "tag": "span", "attrs": { "class": "mail-message-icon fas ${message.icon}", "aria-hidden": "true" } },
                                 { "tag": "div", "attrs": { "class": "mail-message-copy" }, "children": [
                                   { "tag": "div", "attrs": { "class": "mail-message-meta" }, "children": [
-                                    { "tag": "strong", "attrs": { "class": "mail-contact-source", "data-contact-email": "${message.contactEmail}", "aria-label": "${message.contactName}", "title": "Clic derecho para agregar a contactos" }, "text": "${message.from}" },
+                                    { "tag": "strong", "attrs": { "class": "mail-contact-source", "data-contact-email": "${message.contactEmail}", "aria-label": "${message.contactName}", "title": "Clic derecho para ver acciones" }, "text": "${message.from}" },
                                     { "tag": "time", "attrs": { "class": "text-muted" }, "text": "${message.sent}" },
                                     { "tag": "span", "attrs": { "class": "mail-message-state ${message.stateClass}" }, "text": "${message.state}" }
                                   ] },
@@ -999,7 +1021,7 @@
                         "children": [
                           { "tag": "h1", "attrs": { "class": "mail-message-title" }, "text": "${subject}" },
                           { "tag": "dl", "attrs": { "class": "mail-headers" }, "children": [
-                            { "tag": "dt", "text": "De" }, { "tag": "dd", "attrs": { "class": "mail-contact-source", "data-contact-email": "${contactEmail}", "aria-label": "${contactName}", "title": "Clic derecho para agregar a contactos" }, "text": "${from}" },
+                            { "tag": "dt", "text": "De" }, { "tag": "dd", "attrs": { "class": "mail-contact-source", "data-contact-email": "${contactEmail}", "aria-label": "${contactName}", "title": "Clic derecho para ver acciones" }, "text": "${from}" },
                             { "tag": "dt", "text": "Para" }, { "tag": "dd", "text": "${to}" },
                             { "tag": "dt", "text": "CC" }, { "tag": "dd", "text": "${cc}" }
                           ] },

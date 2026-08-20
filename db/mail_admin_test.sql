@@ -12,6 +12,7 @@ declare resultado json;
 declare contacto text;
 declare contacto_usuario text;
 declare password_anterior text;
+declare v_spam_id bigint;
 begin
     resultado := mail_fn_admin_usuario_crear('{"actor":"mail-admin-test@soft-gator.com",'
         '"user":"mail-new-test","name":"Usuario nuevo","email":"mail-new-test@soft-gator.com",'
@@ -38,6 +39,30 @@ begin
     assert resultado ->> 'codigo' = '0', 'No se registró Global Safe List';
     assert (select global_safe_list from mail_usuario_telefonos
               where usuario_id = 'mail-user-test'), 'Estado de Global Safe List incorrecto';
+    resultado := mail_fn_admin_spam_guardar('{"actor":"mail-admin-test@soft-gator.com",'
+        '"email":"SPAMMER@Example.com","scope":"ADDRESS"}')::json;
+    assert resultado ->> 'codigo' = '0' and exists (
+        select 1 from mail_spam_global where tipo = 'ADDRESS' and valor = 'spammer@example.com'),
+        'No se bloqueó la dirección globalmente';
+    select s.spam_id into v_spam_id from mail_spam_global s
+     where s.tipo = 'ADDRESS' and s.valor = 'spammer@example.com';
+    assert exists (select 1 from mail_spam_reprocesos where spam_id = v_spam_id),
+        'No se programó la revisión histórica';
+    resultado := mail_fn_admin_spam_guardar('{"actor":"mail-admin-test@soft-gator.com",'
+        '"email":"spammer@example.com","scope":"DOMAIN"}')::json;
+    assert resultado ->> 'codigo' = '0' and exists (
+        select 1 from mail_spam_global where tipo = 'DOMAIN' and valor = 'example.com'),
+        'No se bloqueó el dominio globalmente';
+    assert (mail_fn_admin_spam_guardar('{"actor":"mail-new-test@soft-gator.com",'
+        '"email":"otro@example.com","scope":"ADDRESS"}')::json ->> 'codigo') = '-1',
+        'Un usuario normal bloqueó una dirección globalmente';
+    assert position('example.com' in mail_fn_admin_spam('mail-admin-test@soft-gator.com')) > 0,
+        'No se listaron los bloqueos globales';
+    resultado := mail_fn_admin_spam_eliminar(json_build_object(
+        'actor', 'mail-admin-test@soft-gator.com', 'id', v_spam_id)::text)::json;
+    assert resultado ->> 'codigo' = '0' and not exists (
+        select 1 from mail_spam_global where spam_id = v_spam_id),
+        'No se eliminó el bloqueo global';
     resultado := mail_fn_admin_usuario_guardar('{"actor":"mail-admin-test@soft-gator.com",'
         '"user":"mail-user-test","name":"Usuario actualizado","enabled":false,'
         '"phone":"+525587654321"}')::json;

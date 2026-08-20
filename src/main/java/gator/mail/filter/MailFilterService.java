@@ -119,6 +119,7 @@ public final class MailFilterService {
     }
 
     private static void process(Config config, String mailbox, IMAPFolder inbox) throws Exception {
+        replayGlobal(config, mailbox, inbox);
         long uidValidity = inbox.getUIDValidity();
         long lastUid = lastUid(config, mailbox, uidValidity);
         Message[] messages = inbox.getMessagesByUID(lastUid + 1, UIDFolder.LASTUID);
@@ -139,7 +140,8 @@ public final class MailFilterService {
                     log("message", mailbox, uidValidity, uid, 0, "", "", attempt,
                             "NO_MATCH", duration(start));
                 } else {
-                    Folder destination = inbox.getStore().getFolder(rule.destination());
+                    Folder destination = rule.global() ? spam(inbox.getStore())
+                            : inbox.getStore().getFolder(rule.destination());
                     if (!destination.exists()) throw new IllegalStateException("La carpeta destino no existe");
                     inbox.moveUIDMessages(new Message[]{message}, destination);
                     complete(config, mailbox, uidValidity, uid, "MOVIDO", "");
@@ -156,6 +158,32 @@ public final class MailFilterService {
                 if (failed) checkpoint(config, mailbox, uidValidity, uid);
                 else throw error;
             }
+        }
+    }
+
+    private static void replayGlobal(Config config, String mailbox, IMAPFolder inbox) throws Exception {
+        List<Rule> pending = pendingRules(config, mailbox);
+        if (pending.isEmpty()) return;
+        Folder destination = spam(inbox.getStore());
+        // ponytail: one Inbox scan per new block; batch scans if global list growth makes replays slow.
+        for (Rule rule : pending) {
+            int moved = 0;
+            for (Message message : inbox.getMessages()) if (matches(rule, message)) {
+                long uid = inbox.getUID(message);
+                inbox.moveUIDMessages(new Message[]{message}, destination);
+                moved++;
+                log("global_replay", mailbox, inbox.getUIDValidity(), uid, rule.id(), rule.name(),
+                        destination.getFullName(), 1, "MOVED", "");
+            }
+            try (Connection db = connection(config);
+                 PreparedStatement statement = db.prepareStatement(
+                         "delete from mail_spam_reprocesos where mailbox=? and spam_id=?")) {
+                statement.setString(1, mailbox);
+                statement.setLong(2, -rule.id());
+                statement.executeUpdate();
+            }
+            log("global_replay_complete", mailbox, inbox.getUIDValidity(), 0, rule.id(), rule.name(),
+                    destination.getFullName(), 1, "OK", "moved=" + moved);
         }
     }
 
@@ -213,11 +241,28 @@ public final class MailFilterService {
         return String.join(", ", values);
     }
 
+    private static Folder spam(Store store) throws Exception {
+        for (Folder folder : store.getDefaultFolder().list("*")) {
+            String name = folder.getName().toLowerCase(Locale.ROOT);
+            if (name.equals("junk") || name.equals("spam")) return folder;
+        }
+        Folder spam = store.getFolder("Spam");
+        if (!spam.exists() && !spam.create(Folder.HOLDS_MESSAGES))
+            throw new IllegalStateException("No fue posible crear la carpeta Spam");
+        return spam;
+    }
+
     private static Set<String> mailboxes(Config config) throws Exception {
         Set<String> result = new HashSet<>();
         try (Connection db = connection(config);
              PreparedStatement statement = db.prepareStatement(
-                     "select distinct mailbox from mail_filtro_reglas where habilitada order by mailbox");
+                     """
+                     select mailbox from mail_filtro_reglas where habilitada
+                     union
+                     select lower(concat(usuario_id, '@', mail_domain)) from app_usuario_mail
+                      where exists (select 1 from mail_spam_global)
+                     order by 1
+                     """);
              ResultSet rows = statement.executeQuery()) {
             while (rows.next()) result.add(rows.getString(1));
         }
@@ -241,7 +286,11 @@ public final class MailFilterService {
                      update mail_filtro_estado e set estado='DETENIDO',ultimo_error=null,reintentos=0,
                          fecha_heartbeat=current_timestamp,fecha_actualizacion=current_timestamp
                      where not exists (select 1 from mail_filtro_reglas r
-                         where r.mailbox=e.mailbox and r.habilitada) and e.estado<>'DETENIDO'
+                         where r.mailbox=e.mailbox and r.habilitada)
+                       and not (exists (select 1 from mail_spam_global) and exists (
+                           select 1 from app_usuario_mail m
+                            where lower(concat(m.usuario_id, '@', m.mail_domain))=e.mailbox))
+                       and e.estado<>'DETENIDO'
                      """)) {
             statement.executeUpdate();
         }
@@ -250,8 +299,14 @@ public final class MailFilterService {
     private static boolean mailboxEnabled(Config config, String mailbox) throws Exception {
         try (Connection db = connection(config);
              PreparedStatement statement = db.prepareStatement(
-                     "select exists(select 1 from mail_filtro_reglas where mailbox=? and habilitada)")) {
+                     """
+                     select exists(select 1 from mail_filtro_reglas where mailbox=? and habilitada)
+                         or (exists(select 1 from mail_spam_global) and exists (
+                             select 1 from app_usuario_mail
+                              where lower(concat(usuario_id, '@', mail_domain))=?))
+                     """)) {
             statement.setString(1, mailbox);
+            statement.setString(2, mailbox);
             try (ResultSet row = statement.executeQuery()) {
                 row.next();
                 return row.getBoolean(1);
@@ -263,14 +318,44 @@ public final class MailFilterService {
         List<Rule> result = new ArrayList<>();
         try (Connection db = connection(config);
              PreparedStatement statement = db.prepareStatement("""
-                     select regla_id,nombre,campo,operador,encabezado,valor,carpeta_destino
-                     from mail_filtro_reglas where mailbox=? and habilitada
-                     order by prioridad,regla_id
+                     select regla_id,nombre,campo,operador,encabezado,valor,carpeta_destino,es_global
+                     from (
+                         select -spam_id regla_id, 'Spam global: ' || valor nombre, 'FROM' campo,
+                                case tipo when 'ADDRESS' then 'EQUALS' else 'ENDS_WITH' end operador,
+                                null::text encabezado,
+                                case tipo when 'ADDRESS' then valor else '@' || valor end valor,
+                                'Spam' carpeta_destino, 0 prioridad, true es_global
+                           from mail_spam_global
+                         union all
+                         select regla_id,nombre,campo,operador,encabezado,valor,carpeta_destino,
+                                prioridad,false es_global
+                           from mail_filtro_reglas where mailbox=? and habilitada
+                     ) reglas order by es_global desc,prioridad,regla_id
                      """)) {
             statement.setString(1, mailbox);
             try (ResultSet rows = statement.executeQuery()) {
                 while (rows.next()) result.add(new Rule(rows.getLong(1), rows.getString(2), rows.getString(3),
-                        rows.getString(4), rows.getString(5), rows.getString(6), rows.getString(7)));
+                        rows.getString(4), rows.getString(5), rows.getString(6), rows.getString(7),
+                        rows.getBoolean(8)));
+            }
+        }
+        return result;
+    }
+
+    private static List<Rule> pendingRules(Config config, String mailbox) throws Exception {
+        List<Rule> result = new ArrayList<>();
+        try (Connection db = connection(config);
+             PreparedStatement statement = db.prepareStatement("""
+                     select -s.spam_id, 'Spam global: ' || s.valor, 'FROM',
+                            case s.tipo when 'ADDRESS' then 'EQUALS' else 'ENDS_WITH' end,
+                            case s.tipo when 'ADDRESS' then s.valor else '@' || s.valor end
+                       from mail_spam_reprocesos r join mail_spam_global s using (spam_id)
+                      where r.mailbox=? order by s.spam_id
+                     """)) {
+            statement.setString(1, mailbox);
+            try (ResultSet rows = statement.executeQuery()) {
+                while (rows.next()) result.add(new Rule(rows.getLong(1), rows.getString(2), rows.getString(3),
+                        rows.getString(4), null, rows.getString(5), "Spam", true));
             }
         }
         return result;
@@ -307,7 +392,8 @@ public final class MailFilterService {
             statement.setString(1, mailbox);
             statement.setLong(2, uidValidity);
             statement.setLong(3, uid);
-            if (rule == null) statement.setNull(4, java.sql.Types.BIGINT); else statement.setLong(4, rule.id());
+            if (rule == null || rule.global()) statement.setNull(4, java.sql.Types.BIGINT);
+            else statement.setLong(4, rule.id());
             statement.setString(5, rule == null ? null : rule.name());
             statement.setString(6, rule == null ? null : rule.destination());
             statement.setString(7, messageId);
@@ -427,7 +513,7 @@ public final class MailFilterService {
     }
 
     record Rule(long id, String name, String field, String operator, String header,
-                String value, String destination) {}
+                String value, String destination, boolean global) {}
 
     record Config(String dbUrl, String dbUser, String dbPassword, String imapHost, int imapPort,
                   String masterUser, String masterPassword, String masterSeparator,

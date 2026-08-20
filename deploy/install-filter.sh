@@ -113,7 +113,8 @@ end $$;
 alter role gator_mail_filter password :'role_password';
 grant connect on database db_gatormail to gator_mail_filter;
 grant usage on schema public to gator_mail_filter;
-grant select on mail_filtro_reglas to gator_mail_filter;
+grant select on mail_filtro_reglas, mail_spam_global, mail_spam_reprocesos, app_usuario_mail to gator_mail_filter;
+grant delete on mail_spam_reprocesos to gator_mail_filter;
 grant select, insert, update on mail_filtro_estado, mail_filtro_auditoria to gator_mail_filter;
 grant usage, select on sequence mail_filtro_auditoria_auditoria_id_seq to gator_mail_filter;
 SQL

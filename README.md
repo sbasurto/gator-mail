@@ -135,6 +135,9 @@ inicial y reserva `fallback=true` para la acción explícita **Usar SMS**.
 Los filtros no dependen de Sieve ni se ejecutan dentro de Tomcat. El servicio
 independiente `gator-mail-filter` obtiene las reglas de `db_gatormail`, revisa
 Entrada cada 15 segundos y mueve la primera coincidencia con UID MOVE.
+Un administrador puede marcar desde el menú contextual una dirección o dominio como spam global;
+el servicio revisa también los mensajes existentes en Entrada de cada buzón. Los bloqueos y el
+avance de esa revisión se administran en **Configuración > Filtros**.
 El checkpoint `(mailbox, UIDVALIDITY, UID)`, los reintentos y las últimas 50
 decisiones se consultan en **Configuración > Filtros**. El primer arranque de
 cada buzón toma como línea base su UID actual; la interfaz permite solicitar

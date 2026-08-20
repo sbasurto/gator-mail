@@ -199,7 +199,7 @@ public final class AccessCodeSelfCheck {
                 "eventCanComplete", "eventCompleted", "eventCompletedState",
                 "invitationAvailable", "invitationCanReply", "invitationCancelled", "invitationReplyNotice",
                 "invitationSyncFailed", "smsAdminAvailable", "userAdminNotice", "filterNotice",
-                "filterRulesAvailable"}) model.put(key, true);
+                "filterRulesAvailable", "spamGlobalNotice"}) model.put(key, true);
         model.put("invitationCannotReply", false);
         model.put("smsAuthenticationEnabled", true);
         model.put("configurationOptionsClass", "active");
@@ -207,6 +207,7 @@ public final class AccessCodeSelfCheck {
         model.put("passwordReset", true);
         model.put("temporaryPassword", "Abcd_1234-Efgh_5678-Ijkl");
         model.put("userAdminMessage", "Teléfono agregado");
+        model.put("spamGlobalMessage", "example.com se marcó como spam global");
         model.put("filterNoticeMessage", "Filtros programados");
         model.put("body", "<script>parent.alert('bad')</script>");
         model.put("originalHtml", "<script>alert('original')</script><p>Hola</p>");
@@ -337,6 +338,11 @@ public final class AccessCodeSelfCheck {
         model.put("filterRules", List.of(Map.of("id", 1, "name", "Facturas", "priority", 100,
                 "enabled", true, "value", "factura", "fields", filterFields,
                 "operators", filterOperators, "headers", filterHeaders, "destinations", filterDestinations)));
+        model.put("globalSpamAvailable", true);
+        model.put("globalSpamEmpty", false);
+        model.put("globalSpam", List.of(Map.of("id", 9, "scope", "Dominio", "value", "example.com",
+                "actor", "admin@example.com", "date", "2026-08-20 10:00:00",
+                "status", "Revisando 2 buzones")));
         model.put("filterAudit", List.of(Map.of("uid", 42, "rule", "Facturas", "destination", "Archivo",
                 "status", "MOVIDO", "attempt", 1, "date", "2026-07-24 10:00:00", "detail", "")));
         model.put("configurationFoldersEmpty", false);
@@ -440,6 +446,9 @@ public final class AccessCodeSelfCheck {
             assert html.contains(">Filtros</span>");
             assert html.contains(">Carpetas</span>");
             assert html.contains("value=\"filterSave\"");
+            assert html.contains("value=\"spamGlobalDelete\"");
+            assert html.contains("Revisando 2 buzones");
+            assert html.contains(">Desbloquear</button>");
             assert html.contains("value=\"X-Spam-Flag\" selected");
             assert html.contains("value=\"From\">Remitente</option>");
             assert html.contains("value=\"To\">Destinatario</option>");
@@ -503,6 +512,9 @@ public final class AccessCodeSelfCheck {
             assert html.contains("value=\"messageDelete\"");
             assert html.contains("id=\"mail-folder-menu\"");
             assert html.contains("id=\"mail-contact-menu\"");
+            assert html.contains("id=\"mail-spam-address\"");
+            assert html.contains("id=\"mail-spam-domain\"");
+            assert html.contains("Spam global actualizado");
             assert html.contains("data-contact-email=\"equipo@example.com\"");
             assert html.contains("value=\"urgente\"");
             assert html.contains("class=\"mail-action-bar\"");

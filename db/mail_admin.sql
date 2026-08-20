@@ -21,6 +21,21 @@ create table if not exists mail_usuario_eliminaciones (
     fecha_completada timestamp without time zone
 );
 
+create table if not exists mail_spam_global (
+    spam_id bigserial primary key,
+    tipo text not null check (tipo in ('ADDRESS', 'DOMAIN')),
+    valor text not null check (valor = lower(valor) and length(valor) between 3 and 320),
+    actor text not null,
+    fecha timestamptz not null default current_timestamp,
+    unique (tipo, valor)
+);
+
+create table if not exists mail_spam_reprocesos (
+    mailbox text not null,
+    spam_id bigint not null references mail_spam_global(spam_id) on delete cascade,
+    primary key (mailbox, spam_id)
+);
+
 create unique index if not exists mail_usuario_eliminaciones_pendiente
     on mail_usuario_eliminaciones(usuario_id) where estado = 'PENDING';
 
@@ -32,7 +47,8 @@ select distinct u.usuario_id
     or lower(e.usuario_email_email) = 'sbasurto@soft-gator.com'
 on conflict do nothing;
 
-revoke all on mail_administradores, mail_usuario_telefonos from public;
+revoke all on mail_administradores, mail_usuario_telefonos, mail_spam_global,
+    mail_spam_reprocesos from public;
 
 create or replace function mail_fn_es_admin(v_email text)
 returns boolean language sql stable security definer set search_path = public as $$
@@ -405,9 +421,71 @@ exception when others then
 end;
 $$;
 
+create or replace function mail_fn_admin_spam_guardar(v_json text)
+returns text language plpgsql security definer set search_path = public as $$
+declare
+    v jsonb := v_json::jsonb;
+    actor_email text := lower(trim(v ->> 'actor'));
+    correo text := lower(trim(v ->> 'email'));
+    tipo text := upper(trim(v ->> 'scope'));
+    id bigint;
+    valor text;
+begin
+    if not mail_fn_es_admin(actor_email) then raise exception 'Acceso administrativo denegado'; end if;
+    if correo !~ '^[^@[:space:]]+@[a-z0-9.-]+[.][a-z]{2,63}$' or length(correo) > 320
+            or tipo not in ('ADDRESS', 'DOMAIN') then
+        raise exception 'Remitente inválido';
+    end if;
+    valor := case when tipo = 'DOMAIN' then split_part(correo, '@', 2) else correo end;
+    insert into mail_spam_global(tipo, valor, actor)
+    values (tipo, valor, actor_email) on conflict (tipo, valor) do update
+        set actor = excluded.actor, fecha = current_timestamp
+    returning spam_id into id;
+    insert into mail_spam_reprocesos(mailbox, spam_id)
+    select lower(concat(usuario_id, '@', mail_domain)), id from app_usuario_mail
+    on conflict do nothing;
+    return json_build_object('codigo', '0', 'value', valor)::text;
+exception when others then
+    return json_build_object('codigo', '-1', 'mensaje', sqlerrm)::text;
+end;
+$$;
+
+create or replace function mail_fn_admin_spam(v_email text)
+returns text language plpgsql stable security definer set search_path = public as $$
+declare resultado json;
+begin
+    if not mail_fn_es_admin(v_email) then raise exception 'Acceso administrativo denegado'; end if;
+    select coalesce(json_agg(json_build_object(
+               'id', s.spam_id, 'scope', s.tipo, 'value', s.valor, 'actor', s.actor,
+               'date', to_char(s.fecha at time zone current_setting('TIMEZONE'), 'YYYY-MM-DD HH24:MI:SS'),
+               'pending', (select count(*) from mail_spam_reprocesos r where r.spam_id = s.spam_id)
+           ) order by s.fecha desc, s.spam_id desc), '[]'::json)
+      into resultado from mail_spam_global s;
+    return json_build_object('codigo', '0', 'reglas', resultado)::text;
+exception when others then
+    return json_build_object('codigo', '-1', 'mensaje', sqlerrm)::text;
+end;
+$$;
+
+create or replace function mail_fn_admin_spam_eliminar(v_json text)
+returns text language plpgsql security definer set search_path = public as $$
+declare v jsonb := v_json::jsonb;
+begin
+    if not mail_fn_es_admin(v ->> 'actor') then raise exception 'Acceso administrativo denegado'; end if;
+    delete from mail_spam_global where spam_id = (v ->> 'id')::bigint;
+    if not found then raise exception 'Bloqueo global inexistente'; end if;
+    return json_build_object('codigo', '0')::text;
+exception when others then
+    return json_build_object('codigo', '-1', 'mensaje', sqlerrm)::text;
+end;
+$$;
+
 revoke all on function mail_fn_es_admin(text), mail_fn_admin_access(text), mail_fn_admin_usuarios(text),
     mail_fn_admin_usuario_guardar(text), mail_fn_admin_usuario_safe_list(text),
     mail_fn_admin_usuario_reset(text), mail_fn_admin_usuario_eliminar(text), mail_fn_admin_contactos(text),
-    mail_fn_admin_contacto_guardar(text), mail_fn_admin_contacto_eliminar(text) from public;
+    mail_fn_admin_contacto_guardar(text), mail_fn_admin_contacto_eliminar(text),
+    mail_fn_admin_spam_guardar(text), mail_fn_admin_spam(text), mail_fn_admin_spam_eliminar(text) from public;
 grant execute on function mail_fn_admin_usuario_reset(text) to w3apps;
 grant execute on function mail_fn_admin_usuario_eliminar(text) to w3apps;
+grant execute on function mail_fn_admin_spam_guardar(text) to w3apps;
+grant execute on function mail_fn_admin_spam(text), mail_fn_admin_spam_eliminar(text) to w3apps;

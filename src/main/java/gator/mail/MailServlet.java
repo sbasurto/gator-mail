@@ -243,6 +243,11 @@ public final class MailServlet extends HttpServlet {
         model.put("smsAdminAvailable", false);
         model.put("userAdminNotice", false);
         model.put("userAdminMessage", "");
+        model.put("spamGlobalNotice", false);
+        model.put("spamGlobalMessage", "");
+        model.put("globalSpamAvailable", false);
+        model.put("globalSpamEmpty", true);
+        model.put("globalSpam", List.of());
         model.put("calendarView", false);
         model.put("eventFormView", false);
         model.put("eventReadOnlyView", false);
@@ -1447,11 +1452,16 @@ public final class MailServlet extends HttpServlet {
         boolean admin = mailDbCall("mail_fn_admin_access", mailbox).get("admin").getAsBoolean();
         model.put("configurationAvailable", true);
         model.put("configurationAdminAvailable", admin);
+        Object spamNotice = session.getAttribute("mail.spam.global.notice");
+        model.put("spamGlobalNotice", spamNotice != null);
+        model.put("spamGlobalMessage", spamNotice == null ? "" : spamNotice);
+        session.removeAttribute("mail.spam.global.notice");
         String action = request.getParameter("action");
         boolean requested = "settings".equals(action) || "optionsSave".equals(action)
                 || "userCreate".equals(action) || "userSave".equals(action) || "userToggle".equals(action)
                 || "userReset".equals(action) || "userSafeList".equals(action) || "userDelete".equals(action)
                 || "contactSave".equals(action) || "contactDelete".equals(action)
+                || "spamGlobalSave".equals(action) || "spamGlobalDelete".equals(action)
                 || "filterSave".equals(action) || "filterDelete".equals(action)
                 || "filterApply".equals(action);
         if (!requested) return false;
@@ -1478,6 +1488,20 @@ public final class MailServlet extends HttpServlet {
                 value.addProperty("smsEnabled", request.getParameter("smsEnabled") != null);
                 checked(mailDbCall("mail_fn_usuario_opciones_guardar", gson.toJson(value)));
                 response.sendRedirect("mail?action=settings&section=options");
+            } else if (action.startsWith("spamGlobal")) {
+                if ("spamGlobalDelete".equals(action)) {
+                    value.addProperty("id", request.getParameter("id"));
+                    checked(mailDbCall("mail_fn_admin_spam_eliminar", gson.toJson(value)));
+                    session.setAttribute("mail.spam.global.notice", "El remitente quedó desbloqueado globalmente.");
+                } else {
+                    value.addProperty("email", request.getParameter("email"));
+                    value.addProperty("scope", request.getParameter("scope"));
+                    JsonObject result = checked(mailDbCall("mail_fn_admin_spam_guardar", gson.toJson(value)));
+                    session.setAttribute("mail.spam.global.notice", "El remitente "
+                            + result.get("value").getAsString()
+                            + " se marcó como spam global y se programó la revisión histórica.");
+                }
+                response.sendRedirect("mail?action=settings&section=filters");
             } else if (action.startsWith("filter")) {
                 if ("filterApply".equals(action)) {
                     checked(mailDbCall("mail_fn_filtros_aplicar", mailbox));
@@ -1819,6 +1843,22 @@ public final class MailServlet extends HttpServlet {
         }
         model.put("filterAudit", audit);
         model.put("filterAuditEmpty", audit.isEmpty());
+        if (Boolean.TRUE.equals(model.get("configurationAdminAvailable"))) {
+            JsonObject global = checked(mailDbCall("mail_fn_admin_spam", mailbox));
+            List<Map<String, Object>> blocked = new ArrayList<>();
+            for (JsonElement element : global.getAsJsonArray("reglas")) {
+                JsonObject rule = element.getAsJsonObject();
+                long pending = rule.get("pending").getAsLong();
+                blocked.add(Map.of("id", rule.get("id").getAsLong(),
+                        "scope", "DOMAIN".equals(rule.get("scope").getAsString()) ? "Dominio" : "Dirección",
+                        "value", rule.get("value").getAsString(), "actor", rule.get("actor").getAsString(),
+                        "date", rule.get("date").getAsString(),
+                        "status", pending == 0 ? "Activo" : "Revisando " + pending + " buzones"));
+            }
+            model.put("globalSpam", blocked);
+            model.put("globalSpamAvailable", !blocked.isEmpty());
+            model.put("globalSpamEmpty", blocked.isEmpty());
+        }
     }
 
     private static String filterStatus(String status) {
