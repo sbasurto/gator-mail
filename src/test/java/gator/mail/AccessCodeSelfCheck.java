@@ -189,7 +189,7 @@ public final class AccessCodeSelfCheck {
         assert rejectedLinuxUser;
 
         Map<String, Object> model = new HashMap<>();
-        for (String key : new String[]{"challenge", "codeChallenge", "phoneCorrection", "composeView", "mailboxView", "messageView", "mailContent", "empty",
+        for (String key : new String[]{"challenge", "codeChallenge", "mobileChallenge", "factorChoice", "mobileRetryAvailable", "phoneCorrection", "composeView", "mailboxView", "messageView", "mailContent", "empty",
                 "hasMessages", "pending", "error", "loggedOut", "noticeVisible", "sendNotice", "mailHtml",
                 "originalHtmlAvailable",
                 "configurationAvailable", "configurationAdminAvailable", "configurationUsersView",
@@ -379,9 +379,15 @@ public final class AccessCodeSelfCheck {
         try {
             String html = new GatorJsonView().renderResource("gator-mail/screens/mail.json", model);
             assert html.contains("Sesión cerrada");
-            assert html.contains("/gator-mail/css/gator-mail.css?v=43");
+            assert html.contains("/gator-mail/css/gator-mail.css?v=45");
             assert html.contains("/elib/js/sweetalert2.all.min.js");
-            assert html.contains("/gator-mail/js/gator-mail.js?v=24");
+            assert html.contains("/gator-mail/js/gator-mail.js?v=27");
+            assert html.contains("spinner-border");
+            assert html.contains("mail-mobile-status");
+            assert html.contains("name=\"format\" value=\"json\"");
+            assert html.contains("value=\"cancelMobile\"");
+            assert html.contains("value=\"retryMobile\"");
+            assert html.contains("Elige cómo continuar");
             assert html.contains("Nueva subcarpeta");
             assert html.contains("href=\"/gator-mail/oauth/password\"");
             assert html.contains("fontawesome-free-5.13.0-web/css/all.min.css");

@@ -296,6 +296,14 @@ body { min-height: 100vh; margin: 0; color: var(--gator-ink); background: var(--
 .mail-logout-note { display: flex; justify-content: center; align-items: center; gap: .4rem; margin: 1.5rem 0 0; color: var(--gator-muted); font-size: .76rem; }
 .mail-auth-card .alert { border: 0; border-radius: 12px; background: #eef8fb; color: #28647c; font-size: .85rem; }
 .mail-challenge-form { display: grid; gap: .55rem; margin-top: 1.35rem; text-align: left; }
+.mail-mobile-wait { display: flex; flex-direction: column; align-items: center; gap: .85rem; padding: .75rem 0 .25rem; color: var(--gator-muted); text-align: center; }
+.mail-mobile-wait .spinner-border { width: 2.35rem; height: 2.35rem; border-width: .2rem; }
+.mail-mobile-status { font-size: .86rem; line-height: 1.45; }
+.mail-mobile-challenge.is-rejected .spinner-border { display: none; }
+.mail-mobile-challenge.is-rejected .mail-mobile-status { color: #bd3030; font-weight: 650; }
+.mail-mobile-cancel { margin-top: .85rem; text-align: center; }
+.mail-mobile-cancel .btn-link { color: var(--gator-blue-dark); font-size: .85rem; text-decoration: none; }
+.mail-mobile-cancel .btn-link:hover { text-decoration: underline; }
 .mail-code-label { margin: 0; color: #344b5d; font-size: .82rem; font-weight: 700; }
 .mail-code { min-height: 58px; border: 1px solid #b9cbd6; border-radius: 12px; background: #fbfdfe; color: var(--gator-ink); font-weight: 720; text-align: center; text-transform: uppercase; }
 .mail-code::placeholder { color: #9aaab5; font-size: .85rem; font-weight: 450; letter-spacing: 0; text-transform: none; }

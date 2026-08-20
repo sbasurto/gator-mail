@@ -14,9 +14,9 @@
           { "tag": "link", "attrs": { "rel": "stylesheet", "href": "/elib/css2/fontawesome-free-5.13.0-web/css/all.min.css" } },
           { "tag": "link", "attrs": { "rel": "stylesheet", "href": "/elib/css/colors.css" } },
           { "tag": "link", "attrs": { "rel": "stylesheet", "href": "/elib/css2/sweetalert2.min.css?v=11.23.0" } },
-          { "tag": "link", "attrs": { "rel": "stylesheet", "href": "${contextPath}/css/gator-mail.css?v=43" } },
+          { "tag": "link", "attrs": { "rel": "stylesheet", "href": "${contextPath}/css/gator-mail.css?v=45" } },
           { "tag": "script", "attrs": { "src": "/elib/js/sweetalert2.all.min.js", "defer": "true" } },
-          { "tag": "script", "attrs": { "src": "${contextPath}/js/gator-mail.js?v=24", "defer": "true" } }
+          { "tag": "script", "attrs": { "src": "${contextPath}/js/gator-mail.js?v=27", "defer": "true" } }
         ]
       },
       {
@@ -635,6 +635,8 @@
                           { "tag": "p", "if": "codeChallenge", "attrs": { "class": "mail-state-copy" }, "text": "Enviamos una clave temporal por SMS al teléfono asociado con tu cuenta." },
                           { "tag": "h1", "if": "mobileChallenge", "attrs": { "class": "mail-state-title" }, "text": "Autoriza tu acceso" },
                           { "tag": "p", "if": "mobileChallenge", "attrs": { "class": "mail-state-copy" }, "text": "Enviamos una solicitud a Gator Mobile." },
+                          { "tag": "h1", "if": "factorChoice", "attrs": { "class": "mail-state-title" }, "text": "Elige cómo continuar" },
+                          { "tag": "p", "if": "factorChoice", "attrs": { "class": "mail-state-copy" }, "text": "Puedes enviar una nueva autorización al iPhone o solicitar una clave por SMS." },
                           { "tag": "h1", "if": "phoneCorrection", "attrs": { "class": "mail-state-title" }, "text": "Corrige tu teléfono" },
                           { "tag": "p", "if": "phoneCorrection", "attrs": { "class": "mail-state-copy" }, "text": "No pudimos entregar el SMS. Puedes corregir tu número una sola vez." },
                           { "tag": "span", "if": "noticeVisible", "attrs": { "class": "d-none mail-swal mail-swal-info", "title": "Aviso" }, "text": "${notice}" },
@@ -654,11 +656,35 @@
                           {
                             "tag": "form",
                             "if": "mobileChallenge",
-                            "attrs": { "method": "post", "class": "mail-challenge-form", "id": "mail-mobile-challenge" },
+                            "attrs": { "method": "post", "class": "mail-challenge-form mail-mobile-challenge", "id": "mail-mobile-challenge" },
                             "children": [
                               { "tag": "input", "attrs": { "type": "hidden", "name": "action", "value": "checkMobile" } },
                               { "tag": "input", "attrs": { "type": "hidden", "name": "token", "value": "${token}" } },
-                              { "tag": "button", "attrs": { "class": "btn btn-primary btn-lg w-100 mail-primary-action", "type": "submit" }, "text": "Comprobar autorización" }
+                              { "tag": "input", "attrs": { "type": "hidden", "name": "format", "value": "json" } },
+                              { "tag": "div", "attrs": { "class": "mail-mobile-wait", "role": "status" }, "children": [
+                                { "tag": "span", "attrs": { "class": "spinner-border", "aria-hidden": "true" } },
+                                { "tag": "span", "attrs": { "class": "mail-mobile-status" }, "text": "Esperando autorización en Gator Mobile…" }
+                              ] }
+                            ]
+                          },
+                          {
+                            "tag": "form",
+                            "if": "mobileRetryAvailable",
+                            "attrs": { "method": "post", "class": "mail-mobile-retry mb-2" },
+                            "children": [
+                              { "tag": "input", "attrs": { "type": "hidden", "name": "action", "value": "retryMobile" } },
+                              { "tag": "input", "attrs": { "type": "hidden", "name": "token", "value": "${token}" } },
+                              { "tag": "button", "attrs": { "class": "btn btn-primary btn-lg w-100 mail-primary-action", "type": "submit" }, "text": "Intentar autorización en el iPhone" }
+                            ]
+                          },
+                          {
+                            "tag": "form",
+                            "if": "mobileChallenge",
+                            "attrs": { "method": "post", "class": "mail-mobile-cancel" },
+                            "children": [
+                              { "tag": "input", "attrs": { "type": "hidden", "name": "action", "value": "cancelMobile" } },
+                              { "tag": "input", "attrs": { "type": "hidden", "name": "token", "value": "${token}" } },
+                              { "tag": "button", "attrs": { "class": "btn btn-link", "type": "submit" }, "text": "Cancelar y usar SMS" }
                             ]
                           },
                           {
@@ -681,7 +707,7 @@
                             "children": [
                               { "tag": "input", "attrs": { "type": "hidden", "name": "action", "value": "resend" } },
                               { "tag": "input", "attrs": { "type": "hidden", "name": "token", "value": "${token}" } },
-                              { "tag": "button", "attrs": { "class": "btn btn-link", "type": "submit", "disabled": "${resendDisabled}" }, "text": "Usar SMS" },
+                              { "tag": "button", "attrs": { "class": "btn btn-link", "type": "submit", "disabled": "${resendDisabled}" }, "text": "Enviar clave por SMS" },
                               { "tag": "small", "attrs": { "class": "d-block text-muted" }, "text": "${resendWait}" }
                             ]
                           }

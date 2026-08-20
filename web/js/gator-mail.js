@@ -1,6 +1,61 @@
 (() => {
     const mobileChallenge = document.getElementById("mail-mobile-challenge");
-    if (mobileChallenge) window.setTimeout(() => mobileChallenge.requestSubmit(), 2000);
+    if (mobileChallenge) {
+        const status = mobileChallenge.querySelector(".mail-mobile-status");
+        const cancellation = document.querySelector(".mail-mobile-cancel");
+        let polling = true;
+        let controller;
+        if (cancellation) cancellation.addEventListener("submit", () => {
+            polling = false;
+            if (controller) controller.abort();
+        });
+        const schedule = delay => {
+            if (polling && document.body.contains(mobileChallenge)) window.setTimeout(poll, delay);
+        };
+        const poll = async () => {
+            try {
+                controller = new AbortController();
+                const endpoint = mobileChallenge.getAttribute("action") || window.location.href;
+                const response = await fetch(endpoint, {
+                    method: "POST",
+                    body: new FormData(mobileChallenge),
+                    credentials: "same-origin",
+                    headers: { Accept: "application/json" },
+                    signal: controller.signal
+                });
+                if (response.redirected) {
+                    polling = false;
+                    window.location.replace(response.url);
+                    return;
+                }
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const result = await response.json();
+                if (result.status === "APPROVED" || result.status === "FALLBACK") {
+                    polling = false;
+                    window.location.replace(result.redirect || window.location.href);
+                    return;
+                }
+                if (result.status === "REJECTED") {
+                    polling = false;
+                    if (result.redirect) window.location.replace(result.redirect);
+                    else {
+                        mobileChallenge.classList.add("is-rejected");
+                        status.textContent = result.message || "El acceso fue rechazado.";
+                    }
+                    return;
+                }
+                status.textContent = "Esperando autorización en Gator Mobile…";
+                schedule(2000);
+            } catch (error) {
+                if (!polling) return;
+                status.textContent = "Reconectando para comprobar la autorización…";
+                schedule(5000);
+            } finally {
+                controller = undefined;
+            }
+        };
+        schedule(1000);
+    }
 
     document.querySelectorAll(".mail-swal").forEach(alert => Swal.fire({
         icon: alert.classList.contains("mail-swal-success") ? "success" : "info",
