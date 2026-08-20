@@ -427,24 +427,24 @@ declare
     v jsonb := v_json::jsonb;
     actor_email text := lower(trim(v ->> 'actor'));
     correo text := lower(trim(v ->> 'email'));
-    tipo text := upper(trim(v ->> 'scope'));
-    id bigint;
-    valor text;
+    v_tipo text := upper(trim(v ->> 'scope'));
+    v_id bigint;
+    v_valor text;
 begin
     if not mail_fn_es_admin(actor_email) then raise exception 'Acceso administrativo denegado'; end if;
     if correo !~ '^[^@[:space:]]+@[a-z0-9.-]+[.][a-z]{2,63}$' or length(correo) > 320
-            or tipo not in ('ADDRESS', 'DOMAIN') then
+            or v_tipo not in ('ADDRESS', 'DOMAIN') then
         raise exception 'Remitente inválido';
     end if;
-    valor := case when tipo = 'DOMAIN' then split_part(correo, '@', 2) else correo end;
+    v_valor := case when v_tipo = 'DOMAIN' then split_part(correo, '@', 2) else correo end;
     insert into mail_spam_global(tipo, valor, actor)
-    values (tipo, valor, actor_email) on conflict (tipo, valor) do update
+    values (v_tipo, v_valor, actor_email) on conflict (tipo, valor) do update
         set actor = excluded.actor, fecha = current_timestamp
-    returning spam_id into id;
+    returning spam_id into v_id;
     insert into mail_spam_reprocesos(mailbox, spam_id)
-    select lower(concat(usuario_id, '@', mail_domain)), id from app_usuario_mail
+    select lower(concat(usuario_id, '@', mail_domain)), v_id from app_usuario_mail
     on conflict do nothing;
-    return json_build_object('codigo', '0', 'value', valor)::text;
+    return json_build_object('codigo', '0', 'value', v_valor)::text;
 exception when others then
     return json_build_object('codigo', '-1', 'mensaje', sqlerrm)::text;
 end;
