@@ -42,6 +42,7 @@ tasks.register('selfTest', JavaExec) {
     classpath = sourceSets.test.runtimeClasspath
     mainClass = 'gator.mail.AccessCodeSelfCheck'
     enableAssertions = true
+    if (project.hasProperty('uiFixtureDir')) args project.property('uiFixtureDir')
 }
 
 tasks.register('filterSelfTest', JavaExec) {
@@ -54,3 +55,9 @@ tasks.register('filterSelfTest', JavaExec) {
 tasks.named('test') { failOnNoDiscoveredTests = false }
 tasks.named('check') { dependsOn selfTest, filterSelfTest }
 tasks.named('clean') { delete 'dist' }
+
+// Browser-independent checks for account-scoped appearance preferences.
+tasks.register('appearanceTest', Exec) {
+    commandLine 'node', 'src/test/web/appearance_test.js'
+}
+tasks.named('check') { dependsOn appearanceTest }

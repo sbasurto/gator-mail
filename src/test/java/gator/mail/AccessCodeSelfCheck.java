@@ -12,6 +12,21 @@ import java.util.Map;
 
 public final class AccessCodeSelfCheck {
     public static void main(String[] args) {
+        assert MailServlet.initials("Mariana López").equals("ML");
+        assert MailServlet.initials("  Alex   Campos  ").equals("AC");
+        assert MailServlet.initials("").equals("GM");
+        var dashboardInput = JsonParser.parseString("""
+                [{"id":"later", "start":"20/09/2026 11:00", "status":"A tiempo"},
+                 {"id":"earlier&id=unsafe", "start":"10/09/2026 11:00", "status":"A tiempo"},
+                 {"id":"past", "start":"01/09/2026 11:00", "status":"Retrasado"},
+                 {"id":"done", "start":"12/09/2026 11:00", "status":"Terminado"},
+                 {"id":"declined", "start":"12/09/2026 11:00", "status":"Rechazado"},
+                 {"id":"next-month", "start":"01/10/2026 11:00", "status":"A tiempo"}]
+                """).getAsJsonArray();
+        var upcoming = MailServlet.dashboardEvents(dashboardInput, java.time.LocalDateTime.of(2026, 9, 9, 10, 0));
+        assert upcoming.size() == 2;
+        assert upcoming.get(0).get("href").equals("mail?action=eventOpen&id=earlier%26id%3Dunsafe");
+        assert upcoming.get(1).get("href").equals("mail?action=eventOpen&id=later");
         String hash = AccessCode.hash("A1B2C3D4");
         assert AccessCode.matches("a1b2c3d4", hash);
         assert !AccessCode.matches("A1B2C3D5", hash);
@@ -376,12 +391,13 @@ public final class AccessCodeSelfCheck {
                 Map.entry("folder", "INBOX"), Map.entry("state", "No leído"), Map.entry("stateClass", "is-unread"),
                 Map.entry("icon", "fa-envelope"), Map.entry("contactName", "Equipo"),
                 Map.entry("contactEmail", "equipo@example.com"))));
+        model.put("eventsPagination", true);
         try {
             String html = new GatorJsonView().renderResource("gator-mail/screens/mail.json", model);
             assert html.contains("Sesión cerrada");
-            assert html.contains("/gator-mail/css/gator-mail.css?v=45");
+            assert html.contains("/gator-mail/css/gator-mail.css?v=50");
             assert html.contains("/elib/js/sweetalert2.all.min.js");
-            assert html.contains("/gator-mail/js/gator-mail.js?v=28");
+            assert html.contains("/gator-mail/js/gator-mail.js?v=32");
             assert html.contains("spinner-border");
             assert html.contains("mail-mobile-status");
             assert html.contains("name=\"format\" value=\"json\"");
@@ -449,8 +465,8 @@ public final class AccessCodeSelfCheck {
             assert html.contains("No hay contactos disponibles. Agrégalos en Configuración &gt; Contactos.");
             assert html.contains(">Contactos</span>");
             assert html.contains(">Configuración</span>");
-            assert html.contains(">Filtros</span>");
-            assert html.contains(">Carpetas</span>");
+            assert html.contains(">Filtros de correo</span>");
+            assert html.contains(">Mis carpetas</span>");
             assert html.contains("value=\"filterSave\"");
             assert html.contains("value=\"spamGlobalDelete\"");
             assert html.contains("Revisando 2 buzones");
@@ -468,19 +484,23 @@ public final class AccessCodeSelfCheck {
             assert html.contains(">Correo</span>");
             assert html.contains(">Carpetas personales</span>");
             assert html.contains("class=\"mail-folder mail-folder-parent\" href=\"/gator-mail/mail\"");
-            assert html.contains("class=\"mail-folder mail-folder-child active\"");
+            assert html.contains("class=\"mail-folder active\"");
             assert html.contains(">Calendario</span>");
-            assert html.contains(">Evento Uno</strong>");
-            assert html.contains("Eventos pendientes");
+            assert html.contains(">Evento Uno</a>");
+            assert html.contains("Próximos eventos");
+            assert html.contains("Tu día, en orden.");
+            assert html.contains("Para revisar");
+            assert html.contains("Quién te escribe");
+            assert html.split("class=\"gm-card gm-stat\"", -1).length - 1 == 4;
             assert html.contains("id=\"mail-dashboard-events\"");
             assert html.contains("id=\"mail-events-page-size\"");
             assert html.contains(">Anterior</button>");
-            assert html.contains(">Total de correos</small>");
-            assert html.contains("Remitentes últimos 7 días");
+            assert html.contains(">Mensajes en Entrada</small>");
+            assert html.contains("Últimos 7 días");
             assert html.contains("reciente@example.com");
-            assert html.contains("Remitentes históricos");
+            assert html.contains("Histórico");
             assert html.contains("historico@example.com");
-            assert html.contains("class=\"mail-sender-bar\" value=\"12\" max=\"12\"");
+            assert html.contains("class=\"gm-meter\" value=\"12\" max=\"12\"");
             assert html.contains(">Julio 2026</h1>");
             assert html.contains("value=\"eventSave\"");
             assert html.contains("value=\"eventComplete\"");
@@ -528,13 +548,22 @@ public final class AccessCodeSelfCheck {
             assert html.contains("class=\"mail-action-buttons\"");
             assert html.contains("form=\"mail-bulk-form\"");
             assert html.contains("Página 1 de 1");
-            assert html.contains("Administrar contraseña");
+            assert html.contains("gm-account-password");
+            assert html.contains("class=\"gm-search-clear\" type=\"button\" aria-label=\"Limpiar búsqueda\"");
             assert html.contains("Opciones de usuario");
             assert html.contains("Solicitar clave por SMS al iniciar sesión");
             assert html.contains("value=\"optionsSave\"");
             assert html.indexOf("title=\"Redactar correo\"") < html.indexOf("title=\"Administrar contraseña\"");
             assert !html.contains("mail-layout");
             assert !html.contains("mail-main");
+            assert html.contains("mail-theme-choice");
+            assert html.contains("value=\"blue\"");
+            assert html.contains("value=\"green\"");
+            assert html.contains("id=\"mail-list-panel\"");
+            assert html.contains("id=\"mail-bulk-form\" method=\"post\" action=\"/gator-mail/mail\"");
+            assert html.contains("id=\"mail-reader-panel\"");
+            assert html.contains("id=\"mail-account-key\"");
+            if (args.length == 1) writeUiFixtures(model, java.nio.file.Path.of(args[0]));
             model.put("eventFormView", false);
             model.put("eventReadOnlyView", true);
             String readOnlyEvent = new GatorJsonView().renderResource("gator-mail/screens/mail.json", model);
@@ -576,4 +605,84 @@ public final class AccessCodeSelfCheck {
         assert document.contains("img-src data:");
         assert document.contains("<p>Hola</p>");
     }
+    private static void writeUiFixtures(Map<String, Object> original, java.nio.file.Path directory) throws Exception {
+        java.nio.file.Files.createDirectories(directory);
+        Map<String, List<String>> screens = Map.ofEntries(
+                Map.entry("inbox", List.of("mailboxView")),
+                Map.entry("message", List.of("mailboxView", "messageView")),
+                Map.entry("compose", List.of("composeView")),
+                Map.entry("dashboard", List.of("dashboardView")),
+                Map.entry("calendar", List.of("calendarView")),
+                Map.entry("event", List.of("eventFormView")),
+                Map.entry("contacts", List.of("configurationContactsView")),
+                Map.entry("users", List.of("configurationUsersView")),
+                Map.entry("filters", List.of("configurationFiltersView")),
+                Map.entry("folders", List.of("configurationFoldersView")),
+                Map.entry("options", List.of("configurationOptionsView")),
+                Map.entry("challenge", List.of("challenge", "codeChallenge")),
+                Map.entry("logout", List.of("loggedOut")));
+        for (var screen : screens.entrySet()) {
+            Map<String, Object> sample = new HashMap<>(original);
+            sample.replaceAll((key, value) -> key.endsWith("View") || List.of("challenge", "codeChallenge",
+                    "mobileChallenge", "factorChoice", "phoneCorrection", "loggedOut", "pending", "error").contains(key)
+                    ? false : value);
+            screen.getValue().forEach(key -> sample.put(key, true));
+            sample.put("empty", false);
+            sample.put("sendNotice", false);
+            sample.put("spamGlobalNotice", false);
+            sample.put("filterNotice", false);
+            sample.put("eventCreated", false);
+            sample.put("eventUpdated", false);
+            sample.put("eventCompleted", false);
+            sample.put("eventSyncFailed", false);
+            sample.put("mailNavigationOnly", false);
+            sample.put("configurationOptionsClass", "");
+            sample.put("configurationUsersClass", "");
+            sample.put("calendarClass", "");
+            sample.put("folderLabel", "Entrada");
+            sample.put("subject", "Propuesta comercial · revisión final");
+            sample.put("from", "Mariana López <mariana@example.com>");
+            sample.put("to", "Alex Campos <demo@example.com>");
+            sample.put("sent", "09/09/2026 10:42");
+            sample.put("body", "<p>Hola, Alex:</p><p>Te comparto la versión actualizada para nuestra reunión.</p><p>Gracias por tus comentarios.<br>Mariana</p>");
+            sample.put("query", "");
+            sample.put("folderMenus", MailServlet.folderMenus(List.of(
+                new ImapMailbox.FolderInfo("INBOX", "Entrada", "", "INBOX", 0, 3, 5),
+                new ImapMailbox.FolderInfo("Sent", "Enviados", "", "Sent", 0, 0, 0),
+                new ImapMailbox.FolderInfo("Drafts", "Borradores", "", "Drafts", 0, 1, 1),
+                new ImapMailbox.FolderInfo("Spam", "Spam", "", "Spam", 0, 0, 0),
+                new ImapMailbox.FolderInfo("Trash", "Papelera", "", "Trash", 0, 0, 0)), "", 60));
+            sample.put("accountName", "Alex Campos");
+            sample.put("accountInitials", "AC");
+            sample.put("dashboardDate", "Miércoles 9 de septiembre de 2026");
+            sample.put("dashboardMonth", "Septiembre de 2026");
+            sample.put("mailTotal", 5);
+            sample.put("mailUnread", 3);
+            sample.put("mailRead", 2);
+            sample.put("eventsCount", 3);
+            sample.put("eventsPagination", false);
+            sample.put("eventsEmpty", false);
+            sample.put("reviewEmpty", false);
+            sample.put("events", List.of(
+                Map.of("startDate", "10 SEP", "startTime", "11:00", "summary", "Coordinación de proyecto", "place", "Sala Norte", "status", "Por confirmar", "statusClass", "is-next", "href", "mail?action=eventOpen&id=1"),
+                Map.of("startDate", "15 SEP", "startTime", "09:30", "summary", "Revisión de entregables", "place", "Videollamada", "status", "Organizas", "statusClass", "is-done", "href", "mail?action=eventOpen&id=2"),
+                Map.of("startDate", "24 SEP", "startTime", "16:00", "summary", "Cierre de septiembre", "place", "Sala principal", "status", "Organizas", "statusClass", "is-done", "href", "mail?action=eventOpen&id=3")));
+            sample.put("reviewMessages", List.of(
+                Map.of("from", "Mariana López", "subject", "Propuesta comercial · revisión final", "sent", "10:42", "href", "mail?folder=INBOX&uid=1"),
+                Map.of("from", "Diego Torres", "subject", "Invitación: coordinación de proyecto", "sent", "10:18", "href", "mail?folder=INBOX&uid=2"),
+                Map.of("from", "Facturación", "subject", "Documentación de septiembre", "sent", "09:35", "href", "mail?folder=INBOX&uid=3")));
+            List<Map<String, Object>> people = List.of(
+                Map.of("sender", "Mariana López", "initials", "ML", "count", 1, "max", 1),
+                Map.of("sender", "Diego Torres", "initials", "DT", "count", 1, "max", 1),
+                Map.of("sender", "Facturación", "initials", "F", "count", 1, "max", 1),
+                Map.of("sender", "Lucía Méndez", "initials", "LM", "count", 1, "max", 1));
+            sample.put("recentSenders", people);
+            sample.put("historicSenders", people);
+            sample.put("mailbox", "demo@example.com");
+            sample.put("sessionActive", true);
+            java.nio.file.Files.writeString(directory.resolve(screen.getKey() + ".html"),
+                    new GatorJsonView().renderResource("gator-mail/screens/mail.json", sample));
+        }
+    }
+
 }

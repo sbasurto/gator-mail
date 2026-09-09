@@ -624,3 +624,111 @@
         syncHtml();
     });
 })();
+
+// Presentation enhancements reuse the existing forms, permissions and URLs.
+(() => {
+    document.documentElement.classList.add('mail-ui-ready');
+    const toggle = document.getElementById('mail-navigation-toggle');
+    if (toggle) toggle.addEventListener('click', () => {
+        const open = document.documentElement.classList.toggle('mail-navigation-open');
+        toggle.setAttribute('aria-expanded', String(open));
+    });
+    document.addEventListener('keydown', event => {
+        if (event.key === 'Escape' && toggle) {
+            document.documentElement.classList.remove('mail-navigation-open');
+            toggle.setAttribute('aria-expanded', 'false');
+        }
+    });
+    document.getElementById('mail-navigation-close')?.addEventListener('click', () => {
+        document.documentElement.classList.remove('mail-navigation-open');
+        toggle?.setAttribute('aria-expanded', 'false');
+        toggle?.focus();
+    });
+    document.querySelectorAll('.gm-search-clear').forEach(button => button.addEventListener('click', () => {
+        const input = button.parentElement.querySelector('input[name="q"]');
+        input.value = '';
+        input.dispatchEvent(new Event('input', {bubbles: true}));
+        input.focus();
+    }));
+    const main = document.getElementById('mail-content-area');
+    if (main) main.tabIndex = -1;
+    const list = document.getElementById('mail-list-panel');
+    if (list && !document.getElementById('mail-reader-panel')) {
+        const empty = document.createElement('section');
+        empty.className = 'card mail-panel mail-reader-empty';
+        const title = document.createElement('h2');
+        title.textContent = 'Tu correo, en contexto';
+        const copy = document.createElement('p');
+        copy.textContent = 'Selecciona un mensaje para leerlo aquí. Tu listado y tus carpetas seguirán a la vista.';
+        empty.append(title, copy);
+        list.after(empty);
+    }
+    const locationQuery = new URLSearchParams(window.location.search);
+    document.querySelectorAll('.mail-sidebar a[href]').forEach(link => {
+        const target = new URL(link.href);
+        const action = locationQuery.get('action') || '';
+        if ((target.searchParams.get('action') || '') === action
+                && target.searchParams.get('section') === locationQuery.get('section')
+                && target.searchParams.get('folder') === locationQuery.get('folder')) {
+            link.classList.add('active');
+            link.setAttribute('aria-current', 'page');
+        }
+    });
+    document.querySelectorAll('.mail-admin-list > form.mail-admin-row:not(.mail-admin-new):not(.mail-user-create):not(.mail-global-spam-row), .mail-admin-list > form.mail-filter-rule-form').forEach(form => {
+        const record = document.createElement('details');
+        record.className = 'mail-record';
+        const summary = document.createElement('summary');
+        const name = form.elements.name?.value || form.elements.user?.value || 'Registro';
+        const email = form.elements.email?.value || form.elements.value?.value || '';
+        summary.textContent = name + (email ? ' · ' + email : '');
+        form.before(record);
+        record.append(summary, form);
+    });
+    const contacts = [...document.querySelectorAll('.mail-record:has(.mail-admin-contact)')];
+    if (contacts.length) {
+        const searchLabel = document.createElement('label');
+        searchLabel.className = 'mail-directory-search';
+        searchLabel.textContent = 'Buscar contactos';
+        const search = document.createElement('input');
+        search.type = 'search'; search.className = 'form-control'; search.placeholder = 'Nombre o correo';
+        searchLabel.append(search);
+        const group = contacts[0].parentElement;
+        group.before(searchLabel);
+        const empty = document.createElement('p');
+        empty.className = 'mail-contact-empty'; empty.textContent = 'No se encontraron contactos.'; empty.hidden = true;
+        group.after(empty);
+        search.addEventListener('input', () => {
+            const term = search.value.trim().toLocaleLowerCase('es');
+            contacts.forEach(record => record.hidden = !record.querySelector('summary').textContent.toLocaleLowerCase('es').includes(term));
+            empty.hidden = contacts.some(record => !record.hidden);
+        });
+    }
+    const calendar = document.querySelector('.mail-agenda-scroll');
+    if (calendar) {
+        const button = document.createElement('button');
+        button.type = 'button'; button.className = 'btn btn-outline-primary'; button.textContent = 'Ver agenda';
+        button.setAttribute('aria-pressed', 'false');
+        calendar.closest('.mail-panel').querySelector('.mail-header-actions').append(button);
+        button.addEventListener('click', () => {
+            const agenda = calendar.classList.toggle('is-agenda');
+            button.setAttribute('aria-pressed', String(agenda));
+            button.textContent = agenda ? 'Ver mes' : 'Ver agenda';
+        });
+    }
+})();
+
+(() => {
+    const recent = document.getElementById('mail-rank-recent');
+    const history = document.getElementById('mail-rank-history');
+    if (!recent || !history) return;
+    const show = historic => {
+        document.getElementById('mail-recentSenders').hidden = historic;
+        document.getElementById('mail-historicSenders').classList.toggle('gm-is-visible', historic);
+        recent.classList.toggle('gm-primary', !historic);
+        history.classList.toggle('gm-primary', historic);
+        recent.setAttribute('aria-expanded', String(!historic));
+        history.setAttribute('aria-expanded', String(historic));
+    };
+    recent.addEventListener('click', () => show(false));
+    history.addEventListener('click', () => show(true));
+})();

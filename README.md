@@ -217,3 +217,22 @@ la cuenta seleccionada y conserva una copia recuperable en
 ## Licencia
 
 GPL-3.0. Consulte [LICENSE](LICENSE) y [NOTICE](NOTICE).
+
+## Apariencia y navegación
+
+En la cabecera o en **Configuración > Opciones de usuario > Apariencia** se puede
+escoger **Azul corporativo** (predeterminado) o **Verde**. Ambos diseños comparten
+las mismas funciones y permisos. La preferencia se conserva por cuenta en este
+navegador; no se sincroniza entre dispositivos. Si el almacenamiento está bloqueado,
+el cambio funciona durante la página actual y se informa que no pudo guardarse.
+
+En escritorio, abrir un mensaje mantiene el listado y la paginación a su lado.
+En móvil, **Menú** abre la navegación y **Volver** regresa al listado. Los contactos
+tienen búsqueda por nombre o correo y los formularios de registros se despliegan
+al seleccionar su encabezado. El calendario permite alternar mes y agenda.
+
+`./gradlew check` incluye `appearanceTest` (Node 22 o posterior), que comprueba
+selección de paleta, separación entre cuentas y almacenamiento bloqueado.
+Para generar pantallas de prueba con datos ficticios:
+`./gradlew selfTest -PuiFixtureDir=/tmp/gator-mail-ui-fixtures`.
+Los prototipos originales azul y verde se conservan en `gator-gui-essay/web/`.

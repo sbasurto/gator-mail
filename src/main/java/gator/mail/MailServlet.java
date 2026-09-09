@@ -124,6 +124,8 @@ public final class MailServlet extends HttpServlet {
             session.setMaxInactiveInterval(sessionTimeoutSeconds(access));
             String mailbox = access.get("email").getAsString();
             model.put("mailbox", mailbox);
+            model.put("accountName", user);
+            model.put("accountInitials", initials(user));
             String notice = challenge(request, session, user);
             if (mobileChallengePoll(request)) {
                 mobileChallengeResponse(request, response, session, notice);
@@ -669,29 +671,76 @@ public final class MailServlet extends HttpServlet {
         throw new IllegalArgumentException("El enlace del evento debe iniciar con http:// o https://");
     }
 
-    private void dashboardModel(Map<String, Object> model, String mailbox) {
+    private void dashboardModel(Map<String, Object> model, String mailbox) throws Exception {
         model.put("dashboardView", true);
         JsonObject result = checked(mailDbCall("mail_fn_get_eventos", mailbox));
-        List<Map<String, Object>> events = new ArrayList<>();
-        for (JsonElement element : result.getAsJsonArray("eventos")) {
-            JsonObject event = element.getAsJsonObject();
-            String start = event.get("start").getAsString();
-            int separator = start.indexOf(' ');
-            events.add(Map.of("summary", event.get("summary").getAsString(),
-                    "description", event.get("description").getAsString(),
-                    "place", event.get("place").getAsString(),
-                    "startDate", separator < 0 ? start : start.substring(0, separator),
-                    "startTime", separator < 0 ? "" : start.substring(separator + 1),
-                    "status", event.get("status").getAsString(),
-                    "statusClass", event.get("statusClass").getAsString()));
-        }
+        LocalDateTime now = LocalDateTime.now();
+        List<Map<String, Object>> events = dashboardEvents(result.getAsJsonArray("eventos"), now);
         model.put("events", events);
         model.put("eventsAvailable", !events.isEmpty());
         model.put("eventsEmpty", events.isEmpty());
         model.put("eventsCount", events.size());
+        model.put("eventsPagination", events.size() > 5);
+        Locale spanish = Locale.forLanguageTag("es-MX");
+        String date = now.format(DateTimeFormatter.ofPattern("EEEE d 'de' MMMM 'de' yyyy", spanish));
+        String month = now.format(DateTimeFormatter.ofPattern("MMMM 'de' yyyy", spanish));
+        model.put("dashboardDate", Character.toUpperCase(date.charAt(0)) + date.substring(1));
+        model.put("dashboardMonth", Character.toUpperCase(month.charAt(0)) + month.substring(1));
+        List<Map<String, Object>> pending = unreadForDashboard(mailbox);
+        model.put("reviewMessages", pending);
+        model.put("reviewEmpty", pending.isEmpty());
         JsonObject senders = checked(mailDbCall("mail_fn_cache_remitentes", mailbox));
         senderRanking(model, "recentSenders", senders.getAsJsonArray("recientes"));
         senderRanking(model, "historicSenders", senders.getAsJsonArray("historicos"));
+    }
+
+    static List<Map<String, Object>> dashboardEvents(com.google.gson.JsonArray values, LocalDateTime now) {
+        DateTimeFormatter format = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
+        DateTimeFormatter day = DateTimeFormatter.ofPattern("d MMM", Locale.forLanguageTag("es-MX"));
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (JsonElement element : values) {
+            JsonObject event = element.getAsJsonObject();
+            LocalDateTime start = LocalDateTime.parse(string(event, "start"), format);
+            String status = string(event, "status");
+            if (start.isBefore(now) || !YearMonth.from(start).equals(YearMonth.from(now))
+                    || "Terminado".equals(status) || "Rechazado".equals(status)) continue;
+            rows.add(Map.of("summary", string(event, "summary"), "place", string(event, "place"),
+                    "startDate", start.format(day).toUpperCase(Locale.forLanguageTag("es-MX")),
+                    "startTime", start.toLocalTime().toString(), "sortDate", start,
+                    "status", status, "statusClass", string(event, "statusClass"),
+                    "href", "mail?action=eventOpen&id=" + url(string(event, "id"))));
+        }
+        rows.sort(java.util.Comparator.comparing(row -> (LocalDateTime) row.get("sortDate")));
+        return rows;
+    }
+
+    static String initials(String name) {
+        if (name == null || name.isBlank()) return "GM";
+        String[] words = name.strip().split("\\s+");
+        return (words[0].substring(0, 1) + (words.length > 1 ? words[words.length - 1].substring(0, 1) : ""))
+                .toUpperCase(Locale.ROOT);
+    }
+
+    private List<Map<String, Object>> unreadForDashboard(String mailbox) throws Exception {
+        GappSQLStatement statement = new GappSQLStatement();
+        statement.setQuery("SELECT r.mensaje_uid, r.mensaje_remitente, r.mensaje_asunto, r.mensaje_fecha "
+                + "FROM public.mail_mensajes_resumen r JOIN public.mail_carpetas c ON c.carpeta_id = r.carpeta_id "
+                + "WHERE c.carpeta_activa AND lower(concat(c.usuario_id, '@', c.mail_domain)) = lower(btrim(?)) "
+                + "AND c.carpeta_imap = 'INBOX' AND NOT r.mensaje_leido "
+                + "ORDER BY r.mensaje_fecha DESC, r.mensaje_uid DESC LIMIT 5");
+        statement.addParam(mailbox);
+        ADO database = new ADO(getServletContext().getInitParameter("gappContactsDbFile"), true);
+        try (java.sql.ResultSet rows = database.executePreparedStmtRset(statement);
+                java.sql.Statement query = rows == null ? null : rows.getStatement()) {
+            if (rows == null) throw new IllegalStateException("No fue posible consultar los mensajes pendientes");
+            List<Map<String, Object>> pending = new ArrayList<>();
+            while (rows.next()) pending.add(Map.of("from", rows.getString("mensaje_remitente"),
+                    "subject", rows.getString("mensaje_asunto"),
+                    "sent", DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneId.systemDefault())
+                            .format(rows.getTimestamp("mensaje_fecha").toInstant()),
+                    "href", "mail?folder=INBOX&uid=" + rows.getLong("mensaje_uid")));
+            return pending;
+        } finally { database.close(); }
     }
 
     private static void senderRanking(Map<String, Object> model, String name, com.google.gson.JsonArray values) {
@@ -702,7 +751,8 @@ public final class MailServlet extends HttpServlet {
         for (JsonElement element : values) {
             JsonObject sender = element.getAsJsonObject();
             rows.add(Map.of("sender", sender.get("sender").getAsString(),
-                    "count", sender.get("count").getAsInt(), "max", maximum));
+                    "count", sender.get("count").getAsInt(), "max", maximum,
+                    "initials", initials(contactName(sender.get("sender").getAsString(), ""))));
         }
         model.put(name, rows);
         model.put(name + "Count", rows.size());
@@ -927,7 +977,7 @@ public final class MailServlet extends HttpServlet {
             model.put("filterHref", "mail?action=settings&section=filters&sender=" + url(sender));
             model.put("contactEmail", sender);
             model.put("contactName", contactName(mail.from(), sender));
-            return;
+            // Keep the cached list and pagination beside the selected message.
         }
 
         model.put("mailboxView", true);
@@ -963,7 +1013,8 @@ public final class MailServlet extends HttpServlet {
             item.put("uid", mail.uid());
             item.put("folder", folderName);
             item.put("state", state);
-            item.put("stateClass", mail.seen() ? "is-read" : "is-unread");
+            item.put("stateClass", (mail.seen() ? "is-read" : "is-unread")
+                    + (String.valueOf(mail.uid()).equals(uid) ? " is-selected" : ""));
             item.put("icon", mail.seen() ? "fa-envelope-open" : "fa-envelope");
             item.put("contactEmail", sender);
             item.put("contactName", contactName(mail.from(), sender));
@@ -2098,7 +2149,7 @@ public final class MailServlet extends HttpServlet {
         boolean personalSelected = personal.stream().anyMatch(folder -> folder.name().equals(selected));
         List<Map<String, Object>> menus = new ArrayList<>();
         menus.add(Map.of("label", "Correo", "icon", "fas fa-envelope", "open",
-                !selected.isBlank() && !personalSelected, "groups", folderGroups(system, selected, size)));
+                !personalSelected, "groups", folderGroups(system, selected, size)));
         if (!personal.isEmpty())
             menus.add(Map.of("label", "Carpetas personales", "icon", "fas fa-folder", "open",
                     personalSelected, "groups", folderGroups(personal, selected, size)));
@@ -2123,6 +2174,8 @@ public final class MailServlet extends HttpServlet {
         model.put("href", mailboxHref(folder.name(), "", 1, size));
         model.put("label", folder.label());
         model.put("count", (folder.unread() > 0 ? folder.unread() + " sin leer · " : "") + folder.total());
+        model.put("navCount", "Borradores".equals(folder.label()) ? folder.total() : folder.unread());
+        model.put("navCountAvailable", ((Number) model.get("navCount")).intValue() > 0);
         model.put("icon", folderIcon(folder.label()));
         model.put("folder", folder.name());
         model.put("draggable", !folder.name().equalsIgnoreCase("INBOX"));
