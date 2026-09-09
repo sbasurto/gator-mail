@@ -576,6 +576,39 @@
         }
         syncHtml();
     }));
+    const attachments = document.querySelector("#mail-compose-attachments");
+    const attachmentList = document.querySelector("#mail-compose-attachment-list");
+    if (attachments && attachmentList) {
+        attachmentList.setAttribute("aria-live", "polite");
+        let files = [];
+        const renderAttachments = () => {
+            const transfer = new DataTransfer();
+            attachmentList.replaceChildren();
+            files.forEach((file, index) => {
+                transfer.items.add(file);
+                const item = document.createElement("span");
+                item.className = "mail-attachment";
+                item.append(document.createTextNode(file.name + " "));
+                const remove = document.createElement("button");
+                remove.type = "button";
+                remove.className = "btn btn-light";
+                remove.textContent = "Quitar";
+                remove.setAttribute("aria-label", "Quitar " + file.name);
+                remove.addEventListener("click", () => {
+                    files.splice(index, 1);
+                    renderAttachments();
+                    attachments.focus();
+                });
+                item.append(remove);
+                attachmentList.append(item);
+            });
+            attachments.files = transfer.files;
+        };
+        attachments.addEventListener("change", () => {
+            files.push(...attachments.files);
+            renderAttachments();
+        });
+    }
     const images = document.querySelector("#mail-compose-images");
     document.querySelector("#mail-insert-image")?.addEventListener("click", () => images?.click());
     images?.addEventListener("change", () => {

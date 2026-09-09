@@ -16,7 +16,7 @@
           { "tag": "link", "attrs": { "rel": "stylesheet", "href": "/elib/css2/sweetalert2.min.css?v=11.23.0" } },
           { "tag": "link", "attrs": { "rel": "stylesheet", "href": "${contextPath}/css/gator-mail.css?v=45" } },
           { "tag": "script", "attrs": { "src": "/elib/js/sweetalert2.all.min.js", "defer": "true" } },
-          { "tag": "script", "attrs": { "src": "${contextPath}/js/gator-mail.js?v=27", "defer": "true" } }
+          { "tag": "script", "attrs": { "src": "${contextPath}/js/gator-mail.js?v=28", "defer": "true" } }
         ]
       },
       {
@@ -939,6 +939,8 @@
                             { "tag": "input", "attrs": { "id": "mail-compose-images", "name": "images", "type": "file", "accept": "image/png,image/jpeg,image/gif", "multiple": "true" } }
                           ] }
                         ] },
+                        { "tag": "div", "attrs": { "id": "mail-compose-attachment-list", "class": "mail-attachments", "aria-label": "Archivos por adjuntar" } },
+                        { "tag": "small", "attrs": { "class": "text-muted" }, "text": "Puedes agregar archivos en varias selecciones. Máximo 10 archivos y 25 MiB en total, incluyendo imágenes y adjuntos conservados." },
                         { "tag": "div", "attrs": { "class": "mail-compose-footer" }, "children": [
                           { "tag": "small", "attrs": { "class": "text-muted" }, "text": "Se guardará como texto y HTML sanitizado en Borradores." },
                           { "tag": "div", "attrs": { "class": "mail-compose-actions" }, "children": [

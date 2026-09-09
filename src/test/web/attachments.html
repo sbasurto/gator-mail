@@ -1,0 +1,41 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Adjuntos: prueba de regresión</title>
+<form enctype="multipart/form-data">
+  <textarea name="body">Primer texto</textarea>
+  <input id="mail-compose-attachments" name="attachments" type="file" multiple>
+  <div id="mail-compose-attachment-list" aria-live="polite"></div>
+</form>
+<pre id="result">FAIL: prueba incompleta</pre>
+<script src="../../../web/js/gator-mail.js"></script>
+<script>
+(async () => {
+  const input = document.querySelector("input");
+  const form = document.querySelector("form");
+  const select = (...files) => {
+    const transfer = new DataTransfer();
+    files.forEach(file => transfer.items.add(file));
+    input.files = transfer.files;
+    input.dispatchEvent(new Event("change"));
+  };
+  const assert = (condition, message) => { if (!condition) throw new Error(message); };
+  try {
+    select(new File(["uno"], "uno.txt"));
+    form.elements.body.value = "Sigo editando";
+    select(new File(["dos"], "dos.txt"), new File(["tres"], "tres.txt"));
+    select(); // Cancelar no debe perder la selección previa.
+    let data = new FormData(form);
+    assert(data.getAll("attachments").map(file => file.name).join() === "uno.txt,dos.txt,tres.txt",
+      "Seleccionar de nuevo reemplaza los adjuntos anteriores");
+    assert(await data.getAll("attachments")[0].text() === "uno", "Contenido perdido");
+    assert(data.get("body") === "Sigo editando", "Edición perdida");
+    document.querySelector("#mail-compose-attachment-list button").click();
+    data = new FormData(form);
+    assert(data.getAll("attachments").map(file => file.name).join() === "dos.txt,tres.txt",
+      "Quitar debe excluir solamente el archivo elegido");
+    document.querySelector("#result").textContent = "PASS: adjuntos acumulados, cancelación, edición y eliminación";
+  } catch (error) {
+    document.querySelector("#result").textContent = "FAIL: " + error.message;
+  }
+})();
+</script>

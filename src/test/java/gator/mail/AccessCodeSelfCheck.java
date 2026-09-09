@@ -381,7 +381,7 @@ public final class AccessCodeSelfCheck {
             assert html.contains("Sesión cerrada");
             assert html.contains("/gator-mail/css/gator-mail.css?v=45");
             assert html.contains("/elib/js/sweetalert2.all.min.js");
-            assert html.contains("/gator-mail/js/gator-mail.js?v=27");
+            assert html.contains("/gator-mail/js/gator-mail.js?v=28");
             assert html.contains("spinner-border");
             assert html.contains("mail-mobile-status");
             assert html.contains("name=\"format\" value=\"json\"");
