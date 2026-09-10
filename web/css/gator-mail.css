@@ -449,7 +449,7 @@ body { min-height: 100vh; margin: 0; color: var(--gator-ink); background: var(--
 .mail-message-meta { flex-wrap: wrap; gap: .5rem; }
 .mail-message-meta strong { min-width: 0; }
 .mail-message-actions { flex-wrap: wrap; gap: .5rem; }
-.mail-action-bar { position: static; transform: none; width: 100%; max-width: none; margin-top: 16px; border-color: var(--gator-line); box-shadow: none; flex-wrap: wrap; }
+.mail-action-bar { position: fixed; transform: none; width: max-content; max-width: calc(100vw - 2rem); margin: 0; border-color: var(--gator-line); flex-wrap: wrap; }
 .mail-content:has(> #mail-list-panel) { display: grid; grid-template-columns: minmax(300px, 35%) minmax(0, 1fr); gap: 0; align-content: start; align-items: start; }
 #mail-list-panel { grid-column: 1; border-radius: 11px 0 0 11px; }
 #mail-reader-panel, .mail-reader-empty { grid-column: 2; grid-row: 1; border-radius: 0 11px 11px 0; min-height: 600px; }
@@ -702,3 +702,7 @@ input:placeholder-shown + .gm-search-clear { visibility: hidden; }
 .gm-search-field { position: relative; flex: 1; min-width: 0; }
 .gm-search-field input { padding-right: 32px; }
 .gm-search-field .gm-search-clear { position: absolute; right: 5px; top: 50%; transform: translateY(-50%); }
+
+/* Reserve room to scroll the last message above the floating controls. */
+#mail-content-area:has(> .mail-action-bar) { padding-bottom: 160px; }
+.mail-content > .mail-action-bar { max-width: calc(100vw - 2rem); }
