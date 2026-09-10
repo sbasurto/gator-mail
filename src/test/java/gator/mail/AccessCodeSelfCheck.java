@@ -12,6 +12,7 @@ import java.util.Map;
 
 public final class AccessCodeSelfCheck {
     public static void main(String[] args) {
+        SignatureSelfCheck.run();
         assert MailServlet.initials("Mariana López").equals("ML");
         assert MailServlet.initials("  Alex   Campos  ").equals("AC");
         assert MailServlet.initials("").equals("GM");
@@ -235,6 +236,7 @@ public final class AccessCodeSelfCheck {
         model.put("mailbox", "<user@example.com>");
         model.put("accountHref", "/gator-mail/oauth/password");
         model.put("folderMenus", folderMenus);
+        model.put("signatureAvailable", true);
         model.put("selectedFolder", "INBOX");
         model.put("folderActionsDisabled", true);
         model.put("csrf", "csrf-token");
@@ -395,7 +397,7 @@ public final class AccessCodeSelfCheck {
         try {
             String html = new GatorJsonView().renderResource("gator-mail/screens/mail.json", model);
             assert html.contains("Sesión cerrada");
-            assert html.contains("/gator-mail/css/gator-mail.css?v=51");
+            assert html.contains("/gator-mail/css/gator-mail.css?v=52");
             assert html.contains("/elib/js/sweetalert2.all.min.js");
             assert html.contains("/gator-mail/js/gator-mail.js?v=32");
             assert html.contains("spinner-border");
@@ -551,6 +553,12 @@ public final class AccessCodeSelfCheck {
             assert html.contains("gm-account-password");
             assert html.contains("class=\"gm-search-clear\" type=\"button\" aria-label=\"Limpiar búsqueda\"");
             assert html.contains("Opciones de usuario");
+            assert html.contains("Firma del usuario");
+            assert html.contains("id=\"mail-signature-form\"");
+            assert html.contains("value=\"signatureSave\"");
+            assert html.contains("value=\"signatureDelete\"");
+            assert html.contains("name=\"includeSignature\" checked");
+            assert html.contains("mail?action=signatureImage");
             assert html.contains("Solicitar clave por SMS al iniciar sesión");
             assert html.contains("value=\"optionsSave\"");
             assert html.indexOf("title=\"Redactar correo\"") < html.indexOf("title=\"Administrar contraseña\"");

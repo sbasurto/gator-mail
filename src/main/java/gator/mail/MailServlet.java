@@ -133,6 +133,8 @@ public final class MailServlet extends HttpServlet {
             }
             if (!Boolean.TRUE.equals(session.getAttribute("mail.challenge.verified"))) {
                 challengeModel(model, session, notice);
+            } else if (signature(request, response, session, mailbox)) {
+                return;
             } else if (configuration(request, response, session, model, mailbox, OAuthServlet.accessToken(request))) {
                 if (response.isCommitted()) return;
             } else if (overview(request, response, session, model, mailbox, OAuthServlet.accessToken(request))) {
@@ -914,6 +916,7 @@ public final class MailServlet extends HttpServlet {
             model.put("composeView", true);
             model.put("composeAction", false);
             contactsModel(model, mailbox);
+            signatureModel(model, mailbox);
             if (!"compose".equals(action)) {
                 String uid = request.getParameter("uid");
                 if (uid == null || !uid.matches("[0-9]+")) throw new IllegalArgumentException("Mensaje inválido");
@@ -1099,6 +1102,50 @@ public final class MailServlet extends HttpServlet {
         return String.join(", ", values.values());
     }
 
+    private SignatureStore signatures() {
+        String configured = System.getenv("GATOR_MAIL_SIGNATURE_DIR");
+        Path directory = configured == null || configured.isBlank()
+                ? Path.of(System.getProperty("catalina.base", System.getProperty("user.home")),
+                        "data", "gator-mail", "signatures") : Path.of(configured);
+        return new SignatureStore(directory);
+    }
+
+    private void signatureModel(Map<String, Object> model, String mailbox) throws IOException {
+        model.put("signatureAvailable", signatures().read(mailbox) != null);
+    }
+
+    private boolean signature(HttpServletRequest request, HttpServletResponse response, HttpSession session,
+            String mailbox) throws Exception {
+        String action = request.getParameter("action");
+        if (!List.of("signatureImage", "signatureSave", "signatureDelete").contains(action == null ? "" : action))
+            return false;
+        if ("signatureImage".equals(action)) {
+            if (!"GET".equals(request.getMethod())) { response.sendError(405); return true; }
+            byte[] data = signatures().read(mailbox);
+            if (data == null) { response.sendError(404); return true; }
+            response.setContentType("image/png");
+            response.setContentLength(data.length);
+            response.getOutputStream().write(data);
+            return true;
+        }
+        if (!"POST".equals(request.getMethod()) || !csrf(session).equals(request.getParameter("csrf"))) {
+            response.sendError(HttpServletResponse.SC_FORBIDDEN);
+            return true;
+        }
+        if ("signatureDelete".equals(action)) {
+            signatures().remove(mailbox);
+        } else {
+            Part part = request.getPart("signature");
+            if (part == null || part.getSize() == 0 || part.getSize() > SignatureStore.MAX_BYTES)
+                throw new IllegalArgumentException("Selecciona una firma PNG o JPG de hasta 2 MiB");
+            try (var input = part.getInputStream()) {
+                signatures().save(mailbox, input.readNBytes(SignatureStore.MAX_BYTES + 1));
+            }
+        }
+        response.sendRedirect("mail?action=settings&section=options&signatureSaved=1");
+        return true;
+    }
+
     private boolean saveDraft(HttpServletRequest request, HttpServletResponse response, HttpSession session,
             String mailbox, String accessToken) throws Exception {
         if (!"saveDraft".equals(request.getParameter("action"))) return false;
@@ -1110,7 +1157,7 @@ public final class MailServlet extends HttpServlet {
             MessageBody body = messageBody(request.getParameter("body"), request.getParameter("format"));
             String drafts = imap.saveDraft(mailbox, request.getParameter("to"), request.getParameter("cc"),
                     request.getParameter("bcc"), request.getParameter("subject"), body.plain(), body.html(),
-                    uploads(request, mailbox, accessToken), accessToken);
+                    messageUploads(request, mailbox, accessToken), accessToken);
             syncFolders(mailbox, accessToken);
             syncFolder(mailbox, drafts, accessToken);
             response.sendRedirect("mail?folder=" + url(drafts));
@@ -1130,7 +1177,7 @@ public final class MailServlet extends HttpServlet {
         MessageBody body = messageBody(request.getParameter("body"), request.getParameter("format"));
         String folder = imap.send(mailbox, request.getParameter("to"), request.getParameter("cc"),
                 request.getParameter("bcc"), request.getParameter("subject"), body.plain(), body.html(),
-                uploads(request, mailbox, accessToken), accessToken);
+                messageUploads(request, mailbox, accessToken), accessToken);
         syncFolders(mailbox, accessToken);
         syncFolder(mailbox, folder, accessToken);
         response.sendRedirect("mail?folder=" + url(folder) + "&sent=1");
@@ -1321,6 +1368,13 @@ public final class MailServlet extends HttpServlet {
             byte[] data = part.getInputStream().readNBytes(25 * 1024 * 1024 + 1);
             result.add(upload(name, part.getContentType(), data, inline));
         }
+        return result;
+    }
+
+    private List<ImapMailbox.Upload> messageUploads(HttpServletRequest request, String mailbox, String accessToken)
+            throws Exception {
+        List<ImapMailbox.Upload> result = uploads(request, mailbox, accessToken);
+        if (request.getParameter("includeSignature") != null) signatures().append(mailbox, result);
         return result;
     }
 
@@ -1818,6 +1872,8 @@ public final class MailServlet extends HttpServlet {
         model.put("userAdminMessage", userNotice == null ? "" : userNotice);
         session.removeAttribute("mail.user.admin.notice");
         if ("options".equals(section)) {
+            signatureModel(model, mailbox);
+            model.put("signatureSaved", "1".equals(request.getParameter("signatureSaved")));
             JsonObject result = checked(mailDbCall("mail_fn_usuario_opciones",
                     String.valueOf(session.getAttribute("oidc.user"))));
             model.put("smsAuthenticationEnabled", result.get("smsEnabled").getAsBoolean());

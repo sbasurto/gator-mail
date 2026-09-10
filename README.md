@@ -236,3 +236,21 @@ selección de paleta, separación entre cuentas y almacenamiento bloqueado.
 Para generar pantallas de prueba con datos ficticios:
 `./gradlew selfTest -PuiFixtureDir=/tmp/gator-mail-ui-fixtures`.
 Los prototipos originales azul y verde se conservan en `gator-gui-essay/web/`.
+
+## Firma personal
+
+En **Configuración > Opciones de usuario > Firma del usuario** se puede subir,
+reemplazar o quitar una imagen PNG/JPG (máximo 2 MiB y 2000 × 1000 píxeles).
+Se valida, ajusta proporcionalmente a un máximo de 600 × 300 píxeles y convierte
+a PNG; el nombre del archivo original no se utiliza.
+Al redactar, responder o reenviar, **Incluir mi firma** permite decidir si se
+adjunta como imagen incrustada al final del correo, también al guardar borrador.
+La firma cuenta dentro del límite de 10 archivos y 25 MiB.
+
+Las firmas se guardan por cuenta fuera del WAR, en
+`${catalina.base}/data/gator-mail/signatures`; se puede cambiar con
+`GATOR_MAIL_SIGNATURE_DIR`. El usuario de Tomcat necesita escritura en ese
+directorio, que debe incluirse en los respaldos. En instalaciones con varias
+instancias, usar un directorio persistente compartido. La consulta de la imagen
+requiere sesión y verificación de acceso; cada cuenta sólo accede a su propia
+firma. No se modifica el esquema de base de datos.
