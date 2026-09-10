@@ -13,6 +13,19 @@ import java.util.Map;
 public final class AccessCodeSelfCheck {
     public static void main(String[] args) {
         SignatureSelfCheck.run();
+        ImapMailbox.validateRecipients("\"Apellido, Nombre\" <uno@example.com>, dos@example.com", "", null);
+        for (String bad : List.of("uno@example.com; dos@example.com", "uno@example.com dos@example.com", "uno@@example.com", "sin-dominio")) {
+            for (String field : List.of("Para", "CC", "CCO")) {
+                try {
+                    ImapMailbox.validateRecipients(field.equals("Para") ? bad : "uno@example.com",
+                            field.equals("CC") ? bad : "", field.equals("CCO") ? bad : "");
+                    throw new AssertionError("Se aceptó: " + bad);
+                } catch (IllegalArgumentException expected) {
+                    assert expected.getMessage().contains(field + ":");
+                    assert expected.getMessage().contains("comas");
+                }
+            }
+        }
         assert MailServlet.initials("Mariana López").equals("ML");
         assert MailServlet.initials("  Alex   Campos  ").equals("AC");
         assert MailServlet.initials("").equals("GM");
@@ -399,7 +412,7 @@ public final class AccessCodeSelfCheck {
             assert html.contains("Sesión cerrada");
             assert html.contains("/gator-mail/css/gator-mail.css?v=52");
             assert html.contains("/elib/js/sweetalert2.all.min.js");
-            assert html.contains("/gator-mail/js/gator-mail.js?v=32");
+            assert html.contains("/gator-mail/js/gator-mail.js?v=33");
             assert html.contains("spinner-border");
             assert html.contains("mail-mobile-status");
             assert html.contains("name=\"format\" value=\"json\"");

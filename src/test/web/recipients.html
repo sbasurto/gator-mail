@@ -1,0 +1,53 @@
+<!doctype html>
+<meta charset="utf-8">
+<form class="mail-compose-form" action="mail">
+  <input name="csrf" value="test" type="hidden">
+  <input name="to" value="ana@example.com">
+  <input name="cc" value="uno@example.com; dos@example.com">
+  <input name="bcc">
+  <textarea name="body">Texto que debe conservarse</textarea>
+  <input name="attachments" type="file" multiple>
+  <button name="action" value="sendMessage">Enviar</button>
+  <button name="action" value="saveDraft">Guardar</button>
+</form>
+<pre id="result">FAIL: incompleto</pre>
+<script>
+let valid = false;
+let submitted = 0;
+window.fetch = async (url, options) => {
+  if (options.body.get('action') !== 'validateRecipients' || options.body.has('attachments')) throw Error('Solicitud incorrecta');
+  return {ok: valid, redirected: false, headers: new Headers({'Content-Type': 'application/json'}),
+    json: async () => valid ? {} : {error: 'CC: separa las direcciones por comas.'}};
+};
+</script>
+<script src="../../../web/js/gator-mail.js"></script>
+<script>
+(async () => {
+  const form = document.querySelector('form');
+  const assert = (value, message) => { if (!value) throw Error(message); };
+  form.addEventListener('submit', event => {
+    if (!event.defaultPrevented) submitted++;
+    event.preventDefault();
+  });
+  try {
+    const transfer = new DataTransfer();
+    transfer.items.add(new File(['contenido'], 'archivo.txt'));
+    form.elements.attachments.files = transfer.files;
+    for (const button of form.querySelectorAll('button')) {
+      form.requestSubmit(button);
+      await new Promise(resolve => setTimeout(resolve, 20));
+      assert(submitted === 0, 'Se envió una forma inválida');
+      assert(form.querySelector('[role="alert"]').textContent.includes('CC:'), 'Falta mensaje claro');
+      assert(form.elements.body.value === 'Texto que debe conservarse', 'Se perdió el texto');
+      assert(new FormData(form).get('attachments') === form.elements.attachments.files[0]
+        && form.elements.attachments.files[0].size === 9, 'Se perdió el adjunto');
+    }
+    valid = true;
+    form.elements.cc.value = 'uno@example.com, dos@example.com';
+    form.requestSubmit(form.querySelector('button'));
+    await new Promise(resolve => setTimeout(resolve, 20));
+    assert(submitted === 1, 'No se permitió corregir y enviar');
+    document.querySelector('#result').textContent = 'PASS: error visible, edición y adjuntos conservados, corrección y envío';
+  } catch (error) { document.querySelector('#result').textContent = 'FAIL: ' + error.message; }
+})();
+</script>

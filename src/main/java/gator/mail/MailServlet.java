@@ -133,6 +133,8 @@ public final class MailServlet extends HttpServlet {
             }
             if (!Boolean.TRUE.equals(session.getAttribute("mail.challenge.verified"))) {
                 challengeModel(model, session, notice);
+            } else if (validateRecipients(request, response, session)) {
+                return;
             } else if (signature(request, response, session, mailbox)) {
                 return;
             } else if (configuration(request, response, session, model, mailbox, OAuthServlet.accessToken(request))) {
@@ -1143,6 +1145,25 @@ public final class MailServlet extends HttpServlet {
             }
         }
         response.sendRedirect("mail?action=settings&section=options&signatureSaved=1");
+        return true;
+    }
+
+    private static boolean validateRecipients(HttpServletRequest request, HttpServletResponse response,
+            HttpSession session) throws IOException {
+        if (!"validateRecipients".equals(request.getParameter("action"))) return false;
+        if (!"POST".equals(request.getMethod()) || !csrf(session).equals(request.getParameter("csrf"))) {
+            response.sendError(HttpServletResponse.SC_FORBIDDEN);
+            return true;
+        }
+        JsonObject result = new JsonObject();
+        try {
+            ImapMailbox.validateRecipients(request.getParameter("to"), request.getParameter("cc"), request.getParameter("bcc"));
+        } catch (IllegalArgumentException error) {
+            response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+            result.addProperty("error", error.getMessage());
+        }
+        response.setContentType("application/json;charset=UTF-8");
+        response.getWriter().write(result.toString());
         return true;
     }
 

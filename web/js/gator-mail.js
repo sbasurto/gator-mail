@@ -514,6 +514,50 @@
         if (event.key === "Escape") closeContacts();
     });
 
+    const composeForm = document.querySelector(".mail-compose-form");
+    if (composeForm) {
+        const notice = document.createElement("p");
+        notice.className = "alert alert-danger";
+        notice.setAttribute("role", "alert");
+        notice.hidden = true;
+        composeForm.prepend(notice);
+        let checking = false;
+        let validated = false;
+        composeForm.addEventListener("submit", async event => {
+            if (validated) { validated = false; return; }
+            event.preventDefault();
+            if (checking) return;
+            checking = true;
+            notice.hidden = true;
+            const values = () => new URLSearchParams({action: "validateRecipients",
+                csrf: composeForm.elements.csrf.value, to: composeForm.elements.to.value,
+                cc: composeForm.elements.cc.value, bcc: composeForm.elements.bcc.value});
+            const body = values();
+            try {
+                const response = await fetch(composeForm.action, {method: "POST", body,
+                    credentials: "same-origin", headers: {Accept: "application/json"}});
+                if (response.redirected || !response.headers.get("Content-Type")?.includes("application/json"))
+                    throw new Error("No fue posible validar los destinatarios. Comprueba tu sesión e inténtalo de nuevo; tu mensaje sigue aquí.");
+                const result = await response.json();
+                if (!response.ok) throw new Error(result.error || "No fue posible validar los destinatarios.");
+                if (body.toString() !== values().toString())
+                    throw new Error("Los destinatarios cambiaron durante la validación. Vuelve a pulsar Enviar o Guardar.");
+                validated = true;
+                composeForm.requestSubmit(event.submitter);
+            } catch (error) {
+                notice.textContent = error instanceof TypeError
+                    ? "No fue posible conectar para validar los destinatarios. Tu texto y adjuntos se conservan; inténtalo de nuevo."
+                    : error.message;
+                notice.hidden = false;
+                const field = {"Para": "to", "CC": "cc", "CCO": "bcc"}[notice.textContent.split(":")[0]];
+                if (field) composeForm.elements[field].focus();
+            } finally {
+                validated = false;
+                checking = false;
+            }
+        });
+    }
+
     const editor = document.querySelector("#mail-compose-body");
     const visualEditor = document.querySelector("#mail-html-editor");
     const format = document.querySelector("#mail-compose-format");

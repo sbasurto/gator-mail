@@ -455,12 +455,10 @@ final class ImapMailbox {
         if (subject == null || subject.length() > 200 || subject.chars().anyMatch(Character::isISOControl)
                 || markdown == null || markdown.isBlank() || markdown.length() > 200_000)
             throw new IllegalArgumentException("El asunto o el contenido no son válidos");
-        InternetAddress[] to = addresses(recipients, true);
-        InternetAddress[] copies = addresses(cc, false);
-        InternetAddress[] hiddenCopies = addresses(bcc, false);
-        if (to.length == 0) throw new IllegalArgumentException("Agrega al menos un destinatario");
-        if (to.length + copies.length + hiddenCopies.length > 100)
-            throw new IllegalArgumentException("No se permiten más de 100 destinatarios");
+        InternetAddress[][] recipientsByType = validateRecipients(recipients, cc, bcc);
+        InternetAddress[] to = recipientsByType[0];
+        InternetAddress[] copies = recipientsByType[1];
+        InternetAddress[] hiddenCopies = recipientsByType[2];
 
         MimeMessage message = new MimeMessage(session);
         message.setFrom(new InternetAddress(mailbox));
@@ -514,13 +512,26 @@ final class ImapMailbox {
         return "inline-" + (index + 1) + "@gator-mail";
     }
 
-    private static InternetAddress[] addresses(String value, boolean required) {
+    static InternetAddress[][] validateRecipients(String to, String cc, String bcc) {
+        InternetAddress[][] result = {addresses(to, "Para"), addresses(cc, "CC"), addresses(bcc, "CCO")};
+        if (result[0].length == 0) throw new IllegalArgumentException("Para: agrega al menos un destinatario.");
+        if (result[0].length + result[1].length + result[2].length > 100)
+            throw new IllegalArgumentException("No se permiten más de 100 destinatarios.");
+        return result;
+    }
+
+    private static InternetAddress[] addresses(String value, String field) {
         if (value == null || value.isBlank()) return new InternetAddress[0];
         try {
-            return InternetAddress.parse(value, true);
-        } catch (Exception error) {
-            throw new IllegalArgumentException(required ? "Los destinatarios no son válidos"
-                    : "Las direcciones CC o CCO no son válidas");
+            InternetAddress[] result = InternetAddress.parse(value, true);
+            for (InternetAddress address : result) address.validate();
+            return result;
+        } catch (jakarta.mail.internet.AddressException error) {
+            String invalid = error.getRef() == null ? value : error.getRef();
+            invalid = invalid.replaceAll("[\\p{Cntrl}]", " ");
+            if (invalid.length() > 120) invalid = invalid.substring(0, 120) + "…";
+            throw new IllegalArgumentException(field + ": revisa «" + invalid
+                    + "». Usa direcciones completas separadas por comas. Ejemplo: ana@empresa.com, juan@empresa.com. No uses punto y coma.");
         }
     }
 
