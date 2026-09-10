@@ -523,7 +523,7 @@ final class ImapMailbox {
     private static InternetAddress[] addresses(String value, String field) {
         if (value == null || value.isBlank()) return new InternetAddress[0];
         try {
-            InternetAddress[] result = InternetAddress.parse(value, true);
+            InternetAddress[] result = InternetAddress.parse(recipientSeparators(value), false);
             for (InternetAddress address : result) address.validate();
             return result;
         } catch (jakarta.mail.internet.AddressException error) {
@@ -531,8 +531,36 @@ final class ImapMailbox {
             invalid = invalid.replaceAll("[\\p{Cntrl}]", " ");
             if (invalid.length() > 120) invalid = invalid.substring(0, 120) + "…";
             throw new IllegalArgumentException(field + ": revisa «" + invalid
-                    + "». Usa direcciones completas separadas por comas. Ejemplo: ana@empresa.com, juan@empresa.com. No uses punto y coma.");
+                    + "». Usa direcciones completas, por ejemplo ana@empresa.com. Puedes separarlas con comas, punto y coma o espacios.");
         }
+    }
+
+    private static String recipientSeparators(String value) {
+        StringBuilder result = new StringBuilder();
+        boolean quoted = false, escaped = false, angle = false, group = false;
+        int comments = 0;
+        for (char c : value.toCharArray()) {
+            if (escaped) { result.append(c); escaped = false; continue; }
+            if (c == '\\' && (quoted || comments > 0)) { result.append(c); escaped = true; continue; }
+            if (c == '"' && comments == 0) quoted = !quoted;
+            if (!quoted) {
+                if (c == '(') comments++;
+                else if (c == ')' && comments > 0) comments--;
+                if (comments == 0) {
+                    if (c == '<') angle = true;
+                    else if (c == '>') angle = false;
+                    if (!angle) {
+                        if (c == ':') group = true;
+                        if (c == ';') {
+                            if (!group) c = ',';
+                            group = false;
+                        }
+                    }
+                }
+            }
+            result.append(c);
+        }
+        return result.toString();
     }
 
     private static Folder drafts(Store store) throws Exception {

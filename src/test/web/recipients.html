@@ -15,6 +15,7 @@
 let valid = false;
 let submitted = 0;
 window.fetch = async (url, options) => {
+  if (url !== 'mail') throw Error('URL de validación incorrecta: ' + String(url));
   if (options.body.get('action') !== 'validateRecipients' || options.body.has('attachments')) throw Error('Solicitud incorrecta');
   return {ok: valid, redirected: false, headers: new Headers({'Content-Type': 'application/json'}),
     json: async () => valid ? {} : {error: 'CC: separa las direcciones por comas.'}};

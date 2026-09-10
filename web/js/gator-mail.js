@@ -534,7 +534,7 @@
                 cc: composeForm.elements.cc.value, bcc: composeForm.elements.bcc.value});
             const body = values();
             try {
-                const response = await fetch(composeForm.action, {method: "POST", body,
+                const response = await fetch(composeForm.getAttribute("action"), {method: "POST", body,
                     credentials: "same-origin", headers: {Accept: "application/json"}});
                 if (response.redirected || !response.headers.get("Content-Type")?.includes("application/json"))
                     throw new Error("No fue posible validar los destinatarios. Comprueba tu sesión e inténtalo de nuevo; tu mensaje sigue aquí.");
