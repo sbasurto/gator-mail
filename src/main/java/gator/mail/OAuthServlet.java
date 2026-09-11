@@ -14,7 +14,15 @@ import java.util.Base64;
 import java.util.Map;
 
 public final class OAuthServlet extends HttpServlet {
-    private static final String ISSUER = env("GATOR_MAIL_OAUTH_ISSUER", "https://mail.soft-gator.com/auth/realms/gator");
+    static String issuer() {
+        String value = env("GATOR_MAIL_OAUTH_ISSUER", env("GATOR_OIDC_ISSUER", ""));
+        if (value.isBlank()) throw new IllegalStateException("Falta GATOR_MAIL_OAUTH_ISSUER o GATOR_OIDC_ISSUER");
+        URI uri = URI.create(value);
+        if (!"https".equalsIgnoreCase(uri.getScheme()) || uri.getHost() == null
+                || uri.getUserInfo() != null || uri.getQuery() != null || uri.getFragment() != null)
+            throw new IllegalStateException("El issuer OAuth debe ser una URL HTTPS válida");
+        return value.replaceAll("/+$", "");
+    }
     private static final HttpClient HTTP = HttpClient.newHttpClient();
 
     @Override protected void doGet(HttpServletRequest req, HttpServletResponse res) throws IOException {
@@ -47,7 +55,7 @@ public final class OAuthServlet extends HttpServlet {
     private void login(HttpServletRequest req, HttpServletResponse res, String action) throws IOException {
         HttpSession s = req.getSession(true); String state = random(24), verifier = random(48);
         s.setAttribute("oidc.state", state); s.setAttribute("oidc.verifier", verifier);
-        res.sendRedirect(ISSUER + "/protocol/openid-connect/auth?response_type=code&scope=openid%20profile%20email&client_id=gator-mail&redirect_uri="
+        res.sendRedirect(issuer() + "/protocol/openid-connect/auth?response_type=code&scope=openid%20profile%20email&client_id=gator-mail&redirect_uri="
                 + enc(redirect(req)) + "&state=" + enc(state) + "&code_challenge_method=S256&code_challenge=" + enc(challenge(verifier))
                 + (action.isBlank() ? "" : "&kc_action=" + enc(action)));
     }
@@ -61,7 +69,7 @@ public final class OAuthServlet extends HttpServlet {
             JsonObject token = token("grant_type=authorization_code&client_id=gator-mail&code=" + enc(req.getParameter("code"))
                     + "&redirect_uri=" + enc(redirect(req)) + "&code_verifier=" + enc(String.valueOf(s.getAttribute("oidc.verifier"))));
             save(s, token);
-            HttpRequest infoReq = HttpRequest.newBuilder(URI.create(ISSUER + "/protocol/openid-connect/userinfo"))
+            HttpRequest infoReq = HttpRequest.newBuilder(URI.create(issuer() + "/protocol/openid-connect/userinfo"))
                     .header("Authorization", "Bearer " + token.get("access_token").getAsString()).GET().build();
             HttpResponse<String> info = HTTP.send(infoReq, HttpResponse.BodyHandlers.ofString());
             if (info.statusCode() != 200) throw new IllegalStateException();
@@ -92,7 +100,7 @@ public final class OAuthServlet extends HttpServlet {
         HttpSession session = req.getSession(false);
         if (session == null || session.getAttribute("oidc.access") == null) return false;
         try {
-            HttpRequest info = HttpRequest.newBuilder(URI.create(ISSUER + "/protocol/openid-connect/userinfo"))
+            HttpRequest info = HttpRequest.newBuilder(URI.create(issuer() + "/protocol/openid-connect/userinfo"))
                     .header("Authorization", "Bearer " + session.getAttribute("oidc.access")).GET().build();
             return HTTP.send(info, HttpResponse.BodyHandlers.discarding()).statusCode() == 200;
         } catch (Exception error) {
@@ -100,7 +108,7 @@ public final class OAuthServlet extends HttpServlet {
         }
     }
     private static JsonObject token(String body) throws Exception {
-        HttpRequest req = HttpRequest.newBuilder(URI.create(ISSUER + "/protocol/openid-connect/token"))
+        HttpRequest req = HttpRequest.newBuilder(URI.create(issuer() + "/protocol/openid-connect/token"))
                 .header("Content-Type", "application/x-www-form-urlencoded").POST(HttpRequest.BodyPublishers.ofString(body)).build();
         HttpResponse<String> res = HTTP.send(req, HttpResponse.BodyHandlers.ofString());
         if (res.statusCode() != 200) throw new IllegalStateException();
@@ -109,7 +117,7 @@ public final class OAuthServlet extends HttpServlet {
     private static void save(HttpSession s, JsonObject token) { s.setAttribute("oidc.access", token.get("access_token").getAsString()); if (token.has("refresh_token")) s.setAttribute("oidc.refresh", token.get("refresh_token").getAsString()); if (token.has("id_token")) s.setAttribute("oidc.id", token.get("id_token").getAsString()); s.setAttribute("oidc.expires", System.currentTimeMillis() + token.get("expires_in").getAsLong() * 1000); }
     static String endSession(String idToken) {
         String hint = idToken.isBlank() || "null".equals(idToken) ? "" : "&id_token_hint=" + enc(idToken);
-        return ISSUER + "/protocol/openid-connect/logout?client_id=gator-mail" + hint;
+        return issuer() + "/protocol/openid-connect/logout?client_id=gator-mail" + hint;
     }
     private static String redirect(HttpServletRequest request) {
         String configured = System.getenv("GATOR_MAIL_OAUTH_REDIRECT_URI");

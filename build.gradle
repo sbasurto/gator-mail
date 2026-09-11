@@ -41,6 +41,7 @@ tasks.register('selfTest', JavaExec) {
     dependsOn testClasses
     classpath = sourceSets.test.runtimeClasspath
     mainClass = 'gator.mail.AccessCodeSelfCheck'
+    environment 'GATOR_MAIL_OAUTH_ISSUER', 'https://identity.example/realms/test'
     enableAssertions = true
     if (project.hasProperty('uiFixtureDir')) args project.property('uiFixtureDir')
 }

@@ -129,6 +129,7 @@ public final class AccessCodeSelfCheck {
             assert "application/octet-stream".equals(compressed.type());
         }
         String logout = OAuthServlet.endSession("id token");
+        assert logout.startsWith("https://identity.example/realms/test/");
         assert logout.contains("id_token_hint=id+token");
         assert !logout.contains("post_logout_redirect_uri");
         assert !OAuthServlet.endSession("").contains("id_token_hint");

@@ -36,8 +36,8 @@ El proceso de Tomcat puede recibir estas variables de entorno:
 - `GATOR_MAIL_IMAP_PORT` (predeterminado: `993`)
 - `GATOR_MAIL_SMTP_HOST` (predeterminado: `mail.soft-gator.com`)
 - `GATOR_MAIL_SMTP_PORT` (predeterminado: `465`)
-- `GATOR_MAIL_OAUTH_ISSUER` (predeterminado:
-  `https://mail.soft-gator.com/auth/realms/gator`)
+- `GATOR_MAIL_OAUTH_ISSUER` (issuer HTTPS; si falta, usa `GATOR_OIDC_ISSUER`;
+  debe definirse al menos una de las dos variables, sin URL incorporada)
 - `GATOR_MAIL_OAUTH_REDIRECT_URI` (opcional; se calcula desde la petición si
   no se define)
 - `GATOR_MAIL_SMS_ENABLED` (`true` para habilitar el desafío; deshabilitado por defecto)
