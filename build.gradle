@@ -53,8 +53,18 @@ tasks.register('filterSelfTest', JavaExec) {
     enableAssertions = true
 }
 
+tasks.register('webSelfTest') {
+    def scriptFile = layout.projectDirectory.file('web/js/gator-mail.js')
+    inputs.file(scriptFile)
+    doLast {
+        def script = scriptFile.asFile.getText('UTF-8')
+        assert script.contains('mobileChallenge.getAttribute("action")')
+        assert !script.contains('mobileChallenge.action ||')
+    }
+}
+
 tasks.named('test') { failOnNoDiscoveredTests = false }
-tasks.named('check') { dependsOn selfTest, filterSelfTest }
+tasks.named('check') { dependsOn selfTest, filterSelfTest, webSelfTest }
 tasks.named('clean') { delete 'dist' }
 
 // Browser-independent checks for account-scoped appearance preferences.

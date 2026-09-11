@@ -663,7 +663,7 @@ public final class MailServlet extends HttpServlet {
     }
 
     private static boolean bool(JsonObject value, String name) {
-        return value.has(name) && value.get(name).getAsBoolean();
+        return value.has(name) && !value.get(name).isJsonNull() && value.get(name).getAsBoolean();
     }
 
     private static String webLink(String value) {

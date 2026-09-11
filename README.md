@@ -108,11 +108,19 @@ configuración de identidad `pg_gatormail_identity`, una entrada `broker_db` con
 El segundo factor sólo se solicita cuando `GATOR_MAIL_SMS_ENABLED=true`,
 `GATOR_MAIL_SMS_ENDPOINT` y `GATOR_MAIL_SMS_SECRET` están configurados, y el usuario lo mantiene habilitado
 en **Configuración > Opciones de usuario**. El endpoint recibe JSON por `POST`
-con autenticación `Bearer`: `action` (`send` o `correct`), `usuario`,
+con autenticación `Bearer`: `action` (`send`, `status`, `cancel` o `correct`), `usuario`,
 `application`, `userHint` y, para corregir, `telefono`. Debe devolver
 `codigo`, `phoneSent`, `challengeHash`, `expiresAt` y, en errores de envío,
 `mensaje` y `phoneCorrectionAllowed`. Cada instalación puede reemplazarlo por
 su propio proveedor; sin endpoint, el correo abre sin solicitar clave.
+Cancelar, rechazar, expirar o fallar una solicitud sólo termina ese intento: la
+misma sesión permite crear una autorización móvil nueva con un `requestToken`
+distinto o cambiar a SMS. Los identificadores de solicitudes cerradas nunca se
+reutilizan.
+La acción explícita **Intentar autorización en el iPhone** envía
+`mobileOnly=true`: si la cuenta no tiene un dispositivo registrado o el canal
+móvil no está disponible, el proveedor debe devolver un error descriptivo y
+nunca sustituir esa acción por un SMS silencioso.
 La administración de usuarios muestra el teléfono y la acción **Agregar a
 Global Safe List** sólo cuando ese endpoint y su secreto están configurados.
 Para actualizar un teléfono envía `action: sync`, `usuario`, `email`, `name` y
@@ -120,15 +128,25 @@ Para actualizar un teléfono envía `action: sync`, `usuario`, `email`, `name` y
 `telefono`. El proveedor debe validar que el teléfono corresponda al usuario.
 Una instalación sin soporte de lista segura puede omitir el endpoint completo;
 Gator Mail no incluye credenciales ni dependencias de Twilio.
-La preferencia se guarda en `app_usuarios.usuario_sms_auth`; una instalación
-que implemente el endpoint debe omitir el desafío cuando ese valor sea falso.
+La preferencia se guarda en `app_usuarios.usuario_sms_auth` y su valor inicial
+es `false`: el segundo factor es opt-in. En producción sólo `sbasurto` y
+`appreview` se inicializan en `true`; cualquier otro usuario puede activarlo en
+**Configuración > Opciones de usuario**. Una instalación que implemente el
+endpoint debe omitir todos los canales del desafío cuando ese valor sea falso.
+Si el proveedor confirma `smsDisabled: true`, Gator Mail considera satisfecho
+el flujo sin crear un desafío; una respuesta incompleta nunca debe provocar un
+error de aplicación.
 Con la integración Soft Gator, el endpoint intenta primero una autorización en
 Gator Mobile y utiliza SMS sólo cuando no hay un dispositivo conectado, vence
-la solicitud o el usuario elige **Usar SMS**. Gator Mail nunca usa correo como
+la solicitud o el usuario elige **Cancelar y usar SMS**. Mientras espera, la
+interfaz consulta silenciosamente el estado y muestra un spinner; no recarga la
+página ni presenta alertas periódicas. La cancelación envía `authorizationId` y
+`requestToken`, marca la solicitud móvil como `CANCELLED` y continúa con el
+método alternativo. Gator Mail nunca usa correo como
 fallback para evitar depender del mismo buzón que se está intentando abrir.
 Para habilitar este orden en el proveedor de Soft Gator, configure
 `GATOR_MOBILE_AUTH_MODE=first`; Gator Mail envía `smsOnly=false` en la solicitud
-inicial y reserva `fallback=true` para la acción explícita **Usar SMS**.
+inicial y reserva `fallback=true` para la acción explícita **Cancelar y usar SMS**.
 
 ## Filtros IMAP
 
