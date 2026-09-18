@@ -634,27 +634,29 @@ final class ImapMailbox {
         rich.setContent(richBody.toString(), "text/html; charset=UTF-8");
         MimeMultipart content = new MimeMultipart("alternative");
         content.addBodyPart(plain);
-        content.addBodyPart(rich);
-        MimeBodyPart body = new MimeBodyPart();
-        body.setContent(content);
         MimeMultipart related = new MimeMultipart("related");
-        related.addBodyPart(body);
+        related.addBodyPart(rich);
         int inlineIndex = 0;
         for (Upload upload : files) if (upload.inline()) {
-            MimeBodyPart image = upload(upload);
+            MimeBodyPart image = new MimeBodyPart();
+            image.setDataHandler(new jakarta.activation.DataHandler(new ByteArrayDataSource(upload.data(), upload.type())));
+            if (draft) image.setFileName(MimeUtility.encodeText(upload.name(), "UTF-8", null));
             image.setDisposition(jakarta.mail.Part.INLINE);
             image.setHeader("Content-ID", "<" + inlineCids.get(inlineIndex++) + ">");
             related.addBodyPart(image);
         }
         MimeBodyPart relatedBody = new MimeBodyPart();
         relatedBody.setContent(related);
+        relatedBody.setHeader("Content-Type", related.getContentType() + "; type=\"text/html\"");
+        content.addBodyPart(inlineIndex > 0 ? relatedBody : rich);
         if (files.stream().anyMatch(upload -> !upload.inline())) {
             MimeMultipart mixed = new MimeMultipart("mixed");
-            mixed.addBodyPart(relatedBody);
+            MimeBodyPart body = new MimeBodyPart();
+            body.setContent(content);
+            mixed.addBodyPart(body);
             for (Upload upload : files) if (!upload.inline()) mixed.addBodyPart(upload(upload));
             message.setContent(mixed);
-        } else if (inlineIndex > 0) message.setContent(related);
-        else message.setContent(content);
+        } else message.setContent(content);
         message.saveChanges();
         return message;
     }

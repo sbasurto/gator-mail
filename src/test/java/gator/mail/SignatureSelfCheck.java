@@ -30,12 +30,39 @@ final class SignatureSelfCheck {
             var message = (jakarta.mail.internet.MimeMessage) buildMessage.invoke(null,
                     jakarta.mail.Session.getInstance(new java.util.Properties()), "first@example.com",
                     "recipient@example.com", "", "", "Prueba", "Hola", "<p>Hola</p>", uploads);
-            var related = (jakarta.mail.Multipart) message.getContent();
+            var wire = new ByteArrayOutputStream();
+            message.writeTo(wire);
+            message = new jakarta.mail.internet.MimeMessage(jakarta.mail.Session.getInstance(new java.util.Properties()),
+                    new java.io.ByteArrayInputStream(wire.toByteArray()));
+            assert message.isMimeType("multipart/alternative") : message.getContentType();
+            var alternative = (jakarta.mail.Multipart) message.getContent();
+            assert alternative.getBodyPart(0).isMimeType("text/plain");
+            assert alternative.getBodyPart(1).isMimeType("multipart/related");
+            var related = (jakarta.mail.Multipart) alternative.getBodyPart(1).getContent();
             assert related.getCount() == 2;
             assert related.getBodyPart(1).getDisposition().equals(jakarta.mail.Part.INLINE);
-            var alternative = (jakarta.mail.Multipart) related.getBodyPart(0).getContent();
-            assert alternative.getBodyPart(1).getContent().toString().contains("cid:inline-1@gator-mail");
-            assert related.getBodyPart(1).getFileName().equals("firma.png");
+            assert related.getBodyPart(0).isMimeType("text/html");
+            assert related.getBodyPart(0).getContent().toString().contains("cid:inline-1@gator-mail");
+            assert related.getBodyPart(1).getHeader("Content-ID")[0].equals("<inline-1@gator-mail>");
+            assert related.getBodyPart(1).getFileName() == null;
+            assert java.util.Arrays.equals(png, related.getBodyPart(1).getInputStream().readAllBytes());
+            uploads.add(new ImapMailbox.Upload("nota.txt", "text/plain", new byte[]{65}, false));
+            message = (jakarta.mail.internet.MimeMessage) buildMessage.invoke(null,
+                    jakarta.mail.Session.getInstance(new java.util.Properties()), "first@example.com",
+                    "recipient@example.com", "", "", "Prueba", "Hola", "<p>Hola</p>", uploads);
+            wire.reset();
+            message.writeTo(wire);
+            message = new jakarta.mail.internet.MimeMessage(jakarta.mail.Session.getInstance(new java.util.Properties()),
+                    new java.io.ByteArrayInputStream(wire.toByteArray()));
+            assert message.isMimeType("multipart/mixed");
+            var mixed = (jakarta.mail.Multipart) message.getContent();
+            assert mixed.getCount() == 2;
+            assert mixed.getBodyPart(1).getFileName().equals("nota.txt");
+            alternative = (jakarta.mail.Multipart) mixed.getBodyPart(0).getContent();
+            related = (jakarta.mail.Multipart) alternative.getBodyPart(1).getContent();
+            assert related.getBodyPart(0).getContent().toString().contains("cid:inline-1@gator-mail");
+            assert related.getBodyPart(1).getDisposition().equals(jakarta.mail.Part.INLINE);
+            assert related.getBodyPart(1).getFileName() == null;
             byte[] before = store.read("first@example.com");
             for (byte[] invalid : java.util.List.of(new byte[0], "<svg onload='alert(1)'/>".getBytes(),
                     new byte[SignatureStore.MAX_BYTES + 1])) {
