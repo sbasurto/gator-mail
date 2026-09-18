@@ -551,6 +551,11 @@ body { min-height: 100vh; margin: 0; color: var(--gator-ink); background: var(--
 .gm-search input { border: 0; background: transparent; padding: 0; width: 100%; min-width: 0; color: var(--gator-ink); font: inherit; outline: none; }
 .gm-search input:focus-visible { outline: none; }
 .gm-top-controls { flex-shrink: 0; }
+.gm-top-account { display: flex; align-items: center; gap: 10px; padding-left: 16px; border-left: 1px solid var(--gator-line); }
+.gm-account-details { display: grid; gap: 2px; min-width: 0; }
+.gm-account-details strong { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--gator-ink); }
+.gm-account-password { font-size: 11px; color: var(--gator-muted); text-underline-offset: 3px; }
+.gm-account-password:hover { color: var(--gator-blue); }
 .gm-top-controls .gm-account-exit { display: inline-flex; align-items: center; gap: 8px; min-height: 38px; padding: 8px 12px; border: 1px solid #edd5d8; border-radius: 9px; background: #fff7f8; color: #9b3542; font-size: 12px; font-weight: 600; white-space: nowrap; text-decoration: none; }
 .gm-top-controls .gm-account-exit:hover { background: #fbe8eb; border-color: #dba6af; color: #782532; }
 .gm-top-controls .gm-account-exit:focus-visible { outline: 3px solid var(--gator-blue); outline-offset: 3px; }
@@ -572,11 +577,7 @@ body { min-height: 100vh; margin: 0; color: var(--gator-ink); background: var(--
 .mail-sidebar .mail-folder-child .mail-folder-icon { display: none; }
 .mail-sidebar .mail-folder small { margin-left: auto; padding: 1px 7px; border-radius: 5px; font-size: 11px; background: #ffffff15; color: #fff; opacity: 1; }
 .mail-sidebar .mail-sidebar-kicker { padding: 0 13px 7px; margin: 22px 0 0; font-size: 9px; letter-spacing: 1.6px; color: var(--gator-nav-muted); }
-.gm-sidebar-account { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 8px 12px; align-items: center; border-top: 1px solid #ffffff20; padding-top: 18px; margin-top: auto; }
-.gm-sidebar-account strong { font-size: 12px; display: block; }
-.gm-sidebar-account small { display: block; font-size: 11px; color: var(--gator-nav-muted); overflow-wrap: anywhere; }
-.gm-sidebar-account a { color: var(--gator-nav-muted); }
-.gm-account-password { grid-column: 2 / -1; font-size: 11px; margin-left: 0; }
+.gm-sidebar-account { border-top: 1px solid #ffffff20; padding-top: 18px; margin-top: auto; }
 .mail-approved-summary { color: var(--gator-ink); }
 .mail-approved-summary h1, .mail-approved-summary h2, .mail-approved-summary p { margin-top: 0; }
 .gm-pagehead { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 24px; }
@@ -640,7 +641,11 @@ body { min-height: 100vh; margin: 0; color: var(--gator-ink); background: var(--
     .mail-sidebar { position: fixed; inset: 0 auto 0 0; width: 240px; min-height: 100vh; max-height: 100vh; z-index: 25; overflow-y: auto; }
     .mail-ui-ready.mail-navigation-open .mail-sidebar { display: flex; padding-bottom: 25px; }
     .mail-topbar { height: 65px; min-height: 65px; padding: 0 20px; gap: 12px; }
-    .gm-top-controls > .gm-avatar { display: none; }
+    .mail-topbar { height: auto; flex-wrap: wrap; padding-top: 12px; padding-bottom: 12px; }
+    .mail-topbar .gm-search { flex: 1; min-width: 0; }
+    .gm-top-controls { width: 100%; justify-content: space-between; }
+    .gm-top-account { flex: 1; min-width: 0; justify-content: flex-end; border-left: 0; padding-left: 0; }
+    .gm-account-details strong { max-width: 150px; }
     .mail-content { padding: 22px 16px; }
     .gm-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .gm-pagehead { align-items: flex-start; }
@@ -683,7 +688,6 @@ body { min-height: 100vh; margin: 0; color: var(--gator-ink); background: var(--
 .mail-approved-summary a:hover { text-decoration: underline; }
 .gm-pagehead .gm-btn { color: var(--gator-blue) !important; }
 .mail-sidebar .mail-sidebar-kicker { font-weight: 400; }
-.gm-sidebar-account strong, .gm-sidebar-account small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .gm-navigation-close { display: none; }
 @media (min-width: 821px) { .gm-btn.mail-navigation-toggle { display: none; } }
 @media (max-width: 820px) { .gm-navigation-close { display: block; position: absolute; right: 12px; top: 7px; border: 0; padding: 5px; color: white; background: var(--gator-nav); } }

@@ -14,7 +14,7 @@
           { "tag": "link", "attrs": { "rel": "stylesheet", "href": "/elib/css2/fontawesome-free-5.13.0-web/css/all.min.css" } },
           { "tag": "link", "attrs": { "rel": "stylesheet", "href": "/elib/css/colors.css" } },
           { "tag": "link", "attrs": { "rel": "stylesheet", "href": "/elib/css2/sweetalert2.min.css?v=11.23.0" } },
-          { "tag": "link", "attrs": { "rel": "stylesheet", "href": "${contextPath}/css/gator-mail.css?v=53" } },
+          { "tag": "link", "attrs": { "rel": "stylesheet", "href": "${contextPath}/css/gator-mail.css?v=54" } },
           { "tag": "script", "attrs": { "src": "/elib/js/sweetalert2.all.min.js", "defer": "true" } },
           { "tag": "script", "attrs": { "src": "${contextPath}/js/gator-mail.js?v=35", "defer": "true" } }
         ]
@@ -147,13 +147,13 @@
       },
       "children": [
         {"tag": "a", "attrs": {"class": "btn btn-outline-secondary btn-sm gm-account-exit", "href": "${contextPath}/oauth/logout"}, "children": [{"tag": "span", "attrs": {"class": "gm-icon gm-icon-logout", "aria-hidden": "true"}}, {"tag": "span", "text": "Cerrar sesión"}]},
-        {
-          "tag": "span",
-          "attrs": {
-            "class": "gm-avatar gm-avatar-blue"
-          },
-          "text": "${accountInitials}"
-        }
+        { "tag": "div", "attrs": { "class": "gm-top-account" }, "children": [
+          { "tag": "span", "attrs": { "class": "gm-avatar gm-avatar-blue", "aria-hidden": "true" }, "text": "${accountInitials}" },
+          { "tag": "div", "attrs": { "class": "gm-account-details" }, "children": [
+            { "tag": "strong", "attrs": { "title": "${mailbox}" }, "text": "${accountName}" },
+            { "tag": "a", "attrs": { "class": "gm-account-password", "title": "Administrar contraseña", "href": "${accountHref}" }, "text": "Contraseña" }
+          ] }
+        ] }
       ]
     }
   ]
@@ -256,7 +256,7 @@
                     ] }
                   ] },
                   { "tag": "span", "if": "spamGlobalNotice", "attrs": { "class": "d-none mail-swal mail-swal-success", "title": "Spam global actualizado" }, "text": "${spamGlobalMessage}" },
-{"tag": "div", "attrs": {"class": "gm-sidebar-account"}, "children": [{"tag": "span", "attrs": {"class": "gm-avatar"}, "text": "${accountInitials}"}, {"tag": "div", "attrs": {"class": "gm-grow"}, "children": [{"tag": "strong", "text": "${accountName}"}, {"tag": "small", "text": "${mailbox}"}]}, {"tag": "a", "attrs": {"class": "gm-account-password", "title": "Administrar contraseña", "href": "${accountHref}"}, "text": "Contraseña"}, {
+{"tag": "div", "attrs": {"class": "gm-sidebar-account"}, "children": [{
           "tag": "label",
           "attrs": {
             "class": "mail-theme-picker"
