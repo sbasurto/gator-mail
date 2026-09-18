@@ -377,6 +377,7 @@
     const createContact = document.querySelector("#mail-contact-create");
     const spamAddress = document.querySelector("#mail-spam-address");
     const spamDomain = document.querySelector("#mail-spam-domain");
+    let spamEmails = [];
     const closeContactMenu = () => contactMenu?.classList.remove("open");
     document.querySelectorAll(".mail-contact-source[data-contact-email]").forEach(contact => {
         contact.addEventListener("contextmenu", event => {
@@ -385,8 +386,12 @@
             closeFolderMenu();
             createContact.dataset.name = contact.getAttribute("aria-label");
             createContact.dataset.email = contact.dataset.contactEmail;
-            if (spamAddress) spamAddress.dataset.email = contact.dataset.contactEmail;
-            if (spamDomain) spamDomain.dataset.email = contact.dataset.contactEmail;
+            const row = contact.closest(".mail-message-row");
+            spamEmails = row?.querySelector(".mail-message-select")?.checked
+                ? [...document.querySelectorAll(".mail-message-select:checked")]
+                    .map(input => input.closest(".mail-message-row").querySelector(".mail-contact-source")?.dataset.contactEmail)
+                    .filter(Boolean)
+                : [contact.dataset.contactEmail];
             contactMenu.classList.add("open");
             contactMenu.style.left = `${Math.min(event.clientX, window.innerWidth - 200)}px`;
             contactMenu.style.top = `${Math.min(event.clientY, window.innerHeight - contactMenu.offsetHeight)}px`;
@@ -396,9 +401,13 @@
         id: "", name: createContact.dataset.name, email: createContact.dataset.email
     }, contactMenu.dataset.csrf));
     const markSpam = (button, scope) => button?.addEventListener("click", async () => {
-        const value = scope === "DOMAIN" ? button.dataset.email.split("@").pop() : button.dataset.email;
+        const senders = new Map(spamEmails.map(email => {
+            email = email.trim().toLowerCase();
+            return [scope === "DOMAIN" ? email.split("@").pop() : email, email];
+        }));
+        const value = [...senders.keys()].join(", ");
         const result = await Swal.fire({
-            title: scope === "DOMAIN" ? "¿Marcar todo el dominio como spam?" : "¿Marcar esta dirección como spam?",
+            title: scope === "DOMAIN" ? "¿Marcar los dominios como spam?" : "¿Marcar las direcciones como spam?",
             text: `${value} se enviará a Spam para todos los usuarios.`,
             icon: "warning",
             showCancelButton: true,
@@ -406,7 +415,7 @@
             cancelButtonText: "Cancelar",
             confirmButtonColor: "#b52f3a"
         });
-        if (result.isConfirmed) post("spamGlobalSave", { email: button.dataset.email, scope }, contactMenu.dataset.csrf);
+        if (result.isConfirmed) post("spamGlobalSave", { email: [...senders.values()], scope }, contactMenu.dataset.csrf);
     });
     markSpam(spamAddress, "ADDRESS");
     markSpam(spamDomain, "DOMAIN");

@@ -1724,12 +1724,18 @@ public final class MailServlet extends HttpServlet {
                     checked(mailDbCall("mail_fn_admin_spam_eliminar", gson.toJson(value)));
                     session.setAttribute("mail.spam.global.notice", "El remitente quedó desbloqueado globalmente.");
                 } else {
-                    value.addProperty("email", request.getParameter("email"));
+                    String[] emails = request.getParameterValues("email");
+                    if (emails == null || emails.length == 0)
+                        throw new IllegalArgumentException("Selecciona al menos un remitente");
                     value.addProperty("scope", request.getParameter("scope"));
-                    JsonObject result = checked(mailDbCall("mail_fn_admin_spam_guardar", gson.toJson(value)));
-                    session.setAttribute("mail.spam.global.notice", "El remitente "
-                            + result.get("value").getAsString()
-                            + " se marcó como spam global y se programó la revisión histórica.");
+                    Set<String> blocked = new HashSet<>();
+                    for (String email : emails) {
+                        value.addProperty("email", email);
+                        JsonObject result = checked(mailDbCall("mail_fn_admin_spam_guardar", gson.toJson(value)));
+                        blocked.add(result.get("value").getAsString());
+                    }
+                    session.setAttribute("mail.spam.global.notice", blocked.size()
+                            + " remitente(s) marcado(s) como spam global. Se programó la revisión histórica.");
                 }
                 response.sendRedirect("mail?action=settings&section=filters");
             } else if (action.startsWith("filter")) {

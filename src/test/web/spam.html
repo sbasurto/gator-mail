@@ -1,0 +1,50 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Spam global: selección múltiple</title>
+<div id="mail-contact-menu" data-csrf="test">
+  <button id="mail-contact-create">Contacto</button>
+  <button id="mail-spam-address">Dirección</button>
+  <button id="mail-spam-domain">Dominio</button>
+</div>
+<div class="mail-message-row"><input class="mail-message-select" type="checkbox" checked><strong class="mail-contact-source" data-contact-email="uno@example.com">Uno</strong></div>
+<div class="mail-message-row"><input class="mail-message-select" type="checkbox" checked><strong class="mail-contact-source" data-contact-email="dos@other.com">Dos</strong></div>
+<div class="mail-message-row"><input class="mail-message-select" type="checkbox" checked><strong class="mail-contact-source" data-contact-email="uno@example.com">Repetido</strong></div>
+<div class="mail-message-row"><input class="mail-message-select" type="checkbox" checked><strong class="mail-contact-source" data-contact-email="tres@example.com">Tres</strong></div>
+<div class="mail-message-row"><input class="mail-message-select" type="checkbox"><strong class="mail-contact-source" data-contact-email="fuera@outside.com">Fuera</strong></div>
+<dd class="mail-contact-source" data-contact-email="lector@reader.com">Lector</dd>
+<pre id="result">FAIL: incompleto</pre>
+<script>
+const posts = [], confirmations = [];
+let confirmed = true;
+window.Swal = {fire: async options => {confirmations.push(options); return {isConfirmed: confirmed};}};
+HTMLFormElement.prototype.submit = function () {posts.push(new FormData(this));};
+</script>
+<script src="../../../web/js/gator-mail.js"></script>
+<script>
+(async () => {
+  const assert = (condition, message) => {if (!condition) throw Error(message);};
+  const contacts = document.querySelectorAll('.mail-contact-source');
+  const mark = async (index, scope) => {
+    contacts[index].dispatchEvent(new MouseEvent('contextmenu', {bubbles: true}));
+    document.querySelector('#mail-spam-' + scope).click();
+    await new Promise(resolve => setTimeout(resolve, 0));
+    return posts.at(-1);
+  };
+  try {
+    let data = await mark(0, 'address');
+    assert(data.getAll('email').join() === 'uno@example.com,dos@other.com,tres@example.com', 'No procesa todos los remitentes seleccionados sin duplicados');
+    assert(data.get('action') === 'spamGlobalSave' && data.get('scope') === 'ADDRESS' && data.get('csrf') === 'test', 'Solicitud inválida');
+    assert(confirmations.length === 1 && confirmations[0].text.includes('dos@other.com'), 'Debe confirmar toda la selección una sola vez');
+    data = await mark(0, 'domain');
+    assert(data.get('scope') === 'DOMAIN' && data.getAll('email').map(email => email.split('@')[1]).join() === 'example.com,other.com', 'Debe incluir cada dominio seleccionado una sola vez');
+    data = await mark(4, 'address');
+    assert(data.getAll('email').join() === 'fuera@outside.com', 'El clic fuera de la selección debe ser individual');
+    data = await mark(5, 'address');
+    assert(data.getAll('email').join() === 'lector@reader.com', 'El lector debe conservar la acción individual');
+    confirmed = false;
+    await mark(0, 'address');
+    assert(posts.length === 4, 'Cancelar no debe enviar');
+    document.querySelector('#result').textContent = 'PASS: selección múltiple, dominios, duplicados, acción individual y cancelación';
+  } catch (error) {document.querySelector('#result').textContent = 'FAIL: ' + error.message;}
+})();
+</script>
