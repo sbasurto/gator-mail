@@ -11,7 +11,44 @@ import java.util.List;
 import java.util.Map;
 
 public final class AccessCodeSelfCheck {
-    public static void main(String[] args) {
+    public static void main(String[] args) throws Exception {
+        try {
+            OAuthServlet.tokenResponse(400, "{\"error\":\"invalid_grant\"}");
+            throw new AssertionError("Se aceptó un refresh token vencido");
+        } catch (OAuthServlet.ReauthenticationRequired expected) { }
+        try {
+            OAuthServlet.tokenResponse(503, "unavailable");
+            throw new AssertionError("Se aceptó un fallo temporal");
+        } catch (java.io.IOException expected) { }
+        String draftId = "b92e72cc-7aeb-4328-a06f-7723f6f9697b";
+        var draft = ImapMailbox.draftMessage("one@example.com", draftId, "ana@", "", "oculto@",
+                "Pendiente", "", "", List.of(new ImapMailbox.Upload("nota.txt", "text/plain", new byte[]{65}, false)));
+        assert draft.isSet(jakarta.mail.Flags.Flag.DRAFT);
+        var restored = ImapMailbox.draftData(draft);
+        assert restored.get("draftId").getAsString().equals(draftId);
+        assert restored.get("to").getAsString().equals("ana@");
+        assert restored.get("bcc").getAsString().equals("oculto@");
+        assert restored.get("body").getAsString().isEmpty();
+        assert restored.getAsJsonArray("uploads").get(0).getAsJsonObject().get("data").getAsString().equals("QQ==");
+        byte[] draftImage = Base64.getDecoder().decode(
+                "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=");
+        var richDraft = ImapMailbox.draftMessage("one@example.com", draftId, "ana@example.com", "", "", "", "Hola",
+                "<p>Hola</p><img src=\"cid:inline-1@gator-mail\"><script>alert(1)</script>",
+                List.of(new ImapMailbox.Upload("imagen.png", "image/png", draftImage, true)));
+        var richRestored = ImapMailbox.draftData(richDraft);
+        assert richRestored.get("body").getAsString().contains("cid:inline-1@gator-mail") : richRestored;
+        assert !richRestored.get("body").getAsString().contains("script");
+        var resaved = ImapMailbox.draftMessage("one@example.com", draftId, "ana@example.com", "", "", "", "Hola",
+                richRestored.get("body").getAsString(), List.of(new ImapMailbox.Upload("imagen.png", "image/png", draftImage, true)));
+        assert ImapMailbox.draftData(resaved).get("body").getAsString().split("<img", -1).length == 2;
+
+        assert richRestored.getAsJsonArray("uploads").get(0).getAsJsonObject().get("name").getAsString().equals("imagen.png");
+        assert richRestored.getAsJsonArray("uploads").get(0).getAsJsonObject().get("inline").getAsBoolean();
+        try {
+            ImapMailbox.draftMessage("one@example.com", "bad\r\nId", "", "", "", "", "", "", List.of());
+            throw new AssertionError("Se aceptó un identificador inválido");
+        } catch (IllegalArgumentException expected) { }
+
         SignatureSelfCheck.run();
         ImapMailbox.validateRecipients("\"Apellido, Nombre\" <uno@example.com>, dos@example.com", "", null);
         for (String bad : List.of("uno@@example.com", "sin-dominio")) {
@@ -419,7 +456,7 @@ public final class AccessCodeSelfCheck {
             assert html.contains("Sesión cerrada");
             assert html.contains("/gator-mail/css/gator-mail.css?v=52");
             assert html.contains("/elib/js/sweetalert2.all.min.js");
-            assert html.contains("/gator-mail/js/gator-mail.js?v=34");
+            assert html.contains("/gator-mail/js/gator-mail.js?v=35");
             assert html.contains("spinner-border");
             assert html.contains("mail-mobile-status");
             assert html.contains("name=\"format\" value=\"json\"");

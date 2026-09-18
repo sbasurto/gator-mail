@@ -1,0 +1,58 @@
+<!doctype html>
+<meta charset="utf-8">
+<form class="mail-compose-form" action="mail">
+  <input name="csrf" value="test" type="hidden">
+  <input name="draftId" value="b92e72cc-7aeb-4328-a06f-7723f6f9697b" type="hidden">
+  <input name="to" value="ana@example.com">
+  <input name="cc" value="incorrecto">
+  <input name="bcc"><input name="subject" value="Pendiente">
+  <input id="mail-compose-format" name="format" value="html" type="hidden">
+  <div id="mail-html-editor" contenteditable="true"></div>
+  <textarea id="mail-compose-body" name="body">Texto que debe conservarse</textarea>
+  <input id="mail-compose-attachments" name="attachments" type="file" multiple>
+  <div id="mail-compose-attachment-list"></div>
+  <input id="mail-compose-images" name="images" type="file" multiple>
+  <button name="action" value="sendMessage">Enviar</button>
+  <button name="action" value="saveDraft" formnovalidate>Guardar</button>
+</form>
+<pre id="result">FAIL: incompleto</pre>
+<script>
+const timers = [], requests = [];
+window.setInterval = fn => timers.push(fn);
+const draft = {draftId: 'b92e72cc-7aeb-4328-a06f-7723f6f9697b', to: 'ana@', cc: '', bcc: 'oculto@',
+  subject: 'Recuperado', body: '<p>Contenido guardado</p><img src="cid:inline-1@gator-mail">',
+  uploads: [{name: 'nota.txt', type: 'text/plain', data: 'QQ==', inline: false},
+    {name: 'firma.png', type: 'image/png', inline: true,
+      data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='}]};
+window.fetch = async (url, options) => {
+  requests.push(options.body);
+  return {ok: true, status: 200, redirected: false, headers: new Headers({'Content-Type': 'application/json'}),
+    json: async () => options.body.get('action') === 'draftData' ? draft : {redirect: '#saved'}};
+};
+</script>
+<script src="../../../web/js/gator-mail.js"></script>
+<script>
+(async () => {
+  const assert = (value, message) => {if (!value) throw Error(message);};
+  try {
+    await new Promise(resolve => setTimeout(resolve, 20));
+    const form = document.querySelector('form');
+    const editor = document.querySelector('#mail-html-editor');
+    assert(requests[0].get('action') === 'draftData', 'Debe cargar el borrador existente');
+    assert(form.elements.to.value === 'ana@' && form.elements.bcc.value === 'oculto@', 'Se perdieron destinatarios incompletos');
+    assert(form.elements.subject.value === 'Recuperado', 'Se perdió el asunto');
+    assert(editor.querySelectorAll('img').length === 1, 'Se duplicó la imagen al restaurar');
+    assert(form.elements.attachments.files[0].name === 'nota.txt', 'Se perdió el archivo');
+    assert(form.elements.images.files[0].name === 'firma.png', 'Se perdió la imagen');
+    editor.querySelector('p').textContent = 'Contenido editado';
+    editor.dispatchEvent(new Event('input', {bubbles: true}));
+    for (const timer of timers) await timer();
+    const saved = requests.at(-1);
+    assert(saved.get('action') === 'saveDraft' && saved.get('draftId') === draft.draftId, 'Se creó otro borrador');
+    assert(new URLSearchParams(location.search).get('draftId') === draft.draftId && !new URLSearchParams(location.search).has('uid'), 'La recarga conserva un UID obsoleto');
+    assert(saved.get('body').includes('cid:inline-1@gator-mail') && !saved.get('body').includes('blob:'), 'Se perdió el CID');
+    assert(saved.get('attachments').size === 1 && saved.get('images').size === 68, 'Se perdieron adjuntos al volver a guardar');
+    document.querySelector('#result').textContent = 'PASS: reapertura, destinatarios, adjuntos, imagen y actualización del mismo borrador';
+  } catch (error) {document.querySelector('#result').textContent = 'FAIL: ' + error.message;}
+})();
+</script>

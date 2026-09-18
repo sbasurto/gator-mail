@@ -16,7 +16,7 @@
           { "tag": "link", "attrs": { "rel": "stylesheet", "href": "/elib/css2/sweetalert2.min.css?v=11.23.0" } },
           { "tag": "link", "attrs": { "rel": "stylesheet", "href": "${contextPath}/css/gator-mail.css?v=52" } },
           { "tag": "script", "attrs": { "src": "/elib/js/sweetalert2.all.min.js", "defer": "true" } },
-          { "tag": "script", "attrs": { "src": "${contextPath}/js/gator-mail.js?v=34", "defer": "true" } }
+          { "tag": "script", "attrs": { "src": "${contextPath}/js/gator-mail.js?v=35", "defer": "true" } }
         ]
       },
       {
@@ -1623,6 +1623,7 @@
                         { "tag": "a", "attrs": { "class": "btn btn-outline-secondary btn-sm", "href": "${composeCancelHref}" }, "text": "Cancelar" }
                       ] },
                       { "tag": "form", "attrs": { "class": "mail-compose-form", "method": "post", "action": "${contextPath}/mail", "enctype": "multipart/form-data" }, "children": [
+                        { "tag": "input", "attrs": { "type": "hidden", "name": "draftId", "value": "${composeDraftId}" } },
                         { "tag": "input", "attrs": { "type": "hidden", "name": "csrf", "value": "${csrf}" } },
                         { "tag": "input", "if": "composeAttachmentsAvailable", "attrs": { "type": "hidden", "name": "sourceFolder", "value": "${composeSourceFolder}" } },
                         { "tag": "input", "if": "composeAttachmentsAvailable", "attrs": { "type": "hidden", "name": "sourceUid", "value": "${composeSourceUid}" } },
@@ -1713,9 +1714,9 @@
                         { "tag": "small", "attrs": { "class": "text-muted" }, "text": "Puedes agregar archivos en varias selecciones. Máximo 10 archivos y 25 MiB en total, incluyendo imágenes y adjuntos conservados." },
                         {"tag": "section", "if": "signatureAvailable", "attrs": {"class": "mail-compose-signature"}, "children": [{"tag": "label", "attrs": {"class": "form-check"}, "children": [{"tag": "input", "attrs": {"class": "form-check-input", "type": "checkbox", "name": "includeSignature", "checked": "true"}}, {"tag": "span", "attrs": {"class": "form-check-label"}, "text": "Incluir mi firma"}]}, {"tag": "img", "attrs": {"class": "mail-signature-preview", "src": "${contextPath}/mail?action=signatureImage", "alt": "Firma que se agregará al final del correo"}}]},
                         { "tag": "div", "attrs": { "class": "mail-compose-footer" }, "children": [
-                          { "tag": "small", "attrs": { "class": "text-muted" }, "text": "Se guardará como texto y HTML sanitizado en Borradores." },
+                          { "tag": "small", "attrs": { "class": "text-muted" }, "text": "El borrador se guarda automáticamente mientras redactas y se elimina al enviar." },
                           { "tag": "div", "attrs": { "class": "mail-compose-actions" }, "children": [
-                            { "tag": "button", "attrs": { "class": "btn btn-outline-primary", "type": "submit", "name": "action", "value": "saveDraft" }, "children": [
+                            { "tag": "button", "attrs": { "class": "btn btn-outline-primary", "type": "submit", "name": "action", "value": "saveDraft", "formnovalidate": "true" }, "children": [
                               { "tag": "span", "attrs": { "class": "fas fa-save", "aria-hidden": "true" } }, { "tag": "span", "text": "Guardar borrador" }
                             ] },
                             { "tag": "button", "attrs": { "class": "btn btn-primary", "type": "submit", "name": "action", "value": "sendMessage" }, "children": [

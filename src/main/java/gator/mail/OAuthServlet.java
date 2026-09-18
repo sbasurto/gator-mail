@@ -82,20 +82,20 @@ public final class OAuthServlet extends HttpServlet {
     }
     static String accessToken(HttpServletRequest req) throws Exception {
         HttpSession s = req.getSession(false);
-        if (s == null || !(s.getAttribute("oidc.expires") instanceof Number expires)
-                || s.getAttribute("oidc.access") == null) throw new ReauthenticationRequired();
-        if (System.currentTimeMillis() >= expires.longValue() - 30_000) {
-            Object refresh = s.getAttribute("oidc.refresh");
-            if (refresh == null) throw new ReauthenticationRequired();
-            try {
+        if (s == null) throw new ReauthenticationRequired();
+        synchronized (s) {
+            if (!(s.getAttribute("oidc.expires") instanceof Number expires)
+                    || s.getAttribute("oidc.access") == null) throw new ReauthenticationRequired();
+            if (System.currentTimeMillis() >= expires.longValue() - 30_000) {
+                Object refresh = s.getAttribute("oidc.refresh");
+                if (refresh == null) throw new ReauthenticationRequired();
                 save(s, token("grant_type=refresh_token&client_id=gator-mail&refresh_token="
                         + enc(String.valueOf(refresh))));
-            } catch (Exception error) {
-                throw new ReauthenticationRequired();
             }
+            return String.valueOf(s.getAttribute("oidc.access"));
         }
-        return String.valueOf(s.getAttribute("oidc.access"));
     }
+
     static boolean active(HttpServletRequest req) {
         HttpSession session = req.getSession(false);
         if (session == null || session.getAttribute("oidc.access") == null) return false;
@@ -111,8 +111,16 @@ public final class OAuthServlet extends HttpServlet {
         HttpRequest req = HttpRequest.newBuilder(URI.create(issuer() + "/protocol/openid-connect/token"))
                 .header("Content-Type", "application/x-www-form-urlencoded").POST(HttpRequest.BodyPublishers.ofString(body)).build();
         HttpResponse<String> res = HTTP.send(req, HttpResponse.BodyHandlers.ofString());
-        if (res.statusCode() != 200) throw new IllegalStateException();
-        return JsonParser.parseString(res.body()).getAsJsonObject();
+        return tokenResponse(res.statusCode(), res.body());
+    }
+    static JsonObject tokenResponse(int status, String body) throws Exception {
+        if (status == 400) {
+            JsonObject error = JsonParser.parseString(body).getAsJsonObject();
+            if (error.has("error") && "invalid_grant".equals(error.get("error").getAsString()))
+                throw new ReauthenticationRequired();
+        }
+        if (status != 200) throw new IOException("No fue posible renovar OAuth: HTTP " + status);
+        return JsonParser.parseString(body).getAsJsonObject();
     }
     private static void save(HttpSession s, JsonObject token) { s.setAttribute("oidc.access", token.get("access_token").getAsString()); if (token.has("refresh_token")) s.setAttribute("oidc.refresh", token.get("refresh_token").getAsString()); if (token.has("id_token")) s.setAttribute("oidc.id", token.get("id_token").getAsString()); s.setAttribute("oidc.expires", System.currentTimeMillis() + token.get("expires_in").getAsLong() * 1000); }
     static String endSession(String idToken) {

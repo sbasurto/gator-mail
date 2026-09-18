@@ -1,5 +1,7 @@
 package gator.mail;
 
+import com.google.gson.JsonObject;
+import com.google.gson.JsonArray;
 import jakarta.mail.Address;
 import jakarta.mail.BodyPart;
 import jakarta.mail.Folder;
@@ -28,6 +30,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.UUID;
+import java.nio.charset.StandardCharsets;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.imageio.ImageIO;
@@ -375,24 +379,165 @@ final class ImapMailbox {
         }
     }
 
-    String saveDraft(String mailbox, String recipients, String cc, String bcc, String subject, String markdown,
-            String html, List<Upload> uploads, String accessToken) throws Exception {
-        MimeMessage message = message(Session.getInstance(new Properties()), mailbox, recipients, cc, bcc, subject,
-                markdown, html, uploads);
+    static String draftId(String value) {
+        if (value == null || !UUID.fromString(value).toString().equals(value))
+            throw new IllegalArgumentException("Borrador inválido");
+        return value;
+    }
+
+    static MimeMessage draftMessage(String mailbox, String id, String to, String cc, String bcc,
+            String subject, String plain, String html, List<Upload> uploads) throws Exception {
+        draftId(id);
+        MimeMessage message = message(Session.getInstance(new Properties()), mailbox, "", "", "", subject,
+                plain, html, uploads, true);
+        message.setHeader("X-Gator-Draft-Id", id);
+        String[] values = {to, cc, bcc};
+        String[] names = {"To", "Cc", "Bcc"};
+        for (int i = 0; i < names.length; i++) {
+            String value = values[i] == null ? "" : values[i];
+            if (value.length() > 10_000) throw new IllegalArgumentException("Destinatarios demasiado largos");
+            message.setHeader("X-Gator-Draft-" + names[i], Base64.getEncoder()
+                    .encodeToString(value.getBytes(StandardCharsets.UTF_8)));
+            // Preserve unfinished addresses separately; only valid addresses belong in MIME headers.
+            try { message.setHeader(names[i], InternetAddress.toString(addresses(value, names[i]))); }
+            catch (IllegalArgumentException unfinished) { }
+        }
         message.setFlag(Flags.Flag.DRAFT, true);
         message.saveChanges();
+        return message;
+    }
 
+    String saveDraft(String mailbox, String id, String recipients, String cc, String bcc, String subject,
+            String plain, String html, List<Upload> uploads, boolean includeSignature, String accessToken) throws Exception {
+        MimeMessage message = draftMessage(mailbox, id, recipients, cc, bcc, subject, plain, html, uploads);
+        message.setHeader("X-Gator-Draft-Signature", Boolean.toString(includeSignature));
+        message.saveChanges();
         try (Store store = connect(mailbox, accessToken)) {
-            Folder drafts = drafts(store);
-            drafts.appendMessages(new Message[]{message});
-            return drafts.getFullName();
+            Folder sent = sent(store);
+            sent.open(Folder.READ_ONLY);
+            try {
+                if (sent.search(new jakarta.mail.search.HeaderTerm("X-Gator-Draft-Id", id)).length > 0)
+                    throw new IllegalArgumentException("Este borrador ya fue enviado");
+            } finally { sent.close(false); }
+            Folder folder = drafts(store);
+            folder.open(Folder.READ_WRITE);
+            try {
+                Message[] previous = draftMessages(folder, id);
+                folder.appendMessages(new Message[]{message});
+                removeDraftMessages(folder, previous);
+                return folder.getFullName();
+            } finally { folder.close(false); }
         }
     }
 
-    String send(String mailbox, String recipients, String cc, String bcc, String subject, String markdown,
+    private static Message[] draftMessages(Folder folder, String id) throws Exception {
+        draftId(id);
+        List<Message> matches = new ArrayList<>();
+        for (Message message : folder.search(new jakarta.mail.search.HeaderTerm("X-Gator-Draft-Id", id))) {
+            String[] header = message.getHeader("X-Gator-Draft-Id");
+            if (message.isSet(Flags.Flag.DRAFT) && header != null && header.length == 1 && id.equals(header[0]))
+                matches.add(message);
+        }
+        return matches.toArray(Message[]::new);
+    }
+
+    private static void removeDraftMessages(Folder folder, Message[] messages) throws Exception {
+        if (messages.length == 0) return;
+        folder.setFlags(messages, new Flags(Flags.Flag.DELETED), true);
+        ((IMAPFolder) folder).expunge(messages);
+    }
+
+    String discardDraft(String mailbox, String id, String accessToken) throws Exception {
+        try (Store store = connect(mailbox, accessToken)) {
+            Folder folder = drafts(store);
+            folder.open(Folder.READ_WRITE);
+            try {
+                removeDraftMessages(folder, draftMessages(folder, id));
+                return folder.getFullName();
+            } finally { folder.close(false); }
+        }
+    }
+
+    JsonObject readDraft(String mailbox, String id, long uid, String accessToken) throws Exception {
+        try (Store store = connect(mailbox, accessToken)) {
+            Folder folder = drafts(store);
+            folder.open(Folder.READ_WRITE);
+            try {
+                Message[] matches = id == null || id.isBlank() ? new Message[0] : draftMessages(folder, id);
+                Message message = id == null || id.isBlank() ? ((UIDFolder) folder).getMessageByUID(uid)
+                        : matches.length == 0 ? null : matches[matches.length - 1];
+                if (message == null || !message.isSet(Flags.Flag.DRAFT))
+                    throw new IllegalArgumentException("Borrador inexistente");
+                if (message.getHeader("X-Gator-Draft-Id") == null) {
+                    MimeMessage copy = new MimeMessage((MimeMessage) message);
+                    copy.setHeader("X-Gator-Draft-Id", UUID.randomUUID().toString());
+                    copy.setFlag(Flags.Flag.DRAFT, true);
+                    copy.saveChanges();
+                    folder.appendMessages(new Message[]{copy});
+                    removeDraftMessages(folder, new Message[]{message});
+                    return draftData(copy);
+                }
+                return draftData(message);
+            } finally { folder.close(false); }
+        }
+    }
+
+    static JsonObject draftData(Message message) throws Exception {
+        JsonObject result = new JsonObject();
+        result.addProperty("draftId", draftId(message.getHeader("X-Gator-Draft-Id")[0]));
+        for (String name : List.of("To", "Cc", "Bcc")) {
+            String[] saved = message.getHeader("X-Gator-Draft-" + name);
+            String value = saved == null ? addresses(message.getRecipients(
+                    name.equals("To") ? Message.RecipientType.TO : name.equals("Cc")
+                            ? Message.RecipientType.CC : Message.RecipientType.BCC))
+                    : new String(Base64.getDecoder().decode(saved[0]), StandardCharsets.UTF_8);
+            result.addProperty(name.toLowerCase(java.util.Locale.ROOT), value);
+        }
+        result.addProperty("subject", text(message.getSubject(), ""));
+        String[] signature = message.getHeader("X-Gator-Draft-Signature");
+        result.addProperty("includeSignature", signature == null || Boolean.parseBoolean(signature[0]));
+        Parsed parsed = parse(message, true);
+        String body = parsed.html.isBlank() ? escape(parsed.plain).replace("\n", "<br>") : parsed.html;
+        JsonArray uploads = new JsonArray();
+        long total = 0;
+        int inlineIndex = 0;
+        for (Attachment attachment : parsed.attachments) {
+            var part = part(message, attachment.part());
+            String type = part.getContentType().split(";", 2)[0].toLowerCase(java.util.Locale.ROOT);
+            byte[] data;
+            try (var input = part.getInputStream()) { data = input.readNBytes(MAX_FILE_BYTES + 1); }
+            if (uploads.size() >= 10 || (total += data.length) > MAX_FILE_BYTES)
+                throw new IllegalArgumentException("Máximo 10 archivos y 25 MB en total");
+            String cid = contentId(part);
+            boolean inline = !cid.isBlank() && safeImage(type, data);
+            if (inline) body = body.replace("cid:" + cid, "cid:" + inlineCid(inlineIndex++));
+            addDraftUpload(uploads, attachment.name(), type, data, inline);
+        }
+        result.addProperty("body", body);
+        result.add("uploads", uploads);
+        return result;
+    }
+
+    private static void addDraftUpload(JsonArray uploads, String name, String type, byte[] data, boolean inline) {
+        if (data.length > MAX_FILE_BYTES) throw new IllegalArgumentException("Adjunto demasiado grande");
+        JsonObject upload = new JsonObject();
+        upload.addProperty("name", name);
+        upload.addProperty("type", type);
+        upload.addProperty("data", Base64.getEncoder().encodeToString(data));
+        upload.addProperty("inline", inline);
+        uploads.add(upload);
+    }
+
+    String send(String mailbox, String recipients, String cc, String bcc, String subject, String plain,
+            String html, List<Upload> uploads, String accessToken) throws Exception {
+        return send(mailbox, null, recipients, cc, bcc, subject, plain, html, uploads, accessToken);
+    }
+
+    String send(String mailbox, String id, String recipients, String cc, String bcc, String subject, String markdown,
             String html, List<Upload> uploads, String accessToken) throws Exception {
         MimeMessage message = message(Session.getInstance(smtpProperties()), mailbox, recipients, cc, bcc, subject,
                 markdown, html, uploads);
+        if (id != null) message.setHeader("X-Gator-Draft-Id", draftId(id));
         Transport.send(message);
         try (Store store = connect(mailbox, accessToken)) {
             Folder sent = sent(store);
@@ -452,10 +597,16 @@ final class ImapMailbox {
 
     private static MimeMessage message(Session session, String mailbox, String recipients, String cc, String bcc,
             String subject, String markdown, String html, List<Upload> uploads) throws Exception {
+        return message(session, mailbox, recipients, cc, bcc, subject, markdown, html, uploads, false);
+    }
+
+    private static MimeMessage message(Session session, String mailbox, String recipients, String cc, String bcc,
+            String subject, String markdown, String html, List<Upload> uploads, boolean draft) throws Exception {
         if (subject == null || subject.length() > 200 || subject.chars().anyMatch(Character::isISOControl)
-                || markdown == null || markdown.isBlank() || markdown.length() > 200_000)
+                || markdown == null || (!draft && markdown.isBlank()) || markdown.length() > 200_000)
             throw new IllegalArgumentException("El asunto o el contenido no son válidos");
-        InternetAddress[][] recipientsByType = validateRecipients(recipients, cc, bcc);
+        InternetAddress[][] recipientsByType = draft ? new InternetAddress[][] {new InternetAddress[0],
+                new InternetAddress[0], new InternetAddress[0]} : validateRecipients(recipients, cc, bcc);
         InternetAddress[] to = recipientsByType[0];
         InternetAddress[] copies = recipientsByType[1];
         InternetAddress[] hiddenCopies = recipientsByType[2];
@@ -678,23 +829,31 @@ final class ImapMailbox {
     }
 
     private static Parsed parse(jakarta.mail.Part part) throws Exception {
+        return parse(part, false);
+    }
+
+    private static Parsed parse(jakarta.mail.Part part, boolean draft) throws Exception {
         Parsed parsed = new Parsed();
-        parse(part, "", parsed);
+        parse(part, "", parsed, draft);
         parsed.originalHtml = parsed.html;
         parsed.html = sanitizeHtml(parsed.html);
         parsed.plain = limited(parsed.plain);
         return parsed;
     }
 
-    private static void parse(jakarta.mail.Part part, String path, Parsed parsed) throws Exception {
+    private static void parse(jakarta.mail.Part part, String path, Parsed parsed, boolean draft) throws Exception {
         if (part.isMimeType("multipart/*")) {
             Multipart multipart = (Multipart) part.getContent();
             for (int i = 0; i < multipart.getCount(); i++)
-                parse(multipart.getBodyPart(i), path.isEmpty() ? String.valueOf(i) : path + "." + i, parsed);
+                parse(multipart.getBodyPart(i), path.isEmpty() ? String.valueOf(i) : path + "." + i, parsed, draft);
             return;
         }
         String cid = contentId(part);
         if (part.isMimeType("image/*") && !cid.isBlank()) {
+            if (draft) {
+                parsed.attachments.add(new Attachment(path, fileName(part), part.getContentType(), part.getSize()));
+                return;
+            }
             byte[] data = part.getInputStream().readNBytes(5 * 1024 * 1024 + 1);
             String type = part.getContentType().split(";", 2)[0].toLowerCase(java.util.Locale.ROOT);
             long imageBytes = parsed.images.stream().mapToLong(image -> image.data().length).sum();
@@ -807,7 +966,8 @@ final class ImapMailbox {
     }
 
     static String sanitizeHtml(String value) {
-        return limited(HTML.sanitize(limited(value)));
+        // Keep CID references comparable when reusing saved inline images.
+        return limited(HTML.sanitize(limited(value))).replace("&#64;", "@");
     }
 
     private static String text(String value, String fallback) {

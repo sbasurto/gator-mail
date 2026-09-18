@@ -526,46 +526,120 @@
     });
 
     const composeForm = document.querySelector(".mail-compose-form");
+    let draftReady = new URLSearchParams(window.location.search).get("action") !== "editDraft";
+    let draftChanged = false;
+    let draftRevision = 0;
+    let lastActivity = 0;
+    let savingDraft = null;
+    let submitting = false;
+    const composeNotice = composeForm ? document.createElement("p") : null;
+    const postCompose = async body => {
+        const response = await fetch(composeForm.getAttribute("action"), {method: "POST", body,
+            credentials: "same-origin", headers: {Accept: "application/json"}});
+        if (response.redirected || response.status === 401 || response.status === 403)
+            throw new Error("La sesión terminó. El último borrador guardado está en Borradores; el texto y los adjuntos actuales siguen aquí.");
+        if (!response.headers.get("Content-Type")?.includes("application/json"))
+            throw new Error("No fue posible confirmar la operación. El mensaje sigue aquí; si intentabas enviarlo, revisa Enviados antes de repetir.");
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || "No fue posible completar la operación. El mensaje sigue aquí.");
+        return result;
+    };
+    const composeError = error => {
+        composeNotice.textContent = error instanceof TypeError
+            ? "No fue posible conectar. Conserva esta página abierta; si intentabas enviar, revisa Enviados antes de repetir."
+            : error.message;
+        composeNotice.className = "alert alert-danger";
+    };
+    const composeData = action => {
+        if (format?.value === "html") syncHtml();
+        const data = new FormData(composeForm);
+        data.set("action", action);
+        return data;
+    };
+    const rememberDraft = () => {
+        const url = new URL(window.location.href);
+        url.searchParams.set("action", "editDraft");
+        url.searchParams.set("draftId", composeForm.elements.draftId.value);
+        url.searchParams.delete("uid");
+        window.history.replaceState(null, "", url);
+    };
+    const saveAutomatically = async () => {
+        if (!draftReady || !draftChanged || submitting || savingDraft) return;
+        const revision = draftRevision;
+        const data = composeData("saveDraft");
+        composeNotice.textContent = "Guardando borrador…";
+        savingDraft = postCompose(data);
+        try {
+            await savingDraft;
+            rememberDraft();
+            if (revision === draftRevision) draftChanged = false;
+            composeNotice.className = "text-muted";
+            composeNotice.textContent = draftChanged ? "Cambios pendientes de guardar…" : "Borrador guardado";
+        } catch (error) { composeError(error); }
+        finally {
+            savingDraft = null;
+            if (revision !== draftRevision) void saveAutomatically();
+        }
+    };
     if (composeForm) {
-        const notice = document.createElement("p");
-        notice.className = "alert alert-danger";
-        notice.setAttribute("role", "alert");
-        notice.hidden = true;
-        composeForm.prepend(notice);
-        let checking = false;
-        let validated = false;
-        composeForm.addEventListener("submit", async event => {
-            if (validated) { validated = false; return; }
-            event.preventDefault();
-            if (checking) return;
-            checking = true;
-            notice.hidden = true;
-            const values = () => new URLSearchParams({action: "validateRecipients",
-                csrf: composeForm.elements.csrf.value, to: composeForm.elements.to.value,
-                cc: composeForm.elements.cc.value, bcc: composeForm.elements.bcc.value});
-            const body = values();
-            try {
-                const response = await fetch(composeForm.getAttribute("action"), {method: "POST", body,
-                    credentials: "same-origin", headers: {Accept: "application/json"}});
-                if (response.redirected || !response.headers.get("Content-Type")?.includes("application/json"))
-                    throw new Error("No fue posible validar los destinatarios. Comprueba tu sesión e inténtalo de nuevo; tu mensaje sigue aquí.");
-                const result = await response.json();
-                if (!response.ok) throw new Error(result.error || "No fue posible validar los destinatarios.");
-                if (body.toString() !== values().toString())
-                    throw new Error("Los destinatarios cambiaron durante la validación. Vuelve a pulsar Enviar o Guardar.");
-                validated = true;
-                composeForm.requestSubmit(event.submitter);
-            } catch (error) {
-                notice.textContent = error instanceof TypeError
-                    ? "No fue posible conectar para validar los destinatarios. Tu texto y adjuntos se conservan; inténtalo de nuevo."
-                    : error.message;
-                notice.hidden = false;
-                const field = {"Para": "to", "CC": "cc", "CCO": "bcc"}[notice.textContent.split(":")[0]];
-                if (field) composeForm.elements[field].focus();
-            } finally {
-                validated = false;
-                checking = false;
+        composeNotice.className = "text-muted";
+        composeNotice.setAttribute("role", "alert");
+        composeNotice.textContent = draftReady ? "El borrador se guardará automáticamente." : "Cargando borrador…";
+        composeForm.prepend(composeNotice);
+        let saveTimer;
+        const changed = () => {
+            if (!draftReady) return;
+            draftChanged = true;
+            draftRevision++;
+            lastActivity = Date.now();
+            window.clearTimeout(saveTimer);
+            saveTimer = window.setTimeout(saveAutomatically, 2000);
+        };
+        composeForm.addEventListener("input", changed);
+        composeForm.addEventListener("change", changed);
+        composeForm.addEventListener("click", changed);
+        composeForm.addEventListener("keydown", () => { lastActivity = Date.now(); });
+        window.setInterval(async () => {
+            if (!draftReady || submitting || savingDraft || Date.now() - lastActivity >= 30_000) return;
+            if (draftChanged) { await saveAutomatically(); return; }
+            if (Date.now() - lastActivity < 30_000) {
+                try { await postCompose(new URLSearchParams({action: "composeSession", csrf: composeForm.elements.csrf.value})); }
+                catch (error) { composeError(error); }
             }
+        }, 15_000);
+        window.addEventListener("beforeunload", event => {
+            if (draftChanged || savingDraft || submitting) { event.preventDefault(); event.returnValue = ""; }
+        });
+        composeForm.addEventListener("submit", async event => {
+            event.preventDefault();
+            if (!draftReady || submitting) return;
+            submitting = true;
+            const controls = Array.from(composeForm.querySelectorAll("input, textarea, button, select"));
+            try {
+                if (savingDraft) { try { await savingDraft; } catch (_) { /* Retry with the current content. */ } }
+                const action = event.submitter?.value || "sendMessage";
+                const data = composeData(action);
+                controls.forEach(control => { control.disabled = true; });
+                visualEditor?.setAttribute("contenteditable", "false");
+                if (action === "sendMessage") {
+                    const validation = await fetch(composeForm.getAttribute("action"), {method: "POST",
+                        body: new URLSearchParams({action: "validateRecipients", csrf: data.get("csrf"),
+                            to: data.get("to"), cc: data.get("cc"), bcc: data.get("bcc")}),
+                        credentials: "same-origin", headers: {Accept: "application/json"}});
+                    if (validation.redirected || !validation.headers.get("Content-Type")?.includes("application/json"))
+                        throw new Error("Comprueba tu sesión. Tu mensaje sigue aquí y el último guardado está en Borradores.");
+                    const result = await validation.json();
+                    if (!validation.ok) throw new Error(result.error || "No fue posible validar los destinatarios.");
+                }
+                const result = await postCompose(data);
+                draftChanged = false;
+                submitting = false;
+                window.location.assign(result.redirect);
+            } catch (error) {
+                composeError(error);
+                controls.forEach(control => { control.disabled = false; });
+                visualEditor?.setAttribute("contenteditable", "true");
+            } finally { submitting = false; }
         });
     }
 
@@ -602,7 +676,7 @@
         setFormat();
     });
     visualEditor?.addEventListener("input", syncHtml);
-    visualEditor?.closest("form")?.addEventListener("submit", syncHtml);
+    visualEditor?.closest("form")?.addEventListener("submit", () => { if (format.value === "html") syncHtml(); });
     setFormat();
     const markdown = {
         bold: ["**", "**"], italic: ["_", "_"], heading: ["## ", ""], list: ["- ", ""],
@@ -670,14 +744,46 @@
         if (!visualEditor) return;
         visualEditor.querySelectorAll("img[data-cid]").forEach(image => image.remove());
         Array.from(images.files).forEach((file, index) => {
-            const image = document.createElement("img");
+            const cid = `inline-${index + 1}@gator-mail`;
+            const image = visualEditor.querySelector(`img[src="cid:${cid}"]`) || document.createElement("img");
+            const existing = image.parentNode;
             image.src = URL.createObjectURL(file);
             image.alt = file.name;
             image.dataset.cid = `inline-${index + 1}@gator-mail`;
-            visualEditor.append(image);
+            if (!existing) visualEditor.append(image);
         });
         syncHtml();
     });
+    if (composeForm && !draftReady) {
+        const controls = Array.from(composeForm.querySelectorAll("input, textarea, button, select"));
+        controls.forEach(control => { control.disabled = true; });
+        visualEditor?.setAttribute("contenteditable", "false");
+        postCompose(new URLSearchParams({action: "draftData", csrf: composeForm.elements.csrf.value,
+            uid: new URLSearchParams(window.location.search).get("uid") || "",
+            draftId: new URLSearchParams(window.location.search).get("draftId") || ""})).then(draft => {
+            for (const name of ["draftId", "to", "cc", "bcc", "subject"]) composeForm.elements[name].value = draft[name];
+            if (composeForm.elements.includeSignature) composeForm.elements.includeSignature.checked = draft.includeSignature;
+            editor.value = draft.body;
+            visualEditor.innerHTML = draft.body;
+            format.value = "html";
+            setFormat();
+            for (const inline of [false, true]) {
+                const transfer = new DataTransfer();
+                for (const upload of draft.uploads.filter(file => file.inline === inline)) {
+                    const bytes = Uint8Array.from(atob(upload.data), character => character.charCodeAt(0));
+                    transfer.items.add(new File([bytes], upload.name, {type: upload.type}));
+                }
+                const input = inline ? images : attachments;
+                input.files = transfer.files;
+                input.dispatchEvent(new Event("change", {bubbles: true}));
+            }
+            controls.forEach(control => { control.disabled = false; });
+            visualEditor.setAttribute("contenteditable", "true");
+            draftReady = true;
+            rememberDraft();
+            composeNotice.textContent = "Borrador guardado";
+        }).catch(composeError);
+    }
 })();
 
 // Presentation enhancements reuse the existing forms, permissions and URLs.

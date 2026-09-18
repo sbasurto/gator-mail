@@ -2,53 +2,120 @@
 <meta charset="utf-8">
 <form class="mail-compose-form" action="mail">
   <input name="csrf" value="test" type="hidden">
+  <input name="draftId" value="b92e72cc-7aeb-4328-a06f-7723f6f9697b" type="hidden">
   <input name="to" value="ana@example.com">
-  <input name="cc" value="uno@example.com; dos@example.com">
-  <input name="bcc">
-  <textarea name="body">Texto que debe conservarse</textarea>
-  <input name="attachments" type="file" multiple>
+  <input name="cc" value="incorrecto">
+  <input name="bcc"><input name="subject" value="Pendiente">
+  <input id="mail-compose-format" name="format" value="html" type="hidden">
+  <div id="mail-html-editor" contenteditable="true"></div>
+  <textarea id="mail-compose-body" name="body">Texto que debe conservarse</textarea>
+  <input id="mail-compose-attachments" name="attachments" type="file" multiple>
+  <div id="mail-compose-attachment-list"></div>
+  <input id="mail-compose-images" name="images" type="file" multiple>
   <button name="action" value="sendMessage">Enviar</button>
-  <button name="action" value="saveDraft">Guardar</button>
+  <button name="action" value="saveDraft" formnovalidate>Guardar</button>
 </form>
 <pre id="result">FAIL: incompleto</pre>
 <script>
-let valid = false;
-let submitted = 0;
+const timers = [], requests = [];
+let failSave = false, failSend = true, slowSave = false, releaseSave;
+let now = Date.now();
+Date.now = () => now;
+window.setInterval = fn => timers.push(fn);
 window.fetch = async (url, options) => {
-  if (url !== 'mail') throw Error('URL de validación incorrecta: ' + String(url));
-  if (options.body.get('action') !== 'validateRecipients' || options.body.has('attachments')) throw Error('Solicitud incorrecta');
-  return {ok: valid, redirected: false, headers: new Headers({'Content-Type': 'application/json'}),
-    json: async () => valid ? {} : {error: 'CC: separa las direcciones por comas.'}};
+  if (url !== 'mail') throw Error('URL incorrecta');
+  const data = options.body;
+  const action = data.get('action');
+  requests.push(data);
+  if (action === 'saveDraft' && slowSave) {
+    slowSave = false;
+    await new Promise(resolve => {releaseSave = resolve;});
+  }
+  const invalid = action === 'validateRecipients' && data.get('cc') === 'incorrecto';
+  if (action === 'sendMessage' && failSend || action === 'saveDraft' && failSave)
+    return {ok: false, status: 401, redirected: false, headers: new Headers()};
+  return {ok: !invalid, status: invalid ? 400 : 200, redirected: false,
+    headers: new Headers({'Content-Type': 'application/json'}),
+    json: async () => invalid ? {error: 'CC: revisa la dirección.'} : {redirect: '#saved'}};
 };
 </script>
 <script src="../../../web/js/gator-mail.js"></script>
 <script>
 (async () => {
   const form = document.querySelector('form');
-  const assert = (value, message) => { if (!value) throw Error(message); };
-  form.addEventListener('submit', event => {
-    if (!event.defaultPrevented) submitted++;
-    event.preventDefault();
-  });
+  const assert = (value, message) => {if (!value) throw Error(message);};
+  const pause = () => new Promise(resolve => setTimeout(resolve, 20));
+  const tick = async () => {for (const timer of timers) await timer();};
+  const notice = () => form.querySelector('[role="alert"]').textContent;
   try {
     const transfer = new DataTransfer();
     transfer.items.add(new File(['contenido'], 'archivo.txt'));
     form.elements.attachments.files = transfer.files;
-    for (const button of form.querySelectorAll('button')) {
-      form.requestSubmit(button);
-      await new Promise(resolve => setTimeout(resolve, 20));
-      assert(submitted === 0, 'Se envió una forma inválida');
-      assert(form.querySelector('[role="alert"]').textContent.includes('CC:'), 'Falta mensaje claro');
-      assert(form.elements.body.value === 'Texto que debe conservarse', 'Se perdió el texto');
-      assert(new FormData(form).get('attachments') === form.elements.attachments.files[0]
-        && form.elements.attachments.files[0].size === 9, 'Se perdió el adjunto');
-    }
-    valid = true;
-    form.elements.cc.value = 'uno@example.com, dos@example.com';
-    form.requestSubmit(form.querySelector('button'));
-    await new Promise(resolve => setTimeout(resolve, 20));
-    assert(submitted === 1, 'No se permitió corregir y enviar');
-    document.querySelector('#result').textContent = 'PASS: error visible, edición y adjuntos conservados, corrección y envío';
-  } catch (error) { document.querySelector('#result').textContent = 'FAIL: ' + error.message; }
+    form.elements.attachments.dispatchEvent(new Event('change', {bubbles: true}));
+    form.requestSubmit(form.querySelector('button[value="sendMessage"]'));
+    await pause();
+    assert(notice().includes('CC:'), 'Falta validación de destinatarios al enviar');
+    assert(!requests.some(data => data.get('action') === 'sendMessage'), 'Se envió con destinatarios inválidos');
+    form.elements.to.value = '';
+    await tick();
+    let saves = requests.filter(data => data.get('action') === 'saveDraft');
+    assert(saves.length === 1 && saves[0].get('to') === '', 'Debe guardar un borrador incompleto');
+    assert(saves[0].get('attachments').size === 9, 'El autoguardado perdió el adjunto');
+    const editor = document.querySelector('#mail-html-editor');
+    editor.innerHTML = '<p>Segunda versión</p>';
+    editor.dispatchEvent(new Event('input', {bubbles: true}));
+    failSave = true;
+    await tick();
+    assert(notice().includes('sesión'), 'La expiración debe ser visible');
+    assert(form.elements.attachments.files[0].size === 9 && editor.textContent === 'Segunda versión', 'La expiración perdió el mensaje');
+    const failedCount = requests.length;
+    now += 31_000;
+    await tick();
+    assert(requests.length === failedCount, 'Un fallo de guardado no debe renovar una sesión inactiva');
+    editor.dispatchEvent(new Event('input', {bubbles: true}));
+    failSave = false;
+    await tick();
+    saves = requests.filter(data => data.get('action') === 'saveDraft');
+    assert(saves.length === 3 && saves.every(data => data.get('draftId') === 'b92e72cc-7aeb-4328-a06f-7723f6f9697b'), 'El reintento debe actualizar el mismo borrador');
+    assert(new URLSearchParams(location.search).get('draftId') === 'b92e72cc-7aeb-4328-a06f-7723f6f9697b', 'La recarga debe usar el ID estable');
+    assert(saves[2].get('body') === '<p>Segunda versión</p>', 'Se guardó una versión vieja');
+    await tick();
+    assert(requests.at(-1).get('action') === 'composeSession', 'Falta renovación durante la actividad');
+    const count = requests.length;
+    now += 31_000;
+    await tick();
+    assert(requests.length === count, 'La inactividad no debe renovar la sesión');
+    document.querySelector('#mail-compose-format').value = 'markdown';
+    form.elements.body.value = '**Texto Markdown**';
+    form.elements.body.dispatchEvent(new Event('input', {bubbles: true}));
+    await tick();
+    assert(requests.at(-1).get('body') === '**Texto Markdown**', 'El editor visual sobrescribió Markdown');
+    slowSave = true;
+    form.elements.body.value = 'Antes de guardar';
+    form.elements.body.dispatchEvent(new Event('input', {bubbles: true}));
+    const pending = tick();
+    await pause();
+    form.elements.body.value = 'Escrito durante guardado lento';
+    form.elements.body.dispatchEvent(new Event('input', {bubbles: true}));
+    now += 31_000;
+    releaseSave();
+    await pending;
+    await pause();
+    assert(requests.at(-1).get('body') === 'Escrito durante guardado lento', 'Los cambios durante un guardado lento no se guardaron');
+    form.elements.to.value = 'ana@example.com';
+    form.elements.cc.value = '';
+    form.requestSubmit(form.querySelector('button[value="sendMessage"]'));
+    await pause();
+    assert(notice().includes('sesión') && !form.elements.to.disabled, 'Un fallo al enviar debe conservar el editor editable');
+    assert(form.elements.attachments.files[0].size === 9, 'El envío fallido perdió el adjunto');
+    failSend = false;
+    form.requestSubmit(form.querySelector('button[value="sendMessage"]'));
+    await pause();
+    assert(location.hash === '#saved', 'No se navegó tras confirmar el envío');
+    const leaving = new Event('beforeunload', {cancelable: true});
+    window.dispatchEvent(leaving);
+    assert(!leaving.defaultPrevented, 'El envío confirmado aún se considera pendiente');
+    document.querySelector('#result').textContent = 'PASS: borrador incompleto, mismo ID, adjuntos, reintento, sesión y envío fallido';
+  } catch (error) {document.querySelector('#result').textContent = 'FAIL: ' + error.message;}
 })();
 </script>

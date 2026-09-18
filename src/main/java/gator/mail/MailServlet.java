@@ -90,6 +90,8 @@ public final class MailServlet extends HttpServlet {
     private final GatorJsonView view = new GatorJsonView();
     private final ImapMailbox imap = new ImapMailbox();
     private final ExecutorService cacheExecutor = Executors.newFixedThreadPool(4);
+    // ponytail: locks coordinate one JVM; use a shared lock if multiple nodes edit the same mailbox.
+    private final Map<String, Object> composeLocks = new ConcurrentHashMap<>();
     private final Set<String> cacheSyncs = ConcurrentHashMap.newKeySet();
 
     @Override public void destroy() {
@@ -109,7 +111,8 @@ public final class MailServlet extends HttpServlet {
         prepare(response);
         HttpSession session = request.getSession(false);
         if (session == null || session.getAttribute("oidc.user") == null) {
-            response.sendRedirect(request.getContextPath() + "/oauth/login");
+            if (jsonRequest(request)) response.sendError(HttpServletResponse.SC_UNAUTHORIZED);
+            else response.sendRedirect(request.getContextPath() + "/oauth/login");
             return;
         }
 
@@ -133,6 +136,8 @@ public final class MailServlet extends HttpServlet {
             }
             if (!Boolean.TRUE.equals(session.getAttribute("mail.challenge.verified"))) {
                 challengeModel(model, session, notice);
+            } else if (composeSession(request, response, session, mailbox)) {
+                return;
             } else if (validateRecipients(request, response, session)) {
                 return;
             } else if (signature(request, response, session, mailbox)) {
@@ -161,13 +166,18 @@ public final class MailServlet extends HttpServlet {
                 mailboxModel(model, request, mailbox, OAuthServlet.accessToken(request));
             }
         } catch (IllegalArgumentException error) {
-            response.sendError(HttpServletResponse.SC_BAD_REQUEST, error.getMessage());
+            if (jsonRequest(request)) {
+                response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+                response.setContentType("application/json;charset=UTF-8");
+                response.getWriter().print(gson.toJson(Map.of("error", error.getMessage())));
+            } else response.sendError(HttpServletResponse.SC_BAD_REQUEST, error.getMessage());
             return;
         } catch (Exception error) {
             if (causedBy(error, OAuthServlet.ReauthenticationRequired.class)
                     || causedBy(error, AuthenticationFailedException.class) && !OAuthServlet.active(request)) {
                 session.invalidate();
-                response.sendRedirect(request.getContextPath() + "/oauth/logged-out?expired=true");
+                if (jsonRequest(request)) response.sendError(HttpServletResponse.SC_UNAUTHORIZED);
+                else response.sendRedirect(request.getContextPath() + "/oauth/logged-out?expired=true");
                 return;
             }
             getServletContext().log("No fue posible abrir el correo de " + user, error);
@@ -216,6 +226,7 @@ public final class MailServlet extends HttpServlet {
         model.put("folderActionsDisabled", true);
         model.put("selectedFolder", "");
         model.put("csrf", "");
+        model.put("composeDraftId", UUID.randomUUID().toString());
         model.put("composeTo", "");
         model.put("composeCc", "");
         model.put("composeBcc", "");
@@ -914,12 +925,12 @@ public final class MailServlet extends HttpServlet {
 
         String action = request.getParameter("action");
         if ("compose".equals(action) || "reply".equals(action) || "replyAll".equals(action)
-                || "forward".equals(action)) {
+                || "forward".equals(action) || "editDraft".equals(action)) {
             model.put("composeView", true);
             model.put("composeAction", false);
             contactsModel(model, mailbox);
             signatureModel(model, mailbox);
-            if (!"compose".equals(action)) {
+            if (!"compose".equals(action) && !"editDraft".equals(action)) {
                 String uid = request.getParameter("uid");
                 if (uid == null || !uid.matches("[0-9]+")) throw new IllegalArgumentException("Mensaje inválido");
                 ImapMailbox.Mail mail = imap.read(mailbox, folderName, Long.parseLong(uid), accessToken);
@@ -1011,7 +1022,8 @@ public final class MailServlet extends HttpServlet {
             String state = mail.seen() ? "Leído" : "No leído";
             String sender = filterSender(mail.from());
             Map<String, Object> item = new LinkedHashMap<>();
-            item.put("href", mailboxHref(folderName, query, result.page(), result.size()) + "&uid=" + mail.uid());
+            item.put("href", mailboxHref(folderName, query, result.page(), result.size())
+                    + ("Borradores".equals(selected.label()) ? "&action=editDraft" : "") + "&uid=" + mail.uid());
             item.put("from", mail.from());
             item.put("subject", mail.subject());
             item.put("sent", DATE.format(mail.sent()));
@@ -1167,6 +1179,37 @@ public final class MailServlet extends HttpServlet {
         return true;
     }
 
+    private static boolean jsonRequest(HttpServletRequest request) {
+        String accept = request.getHeader("Accept");
+        return accept != null && accept.contains("application/json");
+    }
+
+    private boolean composeSession(HttpServletRequest request, HttpServletResponse response, HttpSession session,
+            String mailbox) throws Exception {
+        String action = request.getParameter("action");
+        if (!"composeSession".equals(action) && !"draftData".equals(action)) return false;
+        if (!"POST".equals(request.getMethod()) || !csrf(session).equals(request.getParameter("csrf"))) {
+            response.sendError(HttpServletResponse.SC_FORBIDDEN);
+            return true;
+        }
+        String token = OAuthServlet.accessToken(request);
+        JsonObject result = new JsonObject();
+        if ("draftData".equals(action)) {
+            String uid = request.getParameter("uid");
+            result = imap.readDraft(mailbox, request.getParameter("draftId"),
+                    uid == null || uid.isBlank() ? 0 : Long.parseLong(uid), token);
+        }
+        response.setContentType("application/json;charset=UTF-8");
+        response.getWriter().print(result);
+        return true;
+    }
+
+    private void composeResult(HttpServletRequest request, HttpServletResponse response, String redirect) throws IOException {
+        if (!jsonRequest(request)) { response.sendRedirect(redirect); return; }
+        response.setContentType("application/json;charset=UTF-8");
+        response.getWriter().print(gson.toJson(Map.of("redirect", redirect)));
+    }
+
     private boolean saveDraft(HttpServletRequest request, HttpServletResponse response, HttpSession session,
             String mailbox, String accessToken) throws Exception {
         if (!"saveDraft".equals(request.getParameter("action"))) return false;
@@ -1174,17 +1217,23 @@ public final class MailServlet extends HttpServlet {
             response.sendError(HttpServletResponse.SC_FORBIDDEN);
             return true;
         }
-        try {
-            MessageBody body = messageBody(request.getParameter("body"), request.getParameter("format"));
-            String drafts = imap.saveDraft(mailbox, request.getParameter("to"), request.getParameter("cc"),
-                    request.getParameter("bcc"), request.getParameter("subject"), body.plain(), body.html(),
-                    messageUploads(request, mailbox, accessToken), accessToken);
-            syncFolders(mailbox, accessToken);
-            syncFolder(mailbox, drafts, accessToken);
-            response.sendRedirect("mail?folder=" + url(drafts));
-        } catch (IllegalArgumentException error) {
-            response.sendError(HttpServletResponse.SC_BAD_REQUEST, error.getMessage());
+        String raw = request.getParameter("body");
+        MessageBody body = raw == null || raw.isBlank() ? new MessageBody("", "")
+                : messageBody(raw, request.getParameter("format"));
+        String drafts;
+        synchronized (composeLocks.computeIfAbsent(mailbox, key -> new Object())) {
+            String id = ImapMailbox.draftId(request.getParameter("draftId"));
+            if (Boolean.TRUE.equals(session.getAttribute("mail.sent." + id)))
+                throw new IllegalArgumentException("Este borrador ya fue enviado");
+            drafts = imap.saveDraft(mailbox, id, request.getParameter("to"),
+                    request.getParameter("cc"), request.getParameter("bcc"), request.getParameter("subject"),
+                    body.plain(), body.html(), uploads(request, mailbox, accessToken),
+                    request.getParameter("includeSignature") != null, accessToken);
         }
+        // Cache refresh must not turn a successful save into an apparent failure.
+        try { syncFolders(mailbox, accessToken); syncFolder(mailbox, drafts, accessToken); }
+        catch (Exception error) { getServletContext().log("No fue posible actualizar la lista de borradores", error); }
+        composeResult(request, response, "mail?folder=" + url(drafts));
         return true;
     }
 
@@ -1196,12 +1245,28 @@ public final class MailServlet extends HttpServlet {
             return true;
         }
         MessageBody body = messageBody(request.getParameter("body"), request.getParameter("format"));
-        String folder = imap.send(mailbox, request.getParameter("to"), request.getParameter("cc"),
-                request.getParameter("bcc"), request.getParameter("subject"), body.plain(), body.html(),
-                messageUploads(request, mailbox, accessToken), accessToken);
-        syncFolders(mailbox, accessToken);
-        syncFolder(mailbox, folder, accessToken);
-        response.sendRedirect("mail?folder=" + url(folder) + "&sent=1");
+        String id = ImapMailbox.draftId(request.getParameter("draftId"));
+        String folder;
+        synchronized (composeLocks.computeIfAbsent(mailbox, key -> new Object())) {
+            if (Boolean.TRUE.equals(session.getAttribute("mail.sent." + id)))
+                throw new IllegalArgumentException("Este borrador ya fue enviado");
+            List<ImapMailbox.Upload> files = uploads(request, mailbox, accessToken);
+            imap.saveDraft(mailbox, id, request.getParameter("to"), request.getParameter("cc"),
+                    request.getParameter("bcc"), request.getParameter("subject"), body.plain(), body.html(), files,
+                    request.getParameter("includeSignature") != null, accessToken);
+            if (request.getParameter("includeSignature") != null) signatures().append(mailbox, files);
+            folder = imap.send(mailbox, id, request.getParameter("to"), request.getParameter("cc"),
+                    request.getParameter("bcc"), request.getParameter("subject"), body.plain(), body.html(), files, accessToken);
+            session.setAttribute("mail.sent." + id, true);
+            // SMTP has confirmed delivery; cleanup failures must never invite a duplicate send.
+            try {
+                String drafts = imap.discardDraft(mailbox, id, accessToken);
+                syncFolder(mailbox, drafts, accessToken);
+            } catch (Exception error) { getServletContext().log("Mensaje enviado; no fue posible retirar el borrador", error); }
+        }
+        try { syncFolders(mailbox, accessToken); syncFolder(mailbox, folder, accessToken); }
+        catch (Exception error) { getServletContext().log("Mensaje enviado; no fue posible actualizar la lista", error); }
+        composeResult(request, response, "mail?folder=" + url(folder) + "&sent=1");
         return true;
     }
 
@@ -1389,13 +1454,6 @@ public final class MailServlet extends HttpServlet {
             byte[] data = part.getInputStream().readNBytes(25 * 1024 * 1024 + 1);
             result.add(upload(name, part.getContentType(), data, inline));
         }
-        return result;
-    }
-
-    private List<ImapMailbox.Upload> messageUploads(HttpServletRequest request, String mailbox, String accessToken)
-            throws Exception {
-        List<ImapMailbox.Upload> result = uploads(request, mailbox, accessToken);
-        if (request.getParameter("includeSignature") != null) signatures().append(mailbox, result);
         return result;
     }
 
