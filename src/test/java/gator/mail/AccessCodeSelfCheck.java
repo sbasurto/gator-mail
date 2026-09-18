@@ -454,7 +454,7 @@ public final class AccessCodeSelfCheck {
         try {
             String html = new GatorJsonView().renderResource("gator-mail/screens/mail.json", model);
             assert html.contains("Sesión cerrada");
-            assert html.contains("/gator-mail/css/gator-mail.css?v=52");
+            assert html.contains("/gator-mail/css/gator-mail.css?v=53");
             assert html.contains("/elib/js/sweetalert2.all.min.js");
             assert html.contains("/gator-mail/js/gator-mail.js?v=35");
             assert html.contains("spinner-border");
@@ -679,6 +679,22 @@ public final class AccessCodeSelfCheck {
             throw new AssertionError(error);
         }
         String document = MailServlet.htmlDocument("/gator-mail", "<p>Hola</p>");
+        Map<String, String> responseHeaders = new java.util.HashMap<>();
+        MailServlet.prepare((jakarta.servlet.http.HttpServletResponse) java.lang.reflect.Proxy.newProxyInstance(
+                AccessCodeSelfCheck.class.getClassLoader(), new Class<?>[]{jakarta.servlet.http.HttpServletResponse.class},
+                (proxy, method, values) -> {
+                    if (method.getName().equals("setHeader")) responseHeaders.put((String) values[0], (String) values[1]);
+                    return null;
+                }));
+        Map<String, List<String>> policy = new java.util.HashMap<>();
+        for (String directive : responseHeaders.get("Content-Security-Policy").split(";")) {
+            List<String> tokens = List.of(directive.trim().split("\\s+"));
+            policy.put(tokens.getFirst(), tokens.subList(1, tokens.size()));
+        }
+        assert policy.getOrDefault("img-src", policy.get("default-src")).contains("data:")
+                : "El lector hereda una CSP que bloquea las firmas incrustadas";
+        assert policy.get("default-src").equals(List.of("'self'"));
+        assert policy.get("script-src").equals(List.of("'self'"));
         assert document.contains("/gator-mail/css/mail-content.css?v=1");
         assert document.contains("style-src 'self' 'unsafe-inline'");
         String print = MailServlet.printDocument("/gator-mail", new ImapMailbox.Mail(

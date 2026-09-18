@@ -190,7 +190,7 @@ public final class MailServlet extends HttpServlet {
     static void prepare(HttpServletResponse response) {
         response.setContentType("text/html;charset=UTF-8");
         response.setHeader("Cache-Control", "no-store");
-        response.setHeader("Content-Security-Policy", "default-src 'self'; style-src 'self'; script-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'self'");
+        response.setHeader("Content-Security-Policy", "default-src 'self'; style-src 'self'; script-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'none'; frame-ancestors 'self'");
     }
 
     static Map<String, Object> baseModel(HttpServletRequest request, String mailbox) {
