@@ -1,7 +1,7 @@
 /* Gator standard login. Keep Keycloak's forms, validation and flow controls. */
 :root { color-scheme: light; }
 html, body, #keycloak-bg { background: #fff; color: #212529; font-family: Arial, sans-serif; }
-.pf-v5-c-login { min-height: 100vh; padding: 60px 20px 40px; background: #fff; }
+.pf-v5-c-login { min-height: 100vh; padding: 64px 20px 40px; background: #fff; }
 .pf-v5-c-login__container { display: block; width: min(100%, 376px); margin: 0 auto; padding: 0; }
 #kc-header { display: none; }
 .gator-login-brands { display: flex; align-items: center; justify-content: center; gap: 1.25rem; margin-bottom: 18px; }
@@ -9,10 +9,10 @@ html, body, #keycloak-bg { background: #fff; color: #212529; font-family: Arial,
 .gator-login-brand-divider { width: 1px; height: 3.5rem; background: #cbd5e1; }
 .pf-v5-c-login__main { background: transparent; border: 0; border-radius: 0; box-shadow: none; }
 .pf-v5-c-login__main-header, .pf-v5-c-login__main-body, .pf-v5-c-login__main-footer { padding: 0; }
-.pf-v5-c-login__main-header { margin-bottom: 16px; }
-#kc-page-title { font-size: 28px; font-weight: 400; line-height: 1.2; text-align: center; }
+.pf-v5-c-login__main-header { margin-bottom: 11px; }
+#kc-page-title { font-family: Arial, sans-serif; font-size: 28px; font-weight: 400; line-height: 1.2; text-align: center; }
 .gator-application { display: block; color: #5c6064; font-size: 24px; line-height: 1.2; }
-#kc-form-login { gap: 8px; }
+#kc-form-login { gap: 4px; }
 #kc-form-login .pf-v5-c-form__label { position: absolute; width: 1px; height: 1px;
     padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 #kc-form-login .pf-v5-c-form__group { gap: 0; }
