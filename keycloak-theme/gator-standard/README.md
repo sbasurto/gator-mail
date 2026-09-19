@@ -68,6 +68,10 @@ La vista previa estática no valida el flujo OIDC ni el envío de correo. La rec
 Copiar `login/` y los logos preparados al directorio `themes/gator-standard/`
 de la instalación de Keycloak. Guardar previamente los atributos completos
 por cliente en un respaldo privado y fusionar solo los tres atributos de marca.
+Para la API, leer la representación completa del cliente, fusionar los atributos
+y devolver esa representación conservando `webOrigins` (incluido `[]`),
+callbacks y políticas. Un PUT que contenga solo `attributes` puede hacer que
+Keycloak calcule nuevos orígenes web. Verificar las listas sin depender de su orden.
 Comprobar una autorización OIDC nueva (HTTP 200, CSS, nombre y logo correctos)
 antes de extender la activación al resto. No requiere recompilar los WAR.
 Las aplicaciones locales usan el mismo Keycloak de Artemisa.
