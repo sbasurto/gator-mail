@@ -52,7 +52,8 @@ El proceso de Tomcat puede recibir estas variables de entorno:
 
 El cliente público `gator-mail` debe habilitar Authorization Code con PKCE S256
 y registrar exactamente los URI de retorno usados por cada entorno.
-El tema claro de entrada y salida se encuentra en `keycloak-theme/gator-mail`.
+El tema anterior de entrada y salida se encuentra en `keycloak-theme/gator-mail`.
+El login estándar por aplicación está en [`keycloak-theme/gator-standard`](keycloak-theme/gator-standard/README.md), con nombre y logo de la configuración existente.
 
 Las carpetas IMAP se guardan en la tabla jerárquica `mail_carpetas`; el script
 idempotente para crearla está en `db/mail_carpetas.sql`.

@@ -1,0 +1,68 @@
+/* Gator standard login. Keep Keycloak's forms, validation and flow controls. */
+:root { color-scheme: light; }
+html, body, #keycloak-bg { background: #fff; color: #212529; font-family: Arial, sans-serif; }
+.pf-v5-c-login { min-height: 100vh; padding: 60px 20px 40px; background: #fff; }
+.pf-v5-c-login__container { display: block; width: min(100%, 376px); margin: 0 auto; padding: 0; }
+#kc-header { display: none; }
+.gator-login-brands { display: flex; align-items: center; justify-content: center; gap: 1.25rem; margin-bottom: 18px; }
+.gator-login-brands img { width: auto; max-width: 13.75rem; height: auto; max-height: 4.5rem; object-fit: contain; }
+.gator-login-brand-divider { width: 1px; height: 3.5rem; background: #cbd5e1; }
+.pf-v5-c-login__main { background: transparent; border: 0; border-radius: 0; box-shadow: none; }
+.pf-v5-c-login__main-header, .pf-v5-c-login__main-body, .pf-v5-c-login__main-footer { padding: 0; }
+.pf-v5-c-login__main-header { margin-bottom: 16px; }
+#kc-page-title { font-size: 28px; font-weight: 400; line-height: 1.2; text-align: center; }
+.gator-application { display: block; color: #5c6064; font-size: 24px; line-height: 1.2; }
+#kc-form-login { gap: 8px; }
+#kc-form-login .pf-v5-c-form__label { position: absolute; width: 1px; height: 1px;
+    padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+#kc-form-login .pf-v5-c-form__group { gap: 0; }
+#kc-form-login .pf-v5-c-form__group-label { padding: 0; height: 0; }
+#kc-form-login .pf-v5-c-form-control { min-height: 39px; border: 1px solid #dee2e6;
+    border-radius: 5px 0 0 5px; background: #fff; box-shadow: none; }
+#kc-form-login .pf-v5-c-form-control::before, #kc-form-login .pf-v5-c-form-control::after { display: none; }
+#kc-form-login input[type=text], #kc-form-login input[type=password] { font: 16px Arial, sans-serif; height: 37px; padding: 8px 12px; }
+#kc-form-login input:focus { outline: 2px solid #86b7fe; outline-offset: -2px; }
+.gator-username-row { display: flex; min-width: 0; }
+.gator-username-row > .pf-v5-c-form-control { flex: 1; min-width: 0; }
+.gator-username-row::before, #kc-form-login .pf-v5-c-input-group::before { content: ''; width: 45px; flex: 0 0 45px;
+    border: 1px solid #dee2e6; border-right: 0; border-radius: 5px 0 0 5px; background: #f8f9fa center / 16px no-repeat; }
+.gator-username-row::before { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='4' r='3' fill='%23212529'/%3E%3Cpath d='M2 16v-3a6 6 0 0112 0v3' fill='%23212529'/%3E%3C/svg%3E"); }
+#kc-form-login .pf-v5-c-input-group::before { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect x='3' y='6' width='10' height='10' rx='2' fill='%23212529'/%3E%3Cpath d='M5 7V4a3 3 0 016 0v3' fill='none' stroke='%23212529' stroke-width='2'/%3E%3C/svg%3E"); }
+#kc-form-login .pf-v5-c-input-group { display: flex; gap: 0; }
+#kc-form-login .pf-v5-c-input-group__item.pf-m-fill { flex: 1; min-width: 0; }
+#kc-form-login .pf-v5-c-input-group__item .pf-v5-c-form-control,
+.gator-username-row > .pf-v5-c-form-control { border-radius: 0; }
+.gator-clear-user, #password-show-password { width: 46px; height: 39px; padding: 6px;
+    border: 1px solid #6c757d; border-radius: 0 5px 5px 0; background: #fff; color: #6c757d; cursor: pointer; }
+.gator-clear-user { font-size: 26px; line-height: 1; }
+#password-show-password::after { display: none; }
+#kc-form-login .pf-v5-c-form__helper-text { margin-top: 0; }
+#kc-form-login .pf-v5-c-helper-text { justify-content: center; }
+#kc-form-login a { color: #0d6efd; text-decoration: underline; }
+#kc-form-login .pf-v5-c-helper-text__item:has(a) { margin: 24px 0 8px; text-align: center; }
+#kc-form-buttons, #kc-form-login .pf-v5-c-form__actions { text-align: center; margin: 0; }
+#kc-login { display: inline-block; width: auto; min-height: 36px; padding: 7px 12px;
+    border: 0; border-radius: 5px; color: #fff; font: 16px Arial, sans-serif;
+    background: linear-gradient(90deg, #0d6efd, #6f42c1, #d63384, #fd7e14, #198754); background-size: 180% 100%; }
+#kc-login::after { display: none; }
+#kc-login:hover { background-position: 100% 0; }
+button:focus-visible, a:focus-visible { outline: 3px solid #86b7fe; outline-offset: 3px; }
+@media (max-width: 480px) { .pf-v5-c-login { padding-top: 40px; } }
+/* Neutralize the parent layout's grid sizing and card decoration. */
+.pf-v5-c-login { display: block; }
+.pf-v5-c-login__container { grid-template-columns: none; grid-template-areas: none; }
+.pf-v5-c-login__main { width: 100%; max-width: none; border-top: 0; }
+.pf-v5-c-login__main-header { display: block; }
+#kc-page-title { width: 100%; }
+#password-show-password i { display: block; width: 18px; height: 18px; margin: auto;
+    background: center / contain no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z' fill='none' stroke='%236c757d' stroke-width='3'/%3E%3Ccircle cx='12' cy='12' r='3' fill='%236c757d'/%3E%3C/svg%3E"); }
+#password-show-password i::before { content: none; }
+
+.pf-v5-c-login__main::before, .pf-v5-c-login__main::after { display: none; }
+
+.pf-v5-c-login__main-header { border: 0; }
+.pf-v5-c-login__main-header::before, .pf-v5-c-login__main-header::after { display: none; }
+#kc-form-login .pf-v5-c-form__group:has(#kc-login) { display: flex; justify-content: center; padding: 0; }
+
+.gator-login-brands:has(.gator-login-brand-divider) img { max-width: calc((100% - 2.5rem - 1px) / 2); min-width: 0; }
+#password-show-password i.fa-eye-slash { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM3 3l18 18' fill='none' stroke='%236c757d' stroke-width='2'/%3E%3Ccircle cx='12' cy='12' r='3' fill='%236c757d'/%3E%3C/svg%3E"); }
