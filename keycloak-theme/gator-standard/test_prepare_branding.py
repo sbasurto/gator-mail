@@ -34,3 +34,12 @@ with tempfile.TemporaryDirectory() as directory:
         if logo:
             assert (output / 'login/resources/img/clients/customer.png').read_bytes() == b'customer logo'
 print('Branding: nombre, logo, secretos y rutas verificados.')
+
+# Changing the URL prevents reuse of the browser's cached parent favicon.
+import hashlib
+login = script.parent / 'login'
+properties = dict(line.split('=', 1) for line in (login / 'theme.properties').read_text().splitlines() if '=' in line)
+favicon = login / 'resources' / properties['favicons.standard']
+assert favicon.is_file() and favicon.name != 'favicon.ico'
+assert hashlib.sha256(favicon.read_bytes()).hexdigest()[:8] in favicon.name
+print('Favicon: ruta versionada y hash verificados.')

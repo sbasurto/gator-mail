@@ -83,3 +83,10 @@ este tema. No deducir ni modificar permisos a partir de la marca.
 
 Reversión: restaurar los atributos respaldados del cliente. El tema anterior
 `gator-mail` se conserva. No cambiar el tema del realm ni reiniciar Tomcat.
+
+El favicon se declara mediante `favicons.standard` en `theme.properties`, con
+un nombre que incluye su hash. Al cambiarlo, actualizar también la ruta: tanto
+Keycloak (caché gzip) como el navegador pueden conservar el icono heredado bajo
+`img/favicon.ico`. Verificar el HTML servido y comparar los bytes recibidos con
+`Accept-Encoding: identity` y `gzip` (descomprimiendo este último).
+Referencia: https://www.keycloak.org/ui-customization/themes#_advanced_css_script_and_favicon_imports
