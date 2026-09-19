@@ -72,3 +72,15 @@ tasks.register('appearanceTest', Exec) {
     commandLine 'node', 'src/test/web/appearance_test.js'
 }
 tasks.named('check') { dependsOn appearanceTest }
+
+// Keep this guard local: Mail also builds from an independent checkout.
+tasks.register('verifyNoShiro') {
+    def runtime = configurations.named('runtimeClasspath')
+    inputs.files(runtime)
+    doLast {
+        def legacy = runtime.get().files.findAll { it.name.toLowerCase(Locale.ROOT).contains('shiro') }
+        if (legacy) throw new GradleException("Shiro dependencies remain: ${legacy*.name}")
+    }
+}
+tasks.named('check') { dependsOn 'verifyNoShiro' }
+tasks.named('war') { dependsOn 'verifyNoShiro' }
