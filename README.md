@@ -71,6 +71,12 @@ El benchmark reversible `db/mail_cache_benchmark.sql` mide listado y rankings
 con 100 000 encabezados y siempre termina con `rollback`.
 El directorio autónomo se instala con `db/mail_contacts.sql`; no requiere
 tablas externas ni copia hashes de usuario.
+El guardado de contactos desde las aplicaciones Gator mediante `mail-sms.jsp`
+requiere `db/mail_login_contact.sql` en la base autónoma de correo, después de
+`db/mail_admin.sql`. Se verifica con `db/mail_login_contact_test.sql` (rollback).
+Esta variante utiliza `mail_usuario_telefonos` y conserva usuarios, contraseñas
+y permisos existentes.
+
 La administración de usuarios y contactos se instala con `db/mail_admin.sql`;
 las cuentas asociadas a `sbasurto@soft-gator.com` y la cuenta local `admin`
 quedan autorizadas inicialmente y pueden ampliarse desde la tabla
