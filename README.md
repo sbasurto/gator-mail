@@ -279,3 +279,16 @@ directorio, que debe incluirse en los respaldos. En instalaciones con varias
 instancias, usar un directorio persistente compartido. La consulta de la imagen
 requiere sesión y verificación de acceso; cada cuenta sólo accede a su propia
 firma. No se modifica el esquema de base de datos.
+
+## Salida estándar
+
+`GET /oauth/logout` muestra la confirmación compartida de Gator, con favicon
+y traducciones de `gator-lib-i18`. Cancelar conserva la sesión; únicamente
+`POST /oauth/logout` con el token `mail.csrf` la termina. Tras el logout OIDC,
+`/oauth/logged-out` muestra la misma página final que las aplicaciones Spring.
+El idioma procede de la identidad OIDC (`locale`); por defecto se usa español.
+
+Keycloak debe permitir como retornos de salida las rutas exactas
+`/gator-mail/oauth/logged-out`, también con `?language=es` y `?language=en`,
+en los mismos orígenes ya registrados para el callback de Mail. No usar
+comodines ni modificar callbacks, roles o las políticas de acceso.

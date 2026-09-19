@@ -1548,7 +1548,7 @@ public final class MailServlet extends HttpServlet {
                 ? "mail?action=settings&section=folders" : "mail?folder=" + url(folder);
     }
 
-    private static String csrf(HttpSession session) {
+    static String csrf(HttpSession session) {
         String value = (String) session.getAttribute("mail.csrf");
         if (value == null) {
             value = UUID.randomUUID().toString();

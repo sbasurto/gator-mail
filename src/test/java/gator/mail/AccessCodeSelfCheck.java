@@ -12,6 +12,7 @@ import java.util.Map;
 
 public final class AccessCodeSelfCheck {
     public static void main(String[] args) throws Exception {
+        LogoutSelfCheck.run();
         try {
             OAuthServlet.tokenResponse(400, "{\"error\":\"invalid_grant\"}");
             throw new AssertionError("Se aceptó un refresh token vencido");

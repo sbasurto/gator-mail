@@ -3,7 +3,7 @@ package gator.mail;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import jakarta.servlet.http.*;
-import gator.lib.web.gui.GatorJsonView;
+import gator.lib.web.gui.GatorSessionPages;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URLEncoder;
@@ -29,28 +29,49 @@ public final class OAuthServlet extends HttpServlet {
         res.setHeader("Cache-Control", "no-store");
         res.setHeader("Pragma", "no-cache");
         if ("/callback".equals(req.getPathInfo())) callback(req, res);
-        else if ("/logout".equals(req.getPathInfo())) logout(req, res);
+        else if ("/logout".equals(req.getPathInfo())) confirmLogout(req, res);
         else if ("/logged-out".equals(req.getPathInfo())) loggedOut(req, res);
         else login(req, res, "/password".equals(req.getPathInfo()) ? "UPDATE_PASSWORD" : "");
     }
 
-    private void logout(HttpServletRequest req, HttpServletResponse res) throws IOException {
+    private void confirmLogout(HttpServletRequest req, HttpServletResponse res) throws IOException {
+        MailServlet.prepare(res);
+        HttpSession session = req.getSession(true);
+        res.getWriter().print(GatorSessionPages.confirmation(req.getContextPath(), language(session),
+                req.getContextPath() + "/oauth/logout", "csrf", MailServlet.csrf(session),
+                req.getContextPath() + "/mail"));
+    }
+
+    @Override protected void doPost(HttpServletRequest req, HttpServletResponse res) throws IOException {
+        if (!"/logout".equals(req.getPathInfo())) { res.sendError(405); return; }
         HttpSession session = req.getSession(false);
-        String idToken = session == null ? "" : String.valueOf(session.getAttribute("oidc.id"));
-        if (session != null) session.invalidate();
-        res.sendRedirect(endSession(idToken));
+        Object expected = session == null ? null : session.getAttribute("mail.csrf");
+        if (!(expected instanceof String csrf) || !validState(csrf, req.getParameter("csrf"))) {
+            res.sendError(403); return;
+        }
+        String idToken = String.valueOf(session.getAttribute("oidc.id"));
+        String language = language(session);
+        session.invalidate();
+        res.setHeader("Cache-Control", "no-store");
+        if (idToken.isBlank() || "null".equals(idToken)) {
+            res.sendRedirect(req.getContextPath() + "/oauth/logged-out?language=" + enc(language));
+            return;
+        }
+        String callback = redirect(req);
+        String returnUrl = callback.substring(0, callback.length() - "callback".length()) + "logged-out?language=" + enc(language);
+        res.sendRedirect(endSession(idToken) + "&post_logout_redirect_uri=" + enc(returnUrl));
+    }
+
+    private static String language(HttpSession session) {
+        Object value = session == null ? null : session.getAttribute("oidc.locale");
+        return value instanceof String tag && java.util.Locale.forLanguageTag(tag.replace('_', '-'))
+                .getLanguage().equals("en") ? "en" : "es";
     }
 
     private void loggedOut(HttpServletRequest req, HttpServletResponse res) throws IOException {
         MailServlet.prepare(res);
-        Map<String, Object> model = MailServlet.baseModel(req, "");
-        model.put("loggedOut", true);
-        model.put("sessionActive", false);
-        if ("true".equals(req.getParameter("expired"))) {
-            model.put("logoutTitle", "Tu sesión expiró");
-            model.put("logoutCopy", "Por seguridad terminamos la sesión. Ingresa nuevamente para continuar.");
-        }
-        res.getWriter().print(new GatorJsonView().renderResource("gator-mail/screens/mail.json", model));
+        res.getWriter().print(GatorSessionPages.signedOut(req.getContextPath(),
+                req.getParameter("language"), "true".equals(req.getParameter("expired"))));
     }
     private void login(HttpServletRequest req, HttpServletResponse res, String action) throws IOException {
         HttpSession s = req.getSession(true); String state = random(24), verifier = random(48);
@@ -76,6 +97,7 @@ public final class OAuthServlet extends HttpServlet {
             JsonObject user = JsonParser.parseString(info.body()).getAsJsonObject();
             req.changeSessionId();
             s.setAttribute("oidc.user", user.get("preferred_username").getAsString());
+            if (user.has("locale") && !user.get("locale").isJsonNull()) s.setAttribute("oidc.locale", user.get("locale").getAsString());
             s.removeAttribute("oidc.state"); s.removeAttribute("oidc.verifier");
             res.sendRedirect(req.getContextPath() + "/mail");
         } catch (Exception e) { res.sendError(503, "No fue posible completar el acceso OAuth"); }
