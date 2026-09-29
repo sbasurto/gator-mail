@@ -13,6 +13,20 @@ import java.util.Map;
 public final class AccessCodeSelfCheck {
     public static void main(String[] args) throws Exception {
         LogoutSelfCheck.run();
+        Map<String, Object> listing = new HashMap<>();
+        var records = java.util.stream.IntStream.rangeClosed(1, 26)
+                .mapToObj(i -> Map.<String, Object>of("value", "Dominio " + i)).toList();
+        MailServlet.filterListModel(listing, records, "DOMINIO", "99", "10", "spam");
+        assert ((List<?>) listing.get("filterList")).size() == 6;
+        assert listing.get("filterListPage").equals(3);
+        assert listing.get("filterListPrevious").toString().contains("listQuery=DOMINIO");
+        assert Boolean.FALSE.equals(listing.get("filterListHasNext"));
+        MailServlet.filterListModel(listing, records, "ausente", "2", "25", "rules");
+        assert ((List<?>) listing.get("filterList")).isEmpty();
+        assert listing.get("filterListPage").equals(1);
+        assert listing.get("filterListSummary").equals("0 resultados");
+        MailServlet.filterListModel(listing, records, "Dominio 26", "1", "50", "spam");
+        assert ((List<?>) listing.get("filterList")).equals(List.of(records.getLast()));
         try {
             OAuthServlet.tokenResponse(400, "{\"error\":\"invalid_grant\"}");
             throw new AssertionError("Se aceptó un refresh token vencido");
@@ -399,6 +413,11 @@ public final class AccessCodeSelfCheck {
         List<Map<String, Object>> filterDestinations = List.of(
                 Map.of("value", "Archivo", "label", "Archivo", "selected", true));
         model.put("filterDestinationAvailable", true);
+        model.put("filterPreset", false);
+        model.put("filterRulesView", true);
+        model.put("filterSpamView", true);
+        model.put("filterActivityView", true);
+        model.put("filterTab", "rules");
         model.put("filterRulesEmpty", false);
         model.put("filterAuditEmpty", false);
         model.put("filterErrorAvailable", false);
@@ -455,7 +474,7 @@ public final class AccessCodeSelfCheck {
         try {
             String html = new GatorJsonView().renderResource("gator-mail/screens/mail.json", model);
             assert html.contains("Sesión cerrada");
-            assert html.contains("/gator-mail/css/gator-mail.css?v=54");
+            assert html.contains("/gator-mail/css/gator-mail.css?v=55");
             assert html.contains("/elib/js/sweetalert2.all.min.js");
             assert html.contains("/gator-mail/js/gator-mail.js?v=35");
             assert html.contains("spinner-border");
@@ -528,6 +547,10 @@ public final class AccessCodeSelfCheck {
             assert html.contains(">Filtros de correo</span>");
             assert html.contains(">Mis carpetas</span>");
             assert html.contains("value=\"filterSave\"");
+            assert html.indexOf("id=\"mail-new-filter\"") < html.indexOf("class=\"mail-filter-tabs\"");
+            assert html.contains("name=\"listQuery\"");
+            assert html.contains("name=\"listSize\"");
+            assert html.contains("aria-label=\"Páginas del listado\"");
             assert html.contains("value=\"spamGlobalDelete\"");
             assert html.contains("Revisando 2 buzones");
             assert html.contains(">Desbloquear</button>");
@@ -735,6 +758,11 @@ public final class AccessCodeSelfCheck {
                     "mobileChallenge", "factorChoice", "phoneCorrection", "loggedOut", "pending", "error").contains(key)
                     ? false : value);
             screen.getValue().forEach(key -> sample.put(key, true));
+            if ("filters".equals(screen.getKey())) {
+                sample.put("filterRulesView", true);
+                sample.put("filterRulesTabClass", "active");
+                filterFixture(sample, "rules", "", "1", "10");
+            }
             sample.put("empty", false);
             sample.put("sendNotice", false);
             sample.put("spamGlobalNotice", false);
@@ -790,7 +818,41 @@ public final class AccessCodeSelfCheck {
             sample.put("sessionActive", true);
             java.nio.file.Files.writeString(directory.resolve(screen.getKey() + ".html"),
                     new GatorJsonView().renderResource("gator-mail/screens/mail.json", sample));
+            if ("filters".equals(screen.getKey())) {
+                for (String tab : List.of("rules", "spam", "activity")) {
+                    for (String variant : List.of("first", "next", "last", "search", "empty", "size")) {
+                        Map<String, Object> listing = new HashMap<>(sample);
+                        listing.put("filterTab", tab);
+                        listing.put("filterRulesView", "rules".equals(tab));
+                        listing.put("filterSpamView", "spam".equals(tab));
+                        listing.put("filterActivityView", "activity".equals(tab));
+                        listing.put("filterRulesTabClass", "rules".equals(tab) ? "active" : "");
+                        listing.put("filterSpamTabClass", "spam".equals(tab) ? "active" : "");
+                        listing.put("filterActivityTabClass", "activity".equals(tab) ? "active" : "");
+                        filterFixture(listing, tab, "search".equals(variant) ? "REMITENTE26"
+                                        : "empty".equals(variant) ? "ausente" : "",
+                                "next".equals(variant) ? "2" : "last".equals(variant) ? "99" : "1",
+                                "size".equals(variant) ? "25" : "10");
+                        java.nio.file.Files.writeString(directory.resolve("filters-" + tab + "-" + variant + ".html"),
+                                new GatorJsonView().renderResource("gator-mail/screens/mail.json", listing));
+                    }
+                }
+            }
         }
+    }
+
+    private static void filterFixture(Map<String, Object> sample, String tab, String query, String page, String size) {
+        @SuppressWarnings("unchecked")
+        var row = ((List<Map<String, Object>>) sample.get("spam".equals(tab) ? "globalSpam" : "filterRules")).getFirst();
+        var rows = java.util.stream.IntStream.rangeClosed(1, 26).mapToObj(i -> {
+            Map<String, Object> item = new HashMap<>(row);
+            item.put("id", i);
+            item.put("name", "Filtro " + i);
+            item.put("value", "remitente" + i + "@example.com");
+            return item;
+        }).toList();
+        MailServlet.filterListModel(sample, rows, query, page, size, tab);
+        sample.put("spam".equals(tab) ? "globalSpam" : "filterRules", sample.get("filterList"));
     }
 
 }

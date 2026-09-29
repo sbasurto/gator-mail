@@ -106,6 +106,19 @@ body { min-height: 100vh; margin: 0; color: var(--gator-ink); background: var(--
 .mail-filter-header[hidden] { display: none; }
 .mail-filter-audit-title { margin: 1.2rem 1rem .5rem; font-size: 1rem; }
 .mail-filter-audit { margin: 0; font-size: .76rem; }
+.mail-filter-create { margin: 1rem; border: 1px solid var(--gator-line); border-radius: 9px; }
+.mail-filter-create > summary { padding: .8rem 1rem; color: var(--gator-blue-dark); font-weight: 700; cursor: pointer; }
+.mail-filter-create .mail-filter-form.mail-admin-new { margin: 0; border: 0; border-top: 1px solid var(--gator-line); border-radius: 0 0 9px 9px; }
+.mail-filter-tabs { display: flex; flex-wrap: wrap; gap: .25rem; padding: 0 1rem; border-bottom: 1px solid var(--gator-line); }
+.mail-filter-tabs a { padding: .8rem 1rem; border-bottom: 3px solid transparent; color: var(--gator-muted); font-size: .85rem; text-decoration: none; }
+.mail-filter-tabs a.active { color: var(--gator-blue-dark); border-bottom-color: currentColor; font-weight: 700; }
+.mail-filter-search { display: flex; flex-wrap: wrap; align-items: end; gap: .65rem; padding: 1rem; }
+.mail-filter-search label { display: grid; gap: .3rem; margin: 0; font-size: .78rem; color: var(--gator-muted); }
+.mail-filter-search label:first-of-type { flex: 1 1 220px; }
+.mail-filter-search input { min-width: 0; }
+.mail-filter-pagination { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .75rem; padding: 1rem; font-size: .8rem; color: var(--gator-muted); }
+.mail-filter-pagination > div { display: flex; gap: .5rem; }
+.mail-global-spam-row strong, .mail-global-spam-row small { overflow-wrap: anywhere; }
 .mail-folder-admin-new, .mail-folder-admin-row { display: grid; grid-template-columns: minmax(220px, 1fr) auto; align-items: end; gap: .75rem; }
 .mail-folder-admin-new { margin: 1rem; padding: 1rem; border: 1px solid var(--gator-line); border-radius: 10px; background: #f7fbfd; }
 .mail-folder-admin-row { grid-template-columns: minmax(220px, 1fr) auto auto; padding: .85rem; border: 1px solid var(--gator-line); border-radius: 10px; }

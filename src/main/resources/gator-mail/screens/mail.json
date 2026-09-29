@@ -14,7 +14,7 @@
           { "tag": "link", "attrs": { "rel": "stylesheet", "href": "/elib/css2/fontawesome-free-5.13.0-web/css/all.min.css" } },
           { "tag": "link", "attrs": { "rel": "stylesheet", "href": "/elib/css/colors.css" } },
           { "tag": "link", "attrs": { "rel": "stylesheet", "href": "/elib/css2/sweetalert2.min.css?v=11.23.0" } },
-          { "tag": "link", "attrs": { "rel": "stylesheet", "href": "${contextPath}/css/gator-mail.css?v=54" } },
+          { "tag": "link", "attrs": { "rel": "stylesheet", "href": "${contextPath}/css/gator-mail.css?v=55" } },
           { "tag": "script", "attrs": { "src": "/elib/js/sweetalert2.all.min.js", "defer": "true" } },
           { "tag": "script", "attrs": { "src": "${contextPath}/js/gator-mail.js?v=35", "defer": "true" } }
         ]
@@ -1092,127 +1092,259 @@
                       ] }
                     ]
                   },
-                  {
-                    "tag": "section",
-                    "if": "configurationFiltersView",
-                    "attrs": { "class": "card mail-panel" },
-                    "children": [
-                      { "tag": "header", "attrs": { "class": "card-header mail-panel-header" }, "children": [
-                        { "tag": "div", "children": [
-                          { "tag": "small", "attrs": { "class": "mail-eyebrow" }, "text": "Configuración" },
-                          { "tag": "h1", "attrs": { "class": "mail-panel-title" }, "text": "Filtros de correo" }
-                        ] },
-                        { "tag": "a", "attrs": { "class": "btn btn-outline-secondary btn-sm", "href": "${contextPath}/mail" }, "text": "Volver al correo" }
+                  {"tag": "section", "if": "configurationFiltersView", "attrs": {"class": "card mail-panel"}, "children": [
+                    {"tag": "header", "attrs": {"class": "card-header mail-panel-header"}, "children": [
+                      {"tag": "div", "children": [
+                        {"tag": "small", "attrs": {"class": "mail-eyebrow"}, "text": "Configuración"},
+                        {"tag": "h1", "attrs": {"class": "mail-panel-title"}, "text": "Filtros de correo"}
                       ] },
-                      { "tag": "div", "attrs": { "class": "mail-filter-status" }, "children": [
-                        { "tag": "span", "attrs": { "class": "mail-admin-status" }, "text": "${filterStatus}" },
-                        { "tag": "span", "text": "Última revisión: ${filterHeartbeat}" },
-                        { "tag": "strong", "if": "filterErrorAvailable", "attrs": { "class": "text-danger" }, "text": "${filterError}" },
-                        { "tag": "form", "if": "filterRulesAvailable", "attrs": { "class": "mail-filter-apply-form", "method": "post", "action": "${contextPath}/mail" }, "children": [
-                          { "tag": "input", "attrs": { "type": "hidden", "name": "csrf", "value": "${csrf}" } },
-                          { "tag": "button", "attrs": { "class": "btn btn-outline-primary btn-sm mail-filter-apply", "type": "submit", "name": "action", "value": "filterApply" }, "children": [
-                            { "tag": "span", "attrs": { "class": "fas fa-play", "aria-hidden": "true" } }, { "tag": "span", "text": "Aplicar ahora a Entrada" }
-                          ] }
+                      {"tag": "a", "attrs": {"class": "btn btn-outline-secondary btn-sm", "href": "${contextPath}/mail"}, "text": "Volver al correo"}
+                    ] },
+                    {"tag": "div", "attrs": {"class": "mail-filter-status"}, "children": [
+                      {"tag": "span", "attrs": {"class": "mail-admin-status"}, "text": "${filterStatus}"},
+                      {"tag": "span", "text": "Última revisión: ${filterHeartbeat}"},
+                      {"tag": "strong", "if": "filterErrorAvailable", "attrs": {"class": "text-danger"}, "text": "${filterError}"},
+                      {"tag": "form", "if": "filterRulesAvailable", "attrs": {"class": "mail-filter-apply-form", "method": "post", "action": "${contextPath}/mail"}, "children": [
+                        {"tag": "input", "attrs": {"type": "hidden", "name": "csrf", "value": "${csrf}"}},
+                        {"tag": "button", "attrs": {"class": "btn btn-outline-primary btn-sm mail-filter-apply", "type": "submit", "name": "action", "value": "filterApply"}, "children": [
+                          {"tag": "span", "attrs": {"class": "fas fa-play", "aria-hidden": "true"}},
+                          {"tag": "span", "text": "Aplicar ahora a Entrada"}
                         ] }
-                      ] },
-                      { "tag": "span", "if": "filterNotice", "attrs": { "class": "d-none mail-swal mail-swal-success", "title": "Filtros actualizados" }, "text": "${filterNoticeMessage}" },
-                      { "tag": "section", "if": "configurationAdminAvailable", "attrs": { "class": "mail-global-spam" }, "children": [
-                        { "tag": "h2", "attrs": { "class": "mail-filter-audit-title" }, "text": "Spam global" },
-                        { "tag": "p", "attrs": { "class": "mail-filter-note" }, "text": "Estas direcciones y dominios se envían a Spam para todos. Al agregarlos también se revisan los mensajes que permanecen en Entrada." },
-                        { "tag": "p", "if": "globalSpamEmpty", "attrs": { "class": "mail-empty text-muted" }, "text": "No hay remitentes bloqueados globalmente." },
-                        { "tag": "div", "if": "globalSpamAvailable", "attrs": { "class": "mail-admin-list" }, "children": [
-                          { "tag": "form", "each": "globalSpam", "as": "blocked", "attrs": { "class": "mail-admin-row mail-global-spam-row", "method": "post", "action": "${contextPath}/mail" }, "children": [
-                            { "tag": "input", "attrs": { "type": "hidden", "name": "csrf", "value": "${csrf}" } },
-                            { "tag": "input", "attrs": { "type": "hidden", "name": "id", "value": "${blocked.id}" } },
-                            { "tag": "div", "children": [{ "tag": "small", "text": "${blocked.scope}" }, { "tag": "strong", "text": "${blocked.value}" }] },
-                            { "tag": "div", "children": [{ "tag": "small", "text": "Agregado por ${blocked.actor}" }, { "tag": "span", "text": "${blocked.date}" }] },
-                            { "tag": "span", "attrs": { "class": "mail-admin-status" }, "text": "${blocked.status}" },
-                            { "tag": "button", "attrs": { "class": "btn btn-outline-danger btn-sm mail-global-spam-delete", "type": "submit", "name": "action", "value": "spamGlobalDelete" }, "text": "Desbloquear" }
+                      ] }
+                    ] },
+                    {"tag": "span", "if": "filterNotice", "attrs": {"class": "d-none mail-swal mail-swal-success", "title": "Filtros actualizados"}, "text": "${filterNoticeMessage}"},
+                    {"tag": "details", "if": "filterDestinationAvailable", "attrs": {"class": "mail-filter-create", "id": "mail-new-filter", "open": "${filterPreset}"}, "children": [
+                      {"tag": "summary", "text": "Nuevo filtro"},
+                      {"tag": "form", "if": "filterDestinationAvailable", "attrs": {"class": "mail-filter-form mail-filter-rule-form mail-admin-new", "method": "post", "action": "${contextPath}/mail", "id": "mail-new-filter-form"}, "children": [
+                        {"tag": "input", "attrs": {"type": "hidden", "name": "csrf", "value": "${csrf}"}},
+                        {"tag": "input", "attrs": {"type": "hidden", "name": "id", "value": ""}},
+                        {"tag": "p", "if": "filterPreset", "attrs": {"class": "mail-filter-preset"}, "children": [
+                          {"tag": "span", "attrs": {"class": "fas fa-envelope", "aria-hidden": "true"}},
+                          {"tag": "span", "text": "Filtro preparado desde el mensaje. Sólo elige la carpeta destino y guarda."}
+                        ] },
+                        {"tag": "label", "children": [
+                          {"tag": "small", "text": "Nombre de la regla"},
+                          {"tag": "input", "attrs": {"class": "form-control", "name": "name", "value": "${filterNewName}", "maxlength": "100", "required": "true", "placeholder": "Facturas de proveedores"}}
+                        ] },
+                        {"tag": "label", "children": [
+                          {"tag": "small", "text": "Orden"},
+                          {"tag": "input", "attrs": {"class": "form-control", "name": "priority", "type": "number", "value": "100", "min": "1", "max": "9999", "required": "true"}}
+                        ] },
+                        {"tag": "label", "children": [
+                          {"tag": "small", "text": "Buscar en"},
+                          {"tag": "select", "attrs": {"class": "form-select", "name": "field"}, "children": [
+                            {"tag": "option", "each": "filterFields", "as": "choice", "attrs": {"value": "${choice.value}", "selected": "${choice.selected}"}, "text": "${choice.label}"}
                           ] }
+                        ] },
+                        {"tag": "label", "children": [
+                          {"tag": "small", "text": "Condición"},
+                          {"tag": "select", "attrs": {"class": "form-select", "name": "operator"}, "children": [
+                            {"tag": "option", "each": "filterOperators", "as": "choice", "attrs": {"value": "${choice.value}", "selected": "${choice.selected}"}, "text": "${choice.label}"}
+                          ] }
+                        ] },
+                        {"tag": "label", "attrs": {"class": "mail-filter-header"}, "children": [
+                          {"tag": "small", "text": "Encabezado"},
+                          {"tag": "select", "attrs": {"class": "form-select", "name": "header"}, "children": [
+                            {"tag": "option", "each": "filterHeaders", "as": "choice", "attrs": {"value": "${choice.value}", "selected": "${choice.selected}"}, "text": "${choice.label}"}
+                          ] }
+                        ] },
+                        {"tag": "label", "children": [
+                          {"tag": "small", "text": "Valor a comparar"},
+                          {"tag": "input", "attrs": {"class": "form-control mail-filter-value", "name": "value", "value": "${filterNewValue}", "maxlength": "500", "required": "true", "placeholder": "facturas@proveedor.com"}}
+                        ] },
+                        {"tag": "label", "children": [
+                          {"tag": "small", "text": "Mover a"},
+                          {"tag": "select", "attrs": {"class": "form-select", "name": "destination"}, "children": [
+                            {"tag": "option", "each": "filterDestinations", "as": "folder", "attrs": {"value": "${folder.value}"}, "text": "${folder.label}"}
+                          ] }
+                        ] },
+                        {"tag": "label", "attrs": {"class": "mail-filter-enabled"}, "children": [
+                          {"tag": "input", "attrs": {"name": "enabled", "type": "checkbox", "checked": "true"}},
+                          {"tag": "span", "text": "Activo"}
+                        ] },
+                        {"tag": "label", "attrs": {"class": "mail-filter-enabled mail-filter-existing"}, "children": [
+                          {"tag": "input", "attrs": {"name": "applyExisting", "type": "checkbox"}},
+                          {"tag": "span", "text": "Aplicar también a mensajes que ya están en Entrada"}
+                        ] },
+                        {"tag": "button", "attrs": {"class": "btn btn-primary", "type": "submit", "name": "action", "value": "filterSave"}, "children": [
+                          {"tag": "span", "attrs": {"class": "fas fa-filter", "aria-hidden": "true"}},
+                          {"tag": "span", "text": "Agregar filtro"}
                         ] }
-                      ] },
-                      { "tag": "p", "if": "filterRulesEmpty", "attrs": { "class": "mail-empty text-muted" }, "text": "No hay filtros. El primer filtro comenzará a observar sólo los mensajes nuevos." },
-                      { "tag": "p", "if": "filterDestinationAvailable", "attrs": { "class": "mail-filter-note" }, "text": "La regla con el número de orden más bajo se evalúa primero. Al encontrar una coincidencia, el mensaje se mueve y las demás reglas ya no se ejecutan." },
-                      { "tag": "form", "if": "filterDestinationAvailable", "attrs": { "class": "mail-filter-form mail-filter-rule-form mail-admin-new", "method": "post", "action": "${contextPath}/mail" }, "children": [
-                        { "tag": "input", "attrs": { "type": "hidden", "name": "csrf", "value": "${csrf}" } },
-                        { "tag": "input", "attrs": { "type": "hidden", "name": "id", "value": "" } },
-                        { "tag": "p", "if": "filterPreset", "attrs": { "class": "mail-filter-preset" }, "children": [{ "tag": "span", "attrs": { "class": "fas fa-envelope", "aria-hidden": "true" } }, { "tag": "span", "text": "Filtro preparado desde el mensaje. Sólo elige la carpeta destino y guarda." }] },
-                        { "tag": "label", "children": [{ "tag": "small", "text": "Nombre de la regla" }, { "tag": "input", "attrs": { "class": "form-control", "name": "name", "value": "${filterNewName}", "maxlength": "100", "required": "true", "placeholder": "Facturas de proveedores" } }] },
-                        { "tag": "label", "children": [{ "tag": "small", "text": "Orden" }, { "tag": "input", "attrs": { "class": "form-control", "name": "priority", "type": "number", "value": "100", "min": "1", "max": "9999", "required": "true" } }] },
-                        { "tag": "label", "children": [{ "tag": "small", "text": "Buscar en" }, { "tag": "select", "attrs": { "class": "form-select", "name": "field" }, "children": [
-                          { "tag": "option", "each": "filterFields", "as": "choice", "attrs": { "value": "${choice.value}", "selected": "${choice.selected}" }, "text": "${choice.label}" }
-                        ] }] },
-                        { "tag": "label", "children": [{ "tag": "small", "text": "Condición" }, { "tag": "select", "attrs": { "class": "form-select", "name": "operator" }, "children": [
-                          { "tag": "option", "each": "filterOperators", "as": "choice", "attrs": { "value": "${choice.value}", "selected": "${choice.selected}" }, "text": "${choice.label}" }
-                        ] }] },
-                        { "tag": "label", "attrs": { "class": "mail-filter-header" }, "children": [{ "tag": "small", "text": "Encabezado" }, { "tag": "select", "attrs": { "class": "form-select", "name": "header" }, "children": [
-                          { "tag": "option", "each": "filterHeaders", "as": "choice", "attrs": { "value": "${choice.value}", "selected": "${choice.selected}" }, "text": "${choice.label}" }
-                        ] }] },
-                        { "tag": "label", "children": [{ "tag": "small", "text": "Valor a comparar" }, { "tag": "input", "attrs": { "class": "form-control mail-filter-value", "name": "value", "value": "${filterNewValue}", "maxlength": "500", "required": "true", "placeholder": "facturas@proveedor.com" } }] },
-                        { "tag": "label", "children": [{ "tag": "small", "text": "Mover a" }, { "tag": "select", "attrs": { "class": "form-select", "name": "destination" }, "children": [
-                          { "tag": "option", "each": "filterDestinations", "as": "folder", "attrs": { "value": "${folder.value}" }, "text": "${folder.label}" }
-                        ] }] },
-                        { "tag": "label", "attrs": { "class": "mail-filter-enabled" }, "children": [
-                          { "tag": "input", "attrs": { "name": "enabled", "type": "checkbox", "checked": "true" } }, { "tag": "span", "text": "Activo" }
+                      ] }
+                    ] },
+                    {"tag": "nav", "attrs": {"class": "mail-filter-tabs", "aria-label": "Apartados de filtros"}, "children": [
+                      {"tag": "a", "attrs": {"class": "${filterRulesTabClass}", "href": "mail?action=settings&section=filters"}, "text": "Mis filtros"},
+                      {"tag": "a", "if": "configurationAdminAvailable", "attrs": {"class": "${filterSpamTabClass}", "href": "mail?action=settings&section=filters&filterTab=spam"}, "text": "Spam global"},
+                      {"tag": "a", "attrs": {"class": "${filterActivityTabClass}", "href": "mail?action=settings&section=filters&filterTab=activity"}, "text": "Actividad reciente"}
+                    ] },
+                    {"tag": "section", "if": "filterRulesView", "children": [
+                      {"tag": "h2", "attrs": {"class": "mail-filter-audit-title"}, "text": "Mis filtros"},
+                      {"tag": "p", "if": "filterDestinationAvailable", "attrs": {"class": "mail-filter-note"}, "text": "La regla con el número de orden más bajo se evalúa primero. Al encontrar una coincidencia, el mensaje se mueve y las demás reglas ya no se ejecutan."},
+                      {"tag": "form", "attrs": {"class": "mail-filter-search", "method": "get", "action": "${contextPath}/mail"}, "children": [
+                        {"tag": "input", "attrs": {"type": "hidden", "name": "action", "value": "settings"}},
+                        {"tag": "input", "attrs": {"type": "hidden", "name": "section", "value": "filters"}},
+                        {"tag": "input", "attrs": {"type": "hidden", "name": "filterTab", "value": "${filterTab}"}},
+                        {"tag": "label", "children": [
+                          {"tag": "span", "text": "Buscar"},
+                          {"tag": "input", "attrs": {"class": "form-control", "type": "search", "name": "listQuery", "value": "${filterListQuery}", "maxlength": "100", "placeholder": "Nombre, dirección, dominio o destino"}}
                         ] },
-                        { "tag": "label", "attrs": { "class": "mail-filter-enabled mail-filter-existing" }, "children": [
-                          { "tag": "input", "attrs": { "name": "applyExisting", "type": "checkbox" } }, { "tag": "span", "text": "Aplicar también a mensajes que ya están en Entrada" }
+                        {"tag": "label", "children": [
+                          {"tag": "span", "text": "Por página"},
+                          {"tag": "select", "attrs": {"class": "form-select", "name": "listSize"}, "children": [
+                            {"tag": "option", "attrs": {"value": "${choice.value}", "selected": "${choice.selected}"}, "text": "${choice.label}", "each": "filterListSizes", "as": "choice"}
+                          ] }
                         ] },
-                        { "tag": "button", "attrs": { "class": "btn btn-primary", "type": "submit", "name": "action", "value": "filterSave" }, "children": [{ "tag": "span", "attrs": { "class": "fas fa-filter", "aria-hidden": "true" } }, { "tag": "span", "text": "Agregar filtro" }] }
+                        {"tag": "button", "attrs": {"class": "btn btn-primary", "type": "submit"}, "text": "Buscar"},
+                        {"tag": "a", "attrs": {"class": "btn btn-outline-secondary", "href": "mail?action=settings&section=filters&filterTab=${filterTab}"}, "text": "Limpiar"}
                       ] },
-                      { "tag": "div", "attrs": { "class": "mail-admin-list" }, "children": [
-                        { "tag": "form", "each": "filterRules", "as": "rule", "attrs": { "class": "mail-filter-form mail-filter-rule-form", "method": "post", "action": "${contextPath}/mail" }, "children": [
-                          { "tag": "input", "attrs": { "type": "hidden", "name": "csrf", "value": "${csrf}" } },
-                          { "tag": "input", "attrs": { "type": "hidden", "name": "id", "value": "${rule.id}" } },
-                          { "tag": "label", "children": [{ "tag": "small", "text": "Nombre" }, { "tag": "input", "attrs": { "class": "form-control", "name": "name", "value": "${rule.name}", "maxlength": "100", "required": "true" } }] },
-                          { "tag": "label", "children": [{ "tag": "small", "text": "Orden" }, { "tag": "input", "attrs": { "class": "form-control", "name": "priority", "type": "number", "value": "${rule.priority}", "min": "1", "max": "9999", "required": "true" } }] },
-                          { "tag": "label", "children": [{ "tag": "small", "text": "Campo" }, { "tag": "select", "attrs": { "class": "form-select", "name": "field" }, "children": [
-                            { "tag": "option", "each": "rule.fields", "as": "choice", "attrs": { "value": "${choice.value}", "selected": "${choice.selected}" }, "text": "${choice.label}" }
-                          ] }] },
-                          { "tag": "label", "children": [{ "tag": "small", "text": "Operador" }, { "tag": "select", "attrs": { "class": "form-select", "name": "operator" }, "children": [
-                            { "tag": "option", "each": "rule.operators", "as": "choice", "attrs": { "value": "${choice.value}", "selected": "${choice.selected}" }, "text": "${choice.label}" }
-                          ] }] },
-                          { "tag": "label", "attrs": { "class": "mail-filter-header" }, "children": [{ "tag": "small", "text": "Encabezado" }, { "tag": "select", "attrs": { "class": "form-select", "name": "header" }, "children": [
-                            { "tag": "option", "each": "rule.headers", "as": "choice", "attrs": { "value": "${choice.value}", "selected": "${choice.selected}" }, "text": "${choice.label}" }
-                          ] }] },
-                          { "tag": "label", "children": [{ "tag": "small", "text": "Valor" }, { "tag": "input", "attrs": { "class": "form-control mail-filter-value", "name": "value", "value": "${rule.value}", "maxlength": "500", "required": "true" } }] },
-                          { "tag": "label", "children": [{ "tag": "small", "text": "Mover a" }, { "tag": "select", "attrs": { "class": "form-select", "name": "destination" }, "children": [
-                            { "tag": "option", "each": "rule.destinations", "as": "folder", "attrs": { "value": "${folder.value}", "selected": "${folder.selected}" }, "text": "${folder.label}" }
-                          ] }] },
-                          { "tag": "label", "attrs": { "class": "mail-filter-enabled" }, "children": [
-                            { "tag": "input", "attrs": { "name": "enabled", "type": "checkbox", "checked": "${rule.enabled}" } }, { "tag": "span", "text": "Activo" }
+                      {"tag": "p", "if": "filterRulesEmpty", "attrs": {"class": "mail-empty text-muted"}, "text": "No hay filtros. El primer filtro comenzará a observar sólo los mensajes nuevos."},
+                      {"tag": "div", "attrs": {"class": "mail-admin-list"}, "children": [
+                        {"tag": "form", "each": "filterRules", "as": "rule", "attrs": {"class": "mail-filter-form mail-filter-rule-form", "method": "post", "action": "${contextPath}/mail"}, "children": [
+                          {"tag": "input", "attrs": {"type": "hidden", "name": "csrf", "value": "${csrf}"}},
+                          {"tag": "input", "attrs": {"type": "hidden", "name": "listQuery", "value": "${filterListQuery}"}},
+                          {"tag": "input", "attrs": {"type": "hidden", "name": "listSize", "value": "${filterListSize}"}},
+                          {"tag": "input", "attrs": {"type": "hidden", "name": "listPage", "value": "${filterListPage}"}},
+                          {"tag": "input", "attrs": {"type": "hidden", "name": "id", "value": "${rule.id}"}},
+                          {"tag": "label", "children": [
+                            {"tag": "small", "text": "Nombre"},
+                            {"tag": "input", "attrs": {"class": "form-control", "name": "name", "value": "${rule.name}", "maxlength": "100", "required": "true"}}
                           ] },
-                          { "tag": "label", "attrs": { "class": "mail-filter-enabled mail-filter-existing" }, "children": [
-                            { "tag": "input", "attrs": { "name": "applyExisting", "type": "checkbox" } }, { "tag": "span", "text": "Revisar también mensajes existentes" }
+                          {"tag": "label", "children": [
+                            {"tag": "small", "text": "Orden"},
+                            {"tag": "input", "attrs": {"class": "form-control", "name": "priority", "type": "number", "value": "${rule.priority}", "min": "1", "max": "9999", "required": "true"}}
                           ] },
-                          { "tag": "div", "attrs": { "class": "mail-admin-actions" }, "children": [
-                            { "tag": "button", "attrs": { "class": "btn btn-primary btn-sm", "type": "submit", "name": "action", "value": "filterSave" }, "text": "Guardar" },
-                            { "tag": "button", "attrs": { "class": "btn btn-outline-danger btn-sm mail-filter-delete", "type": "submit", "name": "action", "value": "filterDelete" }, "text": "Eliminar" }
+                          {"tag": "label", "children": [
+                            {"tag": "small", "text": "Campo"},
+                            {"tag": "select", "attrs": {"class": "form-select", "name": "field"}, "children": [
+                              {"tag": "option", "each": "rule.fields", "as": "choice", "attrs": {"value": "${choice.value}", "selected": "${choice.selected}"}, "text": "${choice.label}"}
+                            ] }
+                          ] },
+                          {"tag": "label", "children": [
+                            {"tag": "small", "text": "Operador"},
+                            {"tag": "select", "attrs": {"class": "form-select", "name": "operator"}, "children": [
+                              {"tag": "option", "each": "rule.operators", "as": "choice", "attrs": {"value": "${choice.value}", "selected": "${choice.selected}"}, "text": "${choice.label}"}
+                            ] }
+                          ] },
+                          {"tag": "label", "attrs": {"class": "mail-filter-header"}, "children": [
+                            {"tag": "small", "text": "Encabezado"},
+                            {"tag": "select", "attrs": {"class": "form-select", "name": "header"}, "children": [
+                              {"tag": "option", "each": "rule.headers", "as": "choice", "attrs": {"value": "${choice.value}", "selected": "${choice.selected}"}, "text": "${choice.label}"}
+                            ] }
+                          ] },
+                          {"tag": "label", "children": [
+                            {"tag": "small", "text": "Valor"},
+                            {"tag": "input", "attrs": {"class": "form-control mail-filter-value", "name": "value", "value": "${rule.value}", "maxlength": "500", "required": "true"}}
+                          ] },
+                          {"tag": "label", "children": [
+                            {"tag": "small", "text": "Mover a"},
+                            {"tag": "select", "attrs": {"class": "form-select", "name": "destination"}, "children": [
+                              {"tag": "option", "each": "rule.destinations", "as": "folder", "attrs": {"value": "${folder.value}", "selected": "${folder.selected}"}, "text": "${folder.label}"}
+                            ] }
+                          ] },
+                          {"tag": "label", "attrs": {"class": "mail-filter-enabled"}, "children": [
+                            {"tag": "input", "attrs": {"name": "enabled", "type": "checkbox", "checked": "${rule.enabled}"}},
+                            {"tag": "span", "text": "Activo"}
+                          ] },
+                          {"tag": "label", "attrs": {"class": "mail-filter-enabled mail-filter-existing"}, "children": [
+                            {"tag": "input", "attrs": {"name": "applyExisting", "type": "checkbox"}},
+                            {"tag": "span", "text": "Revisar también mensajes existentes"}
+                          ] },
+                          {"tag": "div", "attrs": {"class": "mail-admin-actions"}, "children": [
+                            {"tag": "button", "attrs": {"class": "btn btn-primary btn-sm", "type": "submit", "name": "action", "value": "filterSave"}, "text": "Guardar"},
+                            {"tag": "button", "attrs": {"class": "btn btn-outline-danger btn-sm mail-filter-delete", "type": "submit", "name": "action", "value": "filterDelete"}, "text": "Eliminar"}
                           ] }
                         ] }
                       ] },
-                      { "tag": "h2", "attrs": { "class": "mail-filter-audit-title" }, "text": "Actividad reciente" },
-                      { "tag": "p", "if": "filterAuditEmpty", "attrs": { "class": "mail-empty text-muted" }, "text": "Todavía no hay mensajes procesados." },
-                      { "tag": "div", "attrs": { "class": "table-responsive" }, "children": [
-                        { "tag": "table", "attrs": { "class": "table table-sm mail-filter-audit" }, "children": [
-                          { "tag": "thead", "children": [{ "tag": "tr", "children": [
-                            { "tag": "th", "text": "Fecha" }, { "tag": "th", "text": "UID" },
-                            { "tag": "th", "text": "Regla" }, { "tag": "th", "text": "Destino" },
-                            { "tag": "th", "text": "Estado" }, { "tag": "th", "text": "Intento" },
-                            { "tag": "th", "text": "Detalle" }
-                          ] }] },
-                          { "tag": "tbody", "children": [
-                            { "tag": "tr", "each": "filterAudit", "as": "row", "children": [
-                              { "tag": "td", "text": "${row.date}" }, { "tag": "td", "text": "${row.uid}" },
-                              { "tag": "td", "text": "${row.rule}" }, { "tag": "td", "text": "${row.destination}" },
-                              { "tag": "td", "text": "${row.status}" }, { "tag": "td", "text": "${row.attempt}" },
-                              { "tag": "td", "text": "${row.detail}" }
+                      {"tag": "p", "if": "filterListEmpty", "attrs": {"class": "mail-empty text-muted"}, "text": "No se encontraron coincidencias. Prueba con otra búsqueda."},
+                      {"tag": "nav", "attrs": {"class": "mail-filter-pagination", "aria-label": "Páginas del listado"}, "children": [
+                        {"tag": "span", "attrs": {"role": "status"}, "text": "${filterListSummary}"},
+                        {"tag": "div", "children": [
+                          {"tag": "a", "if": "filterListHasPrevious", "attrs": {"class": "btn btn-outline-secondary btn-sm", "href": "${filterListPrevious}"}, "text": "Anterior"},
+                          {"tag": "a", "if": "filterListHasNext", "attrs": {"class": "btn btn-outline-secondary btn-sm", "href": "${filterListNext}"}, "text": "Siguiente"}
+                        ] }
+                      ] }
+                    ] },
+                    {"tag": "section", "if": "filterSpamView", "attrs": {"class": "mail-global-spam"}, "children": [
+                      {"tag": "h2", "attrs": {"class": "mail-filter-audit-title"}, "text": "Spam global"},
+                      {"tag": "p", "attrs": {"class": "mail-filter-note"}, "text": "Estas direcciones y dominios se envían a Spam para todos. Al agregarlos también se revisan los mensajes que permanecen en Entrada."},
+                      {"tag": "form", "attrs": {"class": "mail-filter-search", "method": "get", "action": "${contextPath}/mail"}, "children": [
+                        {"tag": "input", "attrs": {"type": "hidden", "name": "action", "value": "settings"}},
+                        {"tag": "input", "attrs": {"type": "hidden", "name": "section", "value": "filters"}},
+                        {"tag": "input", "attrs": {"type": "hidden", "name": "filterTab", "value": "${filterTab}"}},
+                        {"tag": "label", "children": [
+                          {"tag": "span", "text": "Buscar"},
+                          {"tag": "input", "attrs": {"class": "form-control", "type": "search", "name": "listQuery", "value": "${filterListQuery}", "maxlength": "100", "placeholder": "Nombre, dirección, dominio o destino"}}
+                        ] },
+                        {"tag": "label", "children": [
+                          {"tag": "span", "text": "Por página"},
+                          {"tag": "select", "attrs": {"class": "form-select", "name": "listSize"}, "children": [
+                            {"tag": "option", "attrs": {"value": "${choice.value}", "selected": "${choice.selected}"}, "text": "${choice.label}", "each": "filterListSizes", "as": "choice"}
+                          ] }
+                        ] },
+                        {"tag": "button", "attrs": {"class": "btn btn-primary", "type": "submit"}, "text": "Buscar"},
+                        {"tag": "a", "attrs": {"class": "btn btn-outline-secondary", "href": "mail?action=settings&section=filters&filterTab=${filterTab}"}, "text": "Limpiar"}
+                      ] },
+                      {"tag": "p", "if": "globalSpamEmpty", "attrs": {"class": "mail-empty text-muted"}, "text": "No hay remitentes bloqueados globalmente."},
+                      {"tag": "div", "if": "globalSpamAvailable", "attrs": {"class": "mail-admin-list"}, "children": [
+                        {"tag": "form", "each": "globalSpam", "as": "blocked", "attrs": {"class": "mail-admin-row mail-global-spam-row", "method": "post", "action": "${contextPath}/mail"}, "children": [
+                          {"tag": "input", "attrs": {"type": "hidden", "name": "csrf", "value": "${csrf}"}},
+                          {"tag": "input", "attrs": {"type": "hidden", "name": "listQuery", "value": "${filterListQuery}"}},
+                          {"tag": "input", "attrs": {"type": "hidden", "name": "listSize", "value": "${filterListSize}"}},
+                          {"tag": "input", "attrs": {"type": "hidden", "name": "listPage", "value": "${filterListPage}"}},
+                          {"tag": "input", "attrs": {"type": "hidden", "name": "id", "value": "${blocked.id}"}},
+                          {"tag": "div", "children": [
+                            {"tag": "small", "text": "${blocked.scope}"},
+                            {"tag": "strong", "text": "${blocked.value}"}
+                          ] },
+                          {"tag": "div", "children": [
+                            {"tag": "small", "text": "Agregado por ${blocked.actor}"},
+                            {"tag": "span", "text": "${blocked.date}"}
+                          ] },
+                          {"tag": "span", "attrs": {"class": "mail-admin-status"}, "text": "${blocked.status}"},
+                          {"tag": "button", "attrs": {"class": "btn btn-outline-danger btn-sm mail-global-spam-delete", "type": "submit", "name": "action", "value": "spamGlobalDelete"}, "text": "Desbloquear"}
+                        ] }
+                      ] },
+                      {"tag": "p", "if": "filterListEmpty", "attrs": {"class": "mail-empty text-muted"}, "text": "No se encontraron coincidencias. Prueba con otra búsqueda."},
+                      {"tag": "nav", "attrs": {"class": "mail-filter-pagination", "aria-label": "Páginas del listado"}, "children": [
+                        {"tag": "span", "attrs": {"role": "status"}, "text": "${filterListSummary}"},
+                        {"tag": "div", "children": [
+                          {"tag": "a", "if": "filterListHasPrevious", "attrs": {"class": "btn btn-outline-secondary btn-sm", "href": "${filterListPrevious}"}, "text": "Anterior"},
+                          {"tag": "a", "if": "filterListHasNext", "attrs": {"class": "btn btn-outline-secondary btn-sm", "href": "${filterListNext}"}, "text": "Siguiente"}
+                        ] }
+                      ] }
+                    ] },
+                    {"tag": "section", "if": "filterActivityView", "children": [
+                      {"tag": "h2", "attrs": {"class": "mail-filter-audit-title"}, "text": "Actividad reciente"},
+                      {"tag": "p", "if": "filterAuditEmpty", "attrs": {"class": "mail-empty text-muted"}, "text": "Todavía no hay mensajes procesados."},
+                      {"tag": "div", "attrs": {"class": "table-responsive"}, "children": [
+                        {"tag": "table", "attrs": {"class": "table table-sm mail-filter-audit"}, "children": [
+                          {"tag": "thead", "children": [
+                            {"tag": "tr", "children": [
+                              {"tag": "th", "text": "Fecha"},
+                              {"tag": "th", "text": "UID"},
+                              {"tag": "th", "text": "Regla"},
+                              {"tag": "th", "text": "Destino"},
+                              {"tag": "th", "text": "Estado"},
+                              {"tag": "th", "text": "Intento"},
+                              {"tag": "th", "text": "Detalle"}
+                            ] }
+                          ] },
+                          {"tag": "tbody", "children": [
+                            {"tag": "tr", "each": "filterAudit", "as": "row", "children": [
+                              {"tag": "td", "text": "${row.date}"},
+                              {"tag": "td", "text": "${row.uid}"},
+                              {"tag": "td", "text": "${row.rule}"},
+                              {"tag": "td", "text": "${row.destination}"},
+                              {"tag": "td", "text": "${row.status}"},
+                              {"tag": "td", "text": "${row.attempt}"},
+                              {"tag": "td", "text": "${row.detail}"}
                             ] }
                           ] }
                         ] }
                       ] }
-                    ]
-                  },
+                    ] }
+                  ] },
+
                   {
                     "tag": "section",
                     "if": "calendarView",
@@ -1785,7 +1917,7 @@
                                 { "tag": "span", "attrs": { "class": "mail-message-icon fas ${message.icon}", "aria-hidden": "true" } },
                                 { "tag": "div", "attrs": { "class": "mail-message-copy" }, "children": [
                                   { "tag": "div", "attrs": { "class": "mail-message-meta" }, "children": [
-                                    { "tag": "strong", "attrs": { "class": "mail-contact-source", "data-contact-email": "${message.contactEmail}", "aria-label": "${message.contactName}", "title": "Clic derecho para ver acciones" }, "text": "${message.from}" },
+                                    { "tag": "strong", "attrs": { "class": "mail-contact-source", "data-contact-email": "${message.contactEmail}", "aria-label": "${message.contactName}", "title": "${message.contactEmail}\nClick derecho para ver acciones" }, "text": "${message.from}" },
                                     { "tag": "time", "attrs": { "class": "text-muted" }, "text": "${message.sent}" },
                                     { "tag": "span", "attrs": { "class": "mail-message-state ${message.stateClass}" }, "text": "${message.state}" }
                                   ] },
@@ -1821,7 +1953,7 @@
                         "children": [
                           { "tag": "h1", "attrs": { "class": "mail-message-title" }, "text": "${subject}" },
                           { "tag": "dl", "attrs": { "class": "mail-headers" }, "children": [
-                            { "tag": "dt", "text": "De" }, { "tag": "dd", "attrs": { "class": "mail-contact-source", "data-contact-email": "${contactEmail}", "aria-label": "${contactName}", "title": "Clic derecho para ver acciones" }, "text": "${from}" },
+                            { "tag": "dt", "text": "De" }, { "tag": "dd", "attrs": { "class": "mail-contact-source", "data-contact-email": "${contactEmail}", "aria-label": "${contactName}", "title": "${contactEmail}\nClick derecho para ver acciones" }, "text": "${from}" },
                             { "tag": "dt", "text": "Para" }, { "tag": "dd", "text": "${to}" },
                             { "tag": "dt", "text": "CC" }, { "tag": "dd", "text": "${cc}" }
                           ] },

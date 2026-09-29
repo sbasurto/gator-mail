@@ -1777,6 +1777,7 @@ public final class MailServlet extends HttpServlet {
                 checked(mailDbCall("mail_fn_usuario_opciones_guardar", gson.toJson(value)));
                 response.sendRedirect("mail?action=settings&section=options");
             } else if (action.startsWith("spamGlobal")) {
+                String returnHref = filterReturn(request, "spam");
                 if ("spamGlobalDelete".equals(action)) {
                     value.addProperty("id", request.getParameter("id"));
                     checked(mailDbCall("mail_fn_admin_spam_eliminar", gson.toJson(value)));
@@ -1795,13 +1796,14 @@ public final class MailServlet extends HttpServlet {
                     session.setAttribute("mail.spam.global.notice", blocked.size()
                             + " remitente(s) marcado(s) como spam global. Se programó la revisión histórica.");
                 }
-                response.sendRedirect("mail?action=settings&section=filters");
+                response.sendRedirect(returnHref);
             } else if (action.startsWith("filter")) {
+                String returnHref = filterReturn(request, "rules");
                 if ("filterApply".equals(action)) {
                     checked(mailDbCall("mail_fn_filtros_aplicar", mailbox));
                     session.setAttribute("mail.filter.notice",
                             "Los filtros se aplicarán a los mensajes que ya están en Entrada.");
-                    response.sendRedirect("mail?action=settings&section=filters");
+                    response.sendRedirect(returnHref);
                     return true;
                 }
                 value.addProperty("mailbox", mailbox);
@@ -1833,7 +1835,7 @@ public final class MailServlet extends HttpServlet {
                                 "Filtro guardado y programado para revisar los mensajes existentes.");
                     }
                 }
-                response.sendRedirect("mail?action=settings&section=filters");
+                response.sendRedirect(returnHref);
             } else if (action.startsWith("user")) {
                 value.addProperty("user", request.getParameter("user"));
                 if ("userCreate".equals(action)) {
@@ -2087,6 +2089,15 @@ public final class MailServlet extends HttpServlet {
             String mailbox,
             List<ImapMailbox.FolderInfo> mailFolders) {
         String sender = filterSender(request.getParameter("sender"));
+        String tab = !sender.isBlank() ? "rules" : filterTab(request.getParameter("filterTab"));
+        if ("spam".equals(tab) && !Boolean.TRUE.equals(model.get("configurationAdminAvailable"))) tab = "rules";
+        model.put("filterRulesView", "rules".equals(tab));
+        model.put("filterSpamView", "spam".equals(tab));
+        model.put("filterActivityView", "activity".equals(tab));
+        model.put("filterTab", tab);
+        model.put("filterRulesTabClass", "rules".equals(tab) ? "active" : "");
+        model.put("filterSpamTabClass", "spam".equals(tab) ? "active" : "");
+        model.put("filterActivityTabClass", "activity".equals(tab) ? "active" : "");
         List<Map<String, Object>> destinations = mailFolders.stream()
                 .filter(folder -> !"INBOX".equalsIgnoreCase(folder.name()))
                 .map(folder -> Map.<String, Object>of("value", folder.name(), "label", folder.label()))
@@ -2113,6 +2124,7 @@ public final class MailServlet extends HttpServlet {
             item.put("priority", rule.get("priority").getAsInt());
             item.put("enabled", rule.get("enabled").getAsBoolean());
             item.put("value", rule.get("value").getAsString());
+            item.put("destination", rule.get("destination").getAsString());
             item.put("fields", filterFields(rule.get("field").getAsString()));
             item.put("operators", filterOperators(rule.get("operator").getAsString()));
             item.put("headers", filterHeaders(rule.get("header").getAsString()));
@@ -2122,6 +2134,11 @@ public final class MailServlet extends HttpServlet {
         model.put("filterRules", rules);
         model.put("filterRulesEmpty", rules.isEmpty());
         model.put("filterRulesAvailable", !rules.isEmpty());
+        if ("rules".equals(tab)) {
+            filterListModel(model, rules, request.getParameter("listQuery"), request.getParameter("listPage"),
+                    request.getParameter("listSize"), tab);
+            model.put("filterRules", model.get("filterList"));
+        }
         JsonObject state = result.getAsJsonObject("estado");
         model.put("filterStatus", filterStatus(state.get("status").getAsString()));
         model.put("filterHeartbeat", state.get("heartbeat").getAsString());
@@ -2139,7 +2156,7 @@ public final class MailServlet extends HttpServlet {
         }
         model.put("filterAudit", audit);
         model.put("filterAuditEmpty", audit.isEmpty());
-        if (Boolean.TRUE.equals(model.get("configurationAdminAvailable"))) {
+        if ("spam".equals(tab)) {
             JsonObject global = checked(mailDbCall("mail_fn_admin_spam", mailbox));
             List<Map<String, Object>> blocked = new ArrayList<>();
             for (JsonElement element : global.getAsJsonArray("reglas")) {
@@ -2154,7 +2171,52 @@ public final class MailServlet extends HttpServlet {
             model.put("globalSpam", blocked);
             model.put("globalSpamAvailable", !blocked.isEmpty());
             model.put("globalSpamEmpty", blocked.isEmpty());
+            filterListModel(model, blocked, request.getParameter("listQuery"), request.getParameter("listPage"),
+                    request.getParameter("listSize"), tab);
+            model.put("globalSpam", model.get("filterList"));
         }
+    }
+
+    private static String filterTab(String value) {
+        return "spam".equals(value) ? "spam" : "activity".equals(value) ? "activity" : "rules";
+    }
+
+    static void filterListModel(Map<String, Object> model, List<Map<String, Object>> rows,
+            String queryValue, String pageValue, String sizeValue, String tab) {
+        String query = searchQuery(queryValue);
+        int size = "25".equals(sizeValue) ? 25 : "50".equals(sizeValue) ? 50 : 10;
+        String term = query.toLowerCase(Locale.ROOT);
+        // ponytail: the existing DB functions return all rows; move search/count/limit to SQL if this becomes costly.
+        List<Map<String, Object>> matches = rows.stream().filter(row -> row.values().stream()
+                .filter(value -> value instanceof String || value instanceof Number)
+                .anyMatch(value -> value.toString().toLowerCase(Locale.ROOT).contains(term))).toList();
+        int pages = Math.max(1, (matches.size() + size - 1) / size);
+        int current = Math.min(page(pageValue), pages);
+        int start = (current - 1) * size;
+        int end = Math.min(start + size, matches.size());
+        model.put("filterList", matches.subList(start, end));
+        model.put("filterListQuery", query);
+        model.put("filterListPage", current);
+        model.put("filterListSize", size);
+        model.put("filterListSizes", choices(List.of(Map.entry("10", "10"), Map.entry("25", "25"),
+                Map.entry("50", "50")), String.valueOf(size)));
+        model.put("filterListEmpty", matches.isEmpty() && !rows.isEmpty());
+        model.put("filterListSummary", matches.isEmpty() ? "0 resultados"
+                : (start + 1) + "–" + end + " de " + matches.size() + " · Página " + current + " de " + pages);
+        model.put("filterListHasPrevious", current > 1);
+        model.put("filterListHasNext", current < pages);
+        String href = "mail?action=settings&section=filters&filterTab=" + filterTab(tab)
+                + "&listQuery=" + url(query) + "&listSize=" + size + "&listPage=";
+        model.put("filterListPrevious", href + Math.max(1, current - 1));
+        model.put("filterListNext", href + Math.min(pages, current + 1));
+    }
+
+    private static String filterReturn(HttpServletRequest request, String tab) {
+        return "mail?action=settings&section=filters&filterTab=" + filterTab(tab)
+                + "&listQuery=" + url(searchQuery(request.getParameter("listQuery")))
+                + "&listSize=" + ("25".equals(request.getParameter("listSize")) ? 25
+                    : "50".equals(request.getParameter("listSize")) ? 50 : 10)
+                + "&listPage=" + page(request.getParameter("listPage"));
     }
 
     private static String filterStatus(String status) {
