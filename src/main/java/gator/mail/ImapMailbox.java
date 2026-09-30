@@ -37,6 +37,9 @@ import java.util.logging.Logger;
 import javax.imageio.ImageIO;
 import org.eclipse.angus.mail.imap.IMAPFolder;
 import org.owasp.html.HtmlPolicyBuilder;
+import org.owasp.html.HtmlSanitizer;
+import org.owasp.html.HtmlStreamEventReceiverWrapper;
+import org.owasp.html.HtmlStreamRenderer;
 import org.owasp.html.PolicyFactory;
 import org.owasp.html.Sanitizers;
 import jakarta.mail.search.BodyTerm;
@@ -82,7 +85,7 @@ final class ImapMailbox {
     record Download(String name, byte[] data) { }
 
     record Mail(String from, String replyTo, String to, String cc, String subject, Instant sent, String body,
-            String plain, String originalHtml, boolean html,
+            String plain, String originalHtml, String headers, boolean html,
             List<Attachment> attachments, ICalendar.Invite invitation, boolean invitationTrusted) {
     }
 
@@ -254,10 +257,14 @@ final class ImapMailbox {
                     addresses(message.getRecipients(Message.RecipientType.TO)),
                     addresses(message.getRecipients(Message.RecipientType.CC)), text(message.getSubject(), "(Sin asunto)"),
                     message.getSentDate() == null ? Instant.EPOCH : message.getSentDate().toInstant(),
-                    body, parsed.plain, parsed.originalHtml, !parsed.html.isBlank(),
+                    body, parsed.plain, parsed.originalHtml, headers((MimeMessage) message), !parsed.originalHtml.isBlank(),
                     List.copyOf(parsed.attachments), parsed.invitation,
                     parsed.invitation != null && address(message.getFrom(), parsed.invitation.organizer()));
         }
+    }
+
+    static String headers(MimeMessage message) throws jakarta.mail.MessagingException {
+        return String.join("\r\n", java.util.Collections.list(message.getAllHeaderLines()));
     }
 
     Download download(String mailbox, String folderName, long uid, String path, String accessToken) throws Exception {
@@ -603,7 +610,7 @@ final class ImapMailbox {
     private static MimeMessage message(Session session, String mailbox, String recipients, String cc, String bcc,
             String subject, String markdown, String html, List<Upload> uploads, boolean draft) throws Exception {
         if (subject == null || subject.length() > 200 || subject.chars().anyMatch(Character::isISOControl)
-                || markdown == null || (!draft && markdown.isBlank()) || markdown.length() > 200_000)
+                || markdown == null || (!draft && markdown.isBlank()))
             throw new IllegalArgumentException("El asunto o el contenido no son válidos");
         InternetAddress[][] recipientsByType = draft ? new InternetAddress[][] {new InternetAddress[0],
                 new InternetAddress[0], new InternetAddress[0]} : validateRecipients(recipients, cc, bcc);
@@ -837,9 +844,8 @@ final class ImapMailbox {
     private static Parsed parse(jakarta.mail.Part part, boolean draft) throws Exception {
         Parsed parsed = new Parsed();
         parse(part, "", parsed, draft);
-        parsed.originalHtml = parsed.html;
+        parsed.originalHtml = inlineImages(parsed.html, parsed.images);
         parsed.html = sanitizeHtml(parsed.html);
-        parsed.plain = limited(parsed.plain);
         return parsed;
     }
 
@@ -876,9 +882,9 @@ final class ImapMailbox {
             return;
         }
         if (part.isMimeType("text/html") && parsed.html.isBlank())
-            parsed.html = limited(String.valueOf(part.getContent()));
+            parsed.html = String.valueOf(part.getContent());
         else if (part.isMimeType("text/plain") && parsed.plain.isBlank())
-            parsed.plain = limited(String.valueOf(part.getContent()));
+            parsed.plain = String.valueOf(part.getContent());
     }
 
     private static jakarta.mail.Part part(jakarta.mail.Part root, String path) throws Exception {
@@ -902,10 +908,24 @@ final class ImapMailbox {
 
     private static String inlineImages(String html, List<InlineImage> images) {
         String result = html;
+        int replacements = 0;
+        int embeddedChars = 0;
         for (InlineImage image : images) {
-            String source = "cid:" + image.cid();
             String embedded = "data:" + image.type() + ";base64," + Base64.getEncoder().encodeToString(image.data());
-            result = result.replace("src=\"" + source + "\"", "src=\"" + embedded + "\"");
+            var matcher = java.util.regex.Pattern.compile("(?i:cid:)" + java.util.regex.Pattern.quote(image.cid())
+                    + "(?=[\"'\\s)<>]|$)").matcher(result);
+            StringBuilder bounded = new StringBuilder();
+            while (matcher.find()) {
+                String replacement = "";
+                if (replacements < 40 && embedded.length() <= 20_000_000 - embeddedChars) {
+                    replacement = embedded;
+                    replacements++;
+                    embeddedChars += embedded.length();
+                }
+                matcher.appendReplacement(bounded, java.util.regex.Matcher.quoteReplacement(replacement));
+            }
+            matcher.appendTail(bounded);
+            result = bounded.toString();
         }
         return result;
     }
@@ -963,13 +983,44 @@ final class ImapMailbox {
         return properties;
     }
 
-    private static String limited(String value) {
-        return value.length() <= 200_000 ? value : value.substring(0, 200_000);
-    }
-
     static String sanitizeHtml(String value) {
         // Keep CID references comparable when reusing saved inline images.
-        return limited(HTML.sanitize(limited(value))).replace("&#64;", "@");
+        return HTML.sanitize(value).replace("&#64;", "@");
+    }
+
+    static String composeHtml(String value, List<Upload> uploads) {
+        StringBuilder result = new StringBuilder();
+        HtmlSanitizer.sanitize(value, HTML.apply(HtmlStreamRenderer.create(result, ignored -> { })),
+                receiver -> new HtmlStreamEventReceiverWrapper(receiver) {
+                    @Override public void openTag(String name, List<String> attributes) {
+                        if ("img".equals(name)) {
+                            attributes = new ArrayList<>(attributes);
+                            for (int i = 0; i + 1 < attributes.size(); i += 2) {
+                                String source = attributes.get(i + 1);
+                                if (!"src".equals(attributes.get(i)) || !source.regionMatches(true, 0, "data:", 0, 5)) continue;
+                                int comma = source.indexOf(',');
+                                String header = comma < 0 ? "" : source.substring(5, comma).toLowerCase(java.util.Locale.ROOT);
+                                if (!List.of("image/png;base64", "image/jpeg;base64", "image/gif;base64").contains(header))
+                                    throw new IllegalArgumentException("La imagen incrustada debe ser PNG, JPG o GIF");
+                                byte[] data;
+                                String encoded = source.substring(comma + 1).replaceAll("\\s", "");
+                                if (uploads.size() >= 10 || encoded.length() > 4 * ((MAX_FILE_BYTES + 2) / 3))
+                                    throw new IllegalArgumentException("Máximo 10 archivos y 25 MB en total");
+                                try { data = Base64.getDecoder().decode(encoded); }
+                                catch (IllegalArgumentException invalid) { throw new IllegalArgumentException("La imagen incrustada no es válida", invalid); }
+                                String type = header.substring(0, header.indexOf(';'));
+                                if (uploads.size() >= 10 || uploads.stream().mapToLong(upload -> upload.data().length).sum() + data.length > MAX_FILE_BYTES)
+                                    throw new IllegalArgumentException("Máximo 10 archivos y 25 MB en total");
+                                if (!safeImage(type, data)) throw new IllegalArgumentException("La imagen incrustada no es válida");
+                                int index = (int) uploads.stream().filter(Upload::inline).count();
+                                uploads.add(new Upload("imagen-" + (index + 1) + "." + type.substring(6), type, data, true));
+                                attributes.set(i + 1, "cid:" + inlineCid(index));
+                            }
+                        }
+                        super.openTag(name, attributes);
+                    }
+                });
+        return result.toString().replace("&#64;", "@");
     }
 
     private static String text(String value, String fallback) {

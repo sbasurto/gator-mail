@@ -47,6 +47,8 @@ final class GatorUserStorageProvider implements UserStorageProvider, UserLookupP
 
     @Override
     public UserModel getUserByUsername(RealmModel realm, String username) {
+        if (model.get("literalUsernames", false))
+            return adapter(realm, find("u.usuario_id = ?", username));
         return adapter(realm, username != null && username.contains("@")
                 ? findByEmail(username) : find("lower(u.usuario_id) = lower(?)", username));
     }
@@ -110,7 +112,8 @@ final class GatorUserStorageProvider implements UserStorageProvider, UserLookupP
     }
     @Override public boolean isValid(RealmModel realm, UserModel user, CredentialInput input) {
         if (!supportsCredentialType(input.getType()) || !(input instanceof UserCredentialModel credential)) return false;
-        Account account = loaded.computeIfAbsent(user.getUsername(), key -> find("lower(u.usuario_id) = lower(?)", key));
+        Account account = loaded.computeIfAbsent(user.getUsername(), key -> find(
+                model.get("literalUsernames", false) ? "u.usuario_id = ?" : "lower(u.usuario_id) = lower(?)", key));
         return account != null && account.enabled()
                 && GatorPassword.matches(credential.getValue(), account.salt(), account.iterations(), account.hash());
     }
@@ -166,7 +169,11 @@ final class GatorUserStorageProvider implements UserStorageProvider, UserLookupP
         }
     }
 
-    private static String required(String name) {
+    private String required(String name) {
+        String prefix = model.get("connectionEnvironmentPrefix", "GATOR_IDP");
+        if (!prefix.matches("[A-Z][A-Z0-9_]*"))
+            throw new IllegalArgumentException("Invalid connection environment prefix");
+        name = prefix + name.substring("GATOR_IDP".length());
         String value = System.getenv(name);
         if (value == null || value.isBlank()) throw new IllegalStateException("Falta configurar " + name);
         return value;

@@ -16,7 +16,7 @@
           { "tag": "link", "attrs": { "rel": "stylesheet", "href": "/elib/css2/sweetalert2.min.css?v=11.23.0" } },
           { "tag": "link", "attrs": { "rel": "stylesheet", "href": "${contextPath}/css/gator-mail.css?v=55" } },
           { "tag": "script", "attrs": { "src": "/elib/js/sweetalert2.all.min.js", "defer": "true" } },
-          { "tag": "script", "attrs": { "src": "${contextPath}/js/gator-mail.js?v=35", "defer": "true" } }
+          { "tag": "script", "attrs": { "src": "${contextPath}/js/gator-mail.js?v=36", "defer": "true" } }
         ]
       },
       {
@@ -1957,6 +1957,10 @@
                             { "tag": "dt", "text": "Para" }, { "tag": "dd", "text": "${to}" },
                             { "tag": "dt", "text": "CC" }, { "tag": "dd", "text": "${cc}" }
                           ] },
+                          { "tag": "details", "attrs": { "class": "mb-3", "id": "mail-message-headers" }, "children": [
+                            { "tag": "summary", "attrs": { "class": "btn btn-sm btn-outline-secondary" }, "text": "Ver encabezados" },
+                            { "tag": "pre", "attrs": { "class": "mail-body" }, "text": "${messageHeaders}" }
+                          ] },
                           { "tag": "nav", "attrs": { "class": "mail-message-actions", "aria-label": "Acciones del mensaje" }, "children": [
                             { "tag": "a", "attrs": { "class": "btn btn-sm btn-outline-primary", "href": "${replyHref}" }, "children": [
                               { "tag": "span", "attrs": { "class": "fas fa-reply", "aria-hidden": "true" } }, { "tag": "span", "text": "Responder" }
@@ -2026,7 +2030,7 @@
                             ] }
                           ] },
                           { "tag": "pre", "if": "mailText", "attrs": { "class": "mail-body" }, "text": "${body}" },
-                          { "tag": "iframe", "if": "mailHtml", "attrs": { "class": "mail-html-body", "sandbox": "allow-popups allow-popups-to-escape-sandbox", "referrerpolicy": "no-referrer", "title": "Contenido HTML del correo", "srcdoc": "${body}" } },
+                          { "tag": "iframe", "if": "mailHtml", "attrs": { "class": "mail-html-body", "sandbox": "allow-popups allow-popups-to-escape-sandbox", "referrerpolicy": "no-referrer", "title": "Contenido HTML del correo", "src": "${htmlContentHref}" } },
                           { "tag": "details", "if": "originalHtmlAvailable", "attrs": { "class": "mt-3" }, "children": [
                             { "tag": "summary", "attrs": { "class": "btn btn-sm btn-outline-secondary" }, "text": "Ver HTML original" },
                             { "tag": "pre", "attrs": { "class": "mail-body" }, "text": "${originalHtml}" }

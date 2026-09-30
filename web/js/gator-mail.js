@@ -553,6 +553,8 @@
     const composeData = action => {
         if (format?.value === "html") syncHtml();
         const data = new FormData(composeForm);
+        // File parts avoid Tomcat's form-field size limit for the message body.
+        data.set("body", new Blob([data.get("body") || ""], {type: "text/plain;charset=UTF-8"}), "body.txt");
         data.set("action", action);
         return data;
     };

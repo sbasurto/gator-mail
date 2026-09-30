@@ -49,7 +49,7 @@ import java.util.concurrent.TimeUnit;
 import org.commonmark.parser.Parser;
 import org.commonmark.renderer.html.HtmlRenderer;
 
-@MultipartConfig(fileSizeThreshold = 1_048_576, maxFileSize = 26_214_400, maxRequestSize = 31_457_280)
+@MultipartConfig(fileSizeThreshold = 1_048_576)
 public final class MailServlet extends HttpServlet {
     private static final long CODE_LIFETIME_MS = 300_000;
     private static final long RESEND_WAIT_MS = 30_000;
@@ -70,6 +70,7 @@ public final class MailServlet extends HttpServlet {
     private static final Parser MARKDOWN = Parser.builder().build();
     private static final HtmlRenderer MARKDOWN_HTML = HtmlRenderer.builder().build();
     private static final SecureRandom RANDOM = new SecureRandom();
+    private static final byte[] IMAGE_KEY = RANDOM.generateSeed(32);
     private static final List<Map.Entry<String, String>> FILTER_HEADERS = List.of(
             Map.entry("From", "Remitente"),
             Map.entry("To", "Destinatario"),
@@ -109,6 +110,7 @@ public final class MailServlet extends HttpServlet {
     private void process(HttpServletRequest request, HttpServletResponse response) throws IOException {
         request.setCharacterEncoding(StandardCharsets.UTF_8);
         prepare(response);
+        if (mailImage(request, response)) return;
         HttpSession session = request.getSession(false);
         if (session == null || session.getAttribute("oidc.user") == null) {
             if (jsonRequest(request)) response.sendError(HttpServletResponse.SC_UNAUTHORIZED);
@@ -159,6 +161,8 @@ public final class MailServlet extends HttpServlet {
             } else if (saveDraft(request, response, session, mailbox, OAuthServlet.accessToken(request))) {
                 return;
             } else if (printMessage(request, response, mailbox, OAuthServlet.accessToken(request))) {
+                return;
+            } else if (htmlContent(request, response, mailbox, OAuthServlet.accessToken(request))) {
                 return;
             } else if (downloadAttachment(request, response, mailbox, OAuthServlet.accessToken(request))) {
                 return;
@@ -969,11 +973,13 @@ public final class MailServlet extends HttpServlet {
             model.put("to", mail.to());
             model.put("cc", mail.cc());
             model.put("sent", DATE.format(mail.sent()));
-            model.put("body", mail.html() ? htmlDocument(request.getContextPath(), mail.body()) : mail.body());
+            model.put("body", mail.body());
+            model.put("htmlContentHref", "mail?action=htmlContent&folder=" + url(folderName) + "&uid=" + uid);
             model.put("mailHtml", mail.html());
             model.put("mailText", !mail.html());
             model.put("originalHtmlAvailable", !mail.originalHtml().isBlank());
             model.put("originalHtml", mail.originalHtml());
+            model.put("messageHeaders", mail.headers());
             markRead(mailbox, folderName, Long.parseLong(uid));
             List<Map<String, Object>> attachments = new ArrayList<>();
             for (ImapMailbox.Attachment attachment : mail.attachments()) attachments.add(Map.of(
@@ -1217,17 +1223,18 @@ public final class MailServlet extends HttpServlet {
             response.sendError(HttpServletResponse.SC_FORBIDDEN);
             return true;
         }
-        String raw = request.getParameter("body");
-        MessageBody body = raw == null || raw.isBlank() ? new MessageBody("", "")
-                : messageBody(raw, request.getParameter("format"));
+        String raw = requestBody(request);
         String drafts;
         synchronized (composeLocks.computeIfAbsent(mailbox, key -> new Object())) {
             String id = ImapMailbox.draftId(request.getParameter("draftId"));
             if (Boolean.TRUE.equals(session.getAttribute("mail.sent." + id)))
                 throw new IllegalArgumentException("Este borrador ya fue enviado");
+            List<ImapMailbox.Upload> files = uploads(request, mailbox, accessToken);
+            MessageBody body = raw == null || raw.isBlank() ? new MessageBody("", "")
+                    : messageBody(raw, request.getParameter("format"), files);
             drafts = imap.saveDraft(mailbox, id, request.getParameter("to"),
                     request.getParameter("cc"), request.getParameter("bcc"), request.getParameter("subject"),
-                    body.plain(), body.html(), uploads(request, mailbox, accessToken),
+                    body.plain(), body.html(), files,
                     request.getParameter("includeSignature") != null, accessToken);
         }
         // Cache refresh must not turn a successful save into an apparent failure.
@@ -1244,13 +1251,13 @@ public final class MailServlet extends HttpServlet {
             response.sendError(HttpServletResponse.SC_FORBIDDEN);
             return true;
         }
-        MessageBody body = messageBody(request.getParameter("body"), request.getParameter("format"));
         String id = ImapMailbox.draftId(request.getParameter("draftId"));
         String folder;
         synchronized (composeLocks.computeIfAbsent(mailbox, key -> new Object())) {
             if (Boolean.TRUE.equals(session.getAttribute("mail.sent." + id)))
                 throw new IllegalArgumentException("Este borrador ya fue enviado");
             List<ImapMailbox.Upload> files = uploads(request, mailbox, accessToken);
+            MessageBody body = messageBody(requestBody(request), request.getParameter("format"), files);
             imap.saveDraft(mailbox, id, request.getParameter("to"), request.getParameter("cc"),
                     request.getParameter("bcc"), request.getParameter("subject"), body.plain(), body.html(), files,
                     request.getParameter("includeSignature") != null, accessToken);
@@ -1367,12 +1374,25 @@ public final class MailServlet extends HttpServlet {
 
     record MessageBody(String plain, String html) { }
 
+    static String requestBody(HttpServletRequest request) throws Exception {
+        String body = request.getParameter("body");
+        if (body != null || request.getContentType() == null
+                || !request.getContentType().toLowerCase(Locale.ROOT).startsWith("multipart/form-data")) return body;
+        Part part = request.getPart("body");
+        if (part == null) return null;
+        try (var input = part.getInputStream()) { return new String(input.readAllBytes(), StandardCharsets.UTF_8); }
+    }
+
     static MessageBody messageBody(String body, String format) {
+        return messageBody(body, format, new ArrayList<>());
+    }
+
+    static MessageBody messageBody(String body, String format, List<ImapMailbox.Upload> uploads) {
         String value = body == null ? "" : body;
-        if (value.isBlank() || value.length() > 200_000)
+        if (value.isBlank())
             throw new IllegalArgumentException("El contenido no es válido");
         if ("html".equals(format)) {
-            String html = ImapMailbox.sanitizeHtml(value);
+            String html = ImapMailbox.composeHtml(value, uploads);
             if (html.isBlank()) throw new IllegalArgumentException("El contenido HTML no es válido");
             String plain = html.replaceAll("(?i)<br\\s*/?>", "\n").replaceAll("(?i)</p\\s*>", "\n")
                     .replaceAll("<[^>]+>", "").replace("&nbsp;", " ").replace("&amp;", "&")
@@ -1488,11 +1508,103 @@ public final class MailServlet extends HttpServlet {
         return new ImapMailbox.Upload(name, inline ? type : "application/octet-stream", data, inline);
     }
 
-    static String htmlDocument(String contextPath, String body) {
-        return "<!doctype html><html><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
-                + "<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; style-src 'self' 'unsafe-inline'; img-src data:\">"
-                + "<link rel=\"stylesheet\" href=\"" + contextPath + "/css/mail-content.css?v=1\"></head>"
-                + "<body class=\"gator-email\">" + body + "</body></html>";
+    private boolean htmlContent(HttpServletRequest request, HttpServletResponse response, String mailbox,
+            String accessToken) throws Exception {
+        if (!"htmlContent".equals(request.getParameter("action"))) return false;
+        String uid = request.getParameter("uid");
+        if (!"GET".equals(request.getMethod()) || uid == null || !uid.matches("[0-9]{1,18}"))
+            throw new IllegalArgumentException("Mensaje inválido");
+        ImapMailbox.Mail mail = imap.read(mailbox, request.getParameter("folder"), Long.parseLong(uid), accessToken);
+        if (mail == null) throw new IllegalArgumentException("Mensaje inexistente");
+        Map<String, String> images = new HashMap<>();
+        int[] embeddedBytes = {0};
+        String original = !mail.html() ? "<pre>" + htmlText(mail.body()) + "</pre>"
+                : mail.originalHtml().isBlank() ? mail.body() : mail.originalHtml();
+        String content = MailHtml.render(original, source -> {
+            if (images.containsKey(source)) return images.get(source);
+            if (images.size() >= 40) return "";
+            String safe = imageSource(request.getContextPath(), source);
+            if (safe.startsWith("data:")) {
+                embeddedBytes[0] += safe.length();
+                if (embeddedBytes[0] > 20_000_000) safe = "";
+            }
+            images.put(source, safe);
+            return safe;
+        });
+        prepareHtmlContent(response);
+        response.getWriter().print(content);
+        return true;
+    }
+
+    static void prepareHtmlContent(HttpServletResponse response) {
+        response.reset();
+        response.setContentType("text/html;charset=UTF-8");
+        response.setHeader("Cache-Control", "private, no-store");
+        response.setHeader("X-Content-Type-Options", "nosniff");
+        response.setHeader("Referrer-Policy", "no-referrer");
+        response.setHeader("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; "
+                + "img-src 'self' data:; script-src 'none'; form-action 'none'; base-uri 'none'; "
+                + "frame-ancestors 'self'; sandbox allow-popups allow-popups-to-escape-sandbox");
+    }
+
+    static String imageSource(String contextPath, String source) {
+        try {
+            if (source.regionMatches(true, 0, "data:image/", 0, 11)) {
+                int comma = source.indexOf(',');
+                if (source.length() > 7_000_000 || comma < 0 || !source.substring(0, comma).endsWith(";base64")) return "";
+                byte[] image = MailImages.png(Base64.getDecoder().decode(source.substring(comma + 1).replaceAll("\\s", "")));
+                return "data:image/png;base64," + Base64.getEncoder().encodeToString(image);
+            }
+            if (source.startsWith("//")) source = "https:" + source;
+            URI uri = URI.create(source);
+            if (source.length() > 4096 || uri.getHost() == null || uri.getUserInfo() != null
+                    || !("https".equalsIgnoreCase(uri.getScheme()) || "http".equalsIgnoreCase(uri.getScheme()))) return "";
+            long expires = System.currentTimeMillis() / 1000 + 600;
+            return contextPath + "/mail?action=mailImage&source=" + url(source) + "&expires=" + expires
+                    + "&signature=" + imageSignature(source, expires);
+        } catch (IllegalArgumentException | IOException invalid) { return ""; }
+    }
+
+    private static String imageSignature(String source, long expires) {
+        try {
+            var mac = javax.crypto.Mac.getInstance("HmacSHA256");
+            mac.init(new javax.crypto.spec.SecretKeySpec(IMAGE_KEY, "HmacSHA256"));
+            return Base64.getUrlEncoder().withoutPadding().encodeToString(
+                    mac.doFinal((expires + "\n" + source).getBytes(StandardCharsets.UTF_8)));
+        } catch (java.security.GeneralSecurityException impossible) { throw new IllegalStateException(impossible); }
+    }
+
+    static boolean validImageLink(String source, String expiry, String signature) {
+        if (source == null || source.length() > 4096 || expiry == null || signature == null) return false;
+        try {
+            long expires = Long.parseLong(expiry);
+            long now = System.currentTimeMillis() / 1000;
+            return expires >= now && expires <= now + 600 && java.security.MessageDigest.isEqual(
+                    imageSignature(source, expires).getBytes(StandardCharsets.UTF_8), signature.getBytes(StandardCharsets.UTF_8));
+        } catch (NumberFormatException invalid) { return false; }
+    }
+
+    private static boolean mailImage(HttpServletRequest request, HttpServletResponse response) throws IOException {
+        if (!"mailImage".equals(request.getParameter("action"))) return false;
+        // The isolated frame has no session cookies. A short-lived signature authorizes only this image URL.
+        if (!"GET".equals(request.getMethod()) || !validImageLink(request.getParameter("source"),
+                request.getParameter("expires"), request.getParameter("signature"))) {
+            response.sendError(HttpServletResponse.SC_FORBIDDEN);
+            return true;
+        }
+        try {
+            byte[] png = MailImages.fetch(request.getParameter("source"));
+            response.reset();
+            response.setContentType("image/png");
+            response.setHeader("Cache-Control", "private, max-age=600");
+            response.setHeader("X-Content-Type-Options", "nosniff");
+            response.setHeader("Content-Security-Policy", "default-src 'none'; sandbox");
+            response.setContentLength(png.length);
+            response.getOutputStream().write(png);
+        } catch (IOException | IllegalArgumentException unavailable) {
+            response.sendError(HttpServletResponse.SC_NOT_FOUND);
+        }
+        return true;
     }
 
     private boolean manageFolders(HttpServletRequest request, HttpServletResponse response, HttpSession session,

@@ -13,6 +13,8 @@ import java.util.Map;
 public final class AccessCodeSelfCheck {
     public static void main(String[] args) throws Exception {
         LogoutSelfCheck.run();
+        MailImagesSelfCheck.run();
+        MailHtmlSelfCheck.run();
         Map<String, Object> listing = new HashMap<>();
         var records = java.util.stream.IntStream.rangeClosed(1, 26)
                 .mapToObj(i -> Map.<String, Object>of("value", "Dominio " + i)).toList();
@@ -27,6 +29,14 @@ public final class AccessCodeSelfCheck {
         assert listing.get("filterListSummary").equals("0 resultados");
         MailServlet.filterListModel(listing, records, "Dominio 26", "1", "50", "spam");
         assert ((List<?>) listing.get("filterList")).equals(List.of(records.getLast()));
+        String rawHeaders = "Received: from relay.example\r\n\tby mail.example\r\n"
+                + "Received: from sender.example\r\nFrom: <sender@example.com>\r\n"
+                + "X-Untrusted: <script>alert('header')</script>";
+        var headerMessage = new jakarta.mail.internet.MimeMessage(
+                jakarta.mail.Session.getInstance(new java.util.Properties()),
+                new java.io.ByteArrayInputStream((rawHeaders + "\r\n\r\nPrivate body")
+                        .getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+        assert ImapMailbox.headers(headerMessage).equals(rawHeaders);
         try {
             OAuthServlet.tokenResponse(400, "{\"error\":\"invalid_grant\"}");
             throw new AssertionError("Se aceptó un refresh token vencido");
@@ -65,6 +75,58 @@ public final class AccessCodeSelfCheck {
         } catch (IllegalArgumentException expected) { }
 
         SignatureSelfCheck.run();
+        String multipartBody = "Texto íntegro áéíóú ".repeat(150_000);
+        var bodyPart = (jakarta.servlet.http.Part) java.lang.reflect.Proxy.newProxyInstance(
+                AccessCodeSelfCheck.class.getClassLoader(), new Class<?>[]{jakarta.servlet.http.Part.class},
+                (proxy, method, arguments) -> method.getName().equals("getInputStream")
+                        ? new java.io.ByteArrayInputStream(multipartBody.getBytes(java.nio.charset.StandardCharsets.UTF_8)) : null);
+        for (boolean multipart : List.of(false, true)) {
+            var bodyRequest = (jakarta.servlet.http.HttpServletRequest) java.lang.reflect.Proxy.newProxyInstance(
+                    AccessCodeSelfCheck.class.getClassLoader(), new Class<?>[]{jakarta.servlet.http.HttpServletRequest.class},
+                    (proxy, method, arguments) -> switch (method.getName()) {
+                        case "getParameter" -> multipart ? null : multipartBody;
+                        case "getContentType" -> "multipart/form-data; boundary=test";
+                        case "getPart" -> bodyPart;
+                        default -> null;
+                    });
+            assert MailServlet.requestBody(bodyRequest).equals(multipartBody);
+        }
+        String longText = "Contenido extenso ".repeat(15_000) + "FINAL_COMPLETO";
+        for (String format : List.of("markdown", "html")) {
+            var body = MailServlet.messageBody(format.equals("html") ? "<p>" + longText + "</p>" : longText, format);
+            assert body.plain().endsWith("FINAL_COMPLETO");
+            assert body.html().contains("FINAL_COMPLETO");
+            var longDraft = ImapMailbox.draftMessage("one@example.com", draftId, "ana@example.com", "", "",
+                    "Correo extenso", body.plain(), body.html(), List.of());
+            assert ImapMailbox.draftData(longDraft).get("body").getAsString().contains("FINAL_COMPLETO");
+        }
+        var pastedImage = new java.awt.image.BufferedImage(320, 320, java.awt.image.BufferedImage.TYPE_INT_RGB);
+        var pixels = new java.util.Random(42);
+        for (int y = 0; y < pastedImage.getHeight(); y++)
+            for (int x = 0; x < pastedImage.getWidth(); x++) pastedImage.setRGB(x, y, pixels.nextInt());
+        var imageBytes = new java.io.ByteArrayOutputStream();
+        javax.imageio.ImageIO.write(pastedImage, "png", imageBytes);
+        String pastedHtml = "<p>Inicio</p><img src='data:image/png;base64,"
+                + Base64.getEncoder().encodeToString(imageBytes.toByteArray()) + "' onerror='alert(1)'><p>Final</p>";
+        assert pastedHtml.length() > 200_000;
+        var pastedUploads = new java.util.ArrayList<ImapMailbox.Upload>();
+        pastedUploads.add(new ImapMailbox.Upload("existente.png", "image/png", draftImage, true));
+        var pastedBody = MailServlet.messageBody(pastedHtml, "html", pastedUploads);
+        assert pastedBody.html().contains("cid:inline-2@gator-mail");
+        assert pastedBody.html().contains("Final") && !pastedBody.html().contains("onerror");
+        assert !pastedBody.html().contains("data:");
+        assert pastedUploads.size() == 2 && pastedUploads.get(1).inline();
+        var pastedDraft = ImapMailbox.draftMessage("one@example.com", draftId, "ana@example.com", "", "",
+                "Imagen pegada", pastedBody.plain(), pastedBody.html(), pastedUploads);
+        var restoredPasted = ImapMailbox.draftData(pastedDraft);
+        assert Arrays.equals(imageBytes.toByteArray(), Base64.getDecoder().decode(
+                restoredPasted.getAsJsonArray("uploads").get(1).getAsJsonObject().get("data").getAsString()));
+        for (String invalidImage : List.of("data:image/svg+xml;base64,PHN2Zy8+", "data:image/png;base64,AAAA")) {
+            try {
+                MailServlet.messageBody("<img src='" + invalidImage + "'>", "html");
+                throw new AssertionError("Se aceptó una imagen incrustada inválida");
+            } catch (IllegalArgumentException expected) { }
+        }
         ImapMailbox.validateRecipients("\"Apellido, Nombre\" <uno@example.com>, dos@example.com", "", null);
         for (String bad : List.of("uno@@example.com", "sin-dominio")) {
             for (String field : List.of("Para", "CC", "CCO")) {
@@ -299,6 +361,8 @@ public final class AccessCodeSelfCheck {
         model.put("filterNoticeMessage", "Filtros programados");
         model.put("body", "<script>parent.alert('bad')</script>");
         model.put("originalHtml", "<script>alert('original')</script><p>Hola</p>");
+        model.put("htmlContentHref", "mail?action=htmlContent&folder=INBOX&uid=1");
+        model.put("messageHeaders", ImapMailbox.headers(headerMessage));
         model.put("contextPath", "/gator-mail");
         model.put("layoutClass", "mail-workspace");
         model.put("contentClass", "mail-content");
@@ -476,7 +540,7 @@ public final class AccessCodeSelfCheck {
             assert html.contains("Sesión cerrada");
             assert html.contains("/gator-mail/css/gator-mail.css?v=55");
             assert html.contains("/elib/js/sweetalert2.all.min.js");
-            assert html.contains("/gator-mail/js/gator-mail.js?v=35");
+            assert html.contains("/gator-mail/js/gator-mail.js?v=36");
             assert html.contains("spinner-border");
             assert html.contains("mail-mobile-status");
             assert html.contains("name=\"format\" value=\"json\"");
@@ -490,7 +554,8 @@ public final class AccessCodeSelfCheck {
             assert html.contains("pattern=\"[A-Za-z0-9]{8,12}\"");
             assert html.contains("maxlength=\"12\"");
             assert html.contains("sandbox=\"allow-popups allow-popups-to-escape-sandbox\"");
-            assert html.contains("srcdoc=\"&lt;script&gt;parent.alert(&#39;bad&#39;)&lt;/script&gt;\"");
+            assert html.contains("src=\"mail?action=htmlContent&amp;folder=INBOX&amp;uid=1\"");
+            assert !html.contains("srcdoc=");
             assert html.contains("Ver HTML original");
             assert html.contains(">Crear filtro</span>");
             assert html.contains("&lt;script&gt;alert(&#39;original&#39;)&lt;/script&gt;&lt;p&gt;Hola&lt;/p&gt;");
@@ -651,6 +716,13 @@ public final class AccessCodeSelfCheck {
             assert html.contains("id=\"mail-list-panel\"");
             assert html.contains("id=\"mail-bulk-form\" method=\"post\" action=\"/gator-mail/mail\"");
             assert html.contains("id=\"mail-reader-panel\"");
+            assert html.contains("Ver encabezados");
+            assert html.contains("id=\"mail-message-headers\"");
+            assert html.contains("Received: from relay.example");
+            assert html.contains("Received: from sender.example");
+            assert html.contains("&lt;script&gt;alert(");
+            assert !html.contains("<script>alert('header')</script>");
+            assert !html.contains("Private body");
             assert html.contains("id=\"mail-account-key\"");
             if (args.length == 1) writeUiFixtures(model, java.nio.file.Path.of(args[0]));
             model.put("eventFormView", false);
@@ -702,14 +774,14 @@ public final class AccessCodeSelfCheck {
         } catch (Exception error) {
             throw new AssertionError(error);
         }
-        String document = MailServlet.htmlDocument("/gator-mail", "<p>Hola</p>");
         Map<String, String> responseHeaders = new java.util.HashMap<>();
-        MailServlet.prepare((jakarta.servlet.http.HttpServletResponse) java.lang.reflect.Proxy.newProxyInstance(
+        var testResponse = (jakarta.servlet.http.HttpServletResponse) java.lang.reflect.Proxy.newProxyInstance(
                 AccessCodeSelfCheck.class.getClassLoader(), new Class<?>[]{jakarta.servlet.http.HttpServletResponse.class},
                 (proxy, method, values) -> {
                     if (method.getName().equals("setHeader")) responseHeaders.put((String) values[0], (String) values[1]);
                     return null;
-                }));
+                });
+        MailServlet.prepare(testResponse);
         Map<String, List<String>> policy = new java.util.HashMap<>();
         for (String directive : responseHeaders.get("Content-Security-Policy").split(";")) {
             List<String> tokens = List.of(directive.trim().split("\\s+"));
@@ -719,12 +791,29 @@ public final class AccessCodeSelfCheck {
                 : "El lector hereda una CSP que bloquea las firmas incrustadas";
         assert policy.get("default-src").equals(List.of("'self'"));
         assert policy.get("script-src").equals(List.of("'self'"));
-        assert document.contains("/gator-mail/css/mail-content.css?v=1");
-        assert document.contains("style-src 'self' 'unsafe-inline'");
+        MailServlet.prepareHtmlContent(testResponse);
+        String contentPolicy = responseHeaders.get("Content-Security-Policy");
+        assert contentPolicy.contains("style-src 'unsafe-inline'");
+        assert contentPolicy.contains("img-src 'self' data:");
+        assert contentPolicy.contains("script-src 'none'") && contentPolicy.contains("form-action 'none'");
+        assert contentPolicy.contains("sandbox") && !contentPolicy.contains("allow-same-origin");
+        assert responseHeaders.get("Referrer-Policy").equals("no-referrer");
+        String source = "https://images.example/banner.png?token=a&b=c";
+        String imageLink = MailServlet.imageSource("/gator-mail", source);
+        Map<String, String> imageParameters = new HashMap<>();
+        for (String parameter : java.net.URI.create(imageLink).getRawQuery().split("&")) {
+            String[] pair = parameter.split("=", 2);
+            imageParameters.put(pair[0], java.net.URLDecoder.decode(pair[1], java.nio.charset.StandardCharsets.UTF_8));
+        }
+        assert MailServlet.validImageLink(source, imageParameters.get("expires"), imageParameters.get("signature"));
+        assert !MailServlet.validImageLink(source + "x", imageParameters.get("expires"), imageParameters.get("signature"));
+        assert !MailServlet.validImageLink(source, "0", imageParameters.get("signature"));
+        assert MailServlet.imageSource("/gator-mail", "javascript:alert(1)").isEmpty();
+        assert MailServlet.imageSource("/gator-mail", "data:image/svg+xml;base64,PHN2Zy8+").isEmpty();
         String print = MailServlet.printDocument("/gator-mail", new ImapMailbox.Mail(
                 "autor@example.com", "autor@example.com", "destino@example.com", "copia@example.com",
                 "Asunto de impresión", Instant.parse("2026-08-05T15:00:00Z"),
-                "<p style=\"color:#123456\">Contenido completo</p>", "Contenido completo", "", true,
+                "<p style=\"color:#123456\">Contenido completo</p>", "Contenido completo", "", "", true,
                 List.of(new ImapMailbox.Attachment("2", "documento.pdf", "application/pdf", 1024)), null, false));
         assert print.contains("Asunto de impresión");
         assert print.contains("autor@example.com");
@@ -733,11 +822,10 @@ public final class AccessCodeSelfCheck {
         assert print.contains("Contenido completo");
         assert print.contains("documento.pdf");
         assert print.contains("gator-mail-print.css?v=1");
-        assert document.contains("img-src data:");
-        assert document.contains("<p>Hola</p>");
     }
     private static void writeUiFixtures(Map<String, Object> original, java.nio.file.Path directory) throws Exception {
         java.nio.file.Files.createDirectories(directory);
+        MailHtmlSelfCheck.writeFixture(directory);
         Map<String, List<String>> screens = Map.ofEntries(
                 Map.entry("inbox", List.of("mailboxView")),
                 Map.entry("message", List.of("mailboxView", "messageView")),

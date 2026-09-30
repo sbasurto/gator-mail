@@ -4,6 +4,9 @@ java { toolchain { languageVersion = JavaLanguageVersion.of(21) } }
 
 repositories { mavenCentral() }
 
+sourceSets.test.compileClasspath += sourceSets.main.compileClasspath
+sourceSets.test.runtimeClasspath += sourceSets.main.compileClasspath
+
 dependencies {
     compileOnly 'org.keycloak:keycloak-core:26.7.0'
     compileOnly 'org.keycloak:keycloak-server-spi:26.7.0'
@@ -26,4 +29,25 @@ tasks.register('selfTest', JavaExec) {
 }
 
 tasks.named('check') { dependsOn selfTest }
+tasks.register('storageSelfTest', JavaExec) {
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'gator.mail.keycloak.GatorStorageSelfCheck'
+    enableAssertions = true
+    environment 'GATOR_IDP_JDBC_URL', 'jdbc:gator-test:mail'
+    environment 'GATOR_IDP_JDBC_USER', 'test'
+    environment 'GATOR_IDP_JDBC_PASSWORD', 'test'
+    environment 'GATOR_LOMALINDA_ERM_JDBC_URL', 'jdbc:gator-test:erm'
+    environment 'GATOR_LOMALINDA_ERM_JDBC_USER', 'test'
+    environment 'GATOR_LOMALINDA_ERM_JDBC_PASSWORD', 'test'
+}
+tasks.named('check') { dependsOn storageSelfTest }
 tasks.named('test') { failOnNoDiscoveredTests = false }
+
+tasks.register('exactLoginSelfTest', JavaExec) {
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'gator.mail.keycloak.GatorExactLoginSelfCheck'
+    enableAssertions = true
+}
+tasks.named('check') { dependsOn exactLoginSelfTest }

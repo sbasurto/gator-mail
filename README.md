@@ -233,8 +233,16 @@ la cuenta seleccionada y conserva una copia recuperable en
   el reenvío a una solicitud cada 30 segundos.
 - Los tokens, sesiones y contraseñas no se escriben en el log.
 - Authorization Code usa PKCE S256 y rota el identificador de sesión al entrar.
-- Los mensajes se abren en modo de solo lectura y el cuerpo se limita a 200 KB.
-- El HTML del mensaje se sanitiza y se presenta dentro de un `iframe sandbox`.
+- Los mensajes se abren en modo de solo lectura, sin truncar el cuerpo.
+- El lector conserva estilos y tablas del HTML recibido dentro de un `iframe sandbox`, sin scripts,
+  formularios, redirecciones ni acceso a la sesión. Los estilos del lector no se aplican al mensaje.
+- Las imágenes externas se descargan desde Gator Mail usando `/usr/bin/curl`, sin cookies ni credenciales
+  del usuario; cada destino y redirección se valida y la conexión se fija a una IP pública.
+  PNG, JPEG y GIF se decodifican y reconstruyen como PNG antes de mostrarse (GIF: primer fotograma).
+  Límite por imagen: 5 MiB, 4096 píxeles por lado y 8 millones de píxeles; hasta 40 fuentes por mensaje.
+  Los enlaces de imagen están firmados por 10 minutos y las copias pueden almacenarse en la caché privada
+  del navegador durante ese periodo. Se omiten formatos no compatibles, fuentes externas y hojas CSS
+  externas. La descarga puede registrar una apertura ante el remitente, usando la IP del servidor.
 - El borrado mueve los mensajes a Papelera; desde Papelera es definitivo.
 - Las operaciones sobre carpetas requieren sesión verificada y token CSRF;
   `INBOX` no se puede mover, renombrar ni eliminar.

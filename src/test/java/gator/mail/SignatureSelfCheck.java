@@ -27,6 +27,11 @@ final class SignatureSelfCheck {
                     String.class, String.class, String.class, String.class, String.class, String.class,
                     String.class, java.util.List.class);
             buildMessage.setAccessible(true);
+            String longBody = "Texto extenso ".repeat(20_000) + "FINAL_COMPLETO";
+            var longMessage = (jakarta.mail.internet.MimeMessage) buildMessage.invoke(null,
+                    jakarta.mail.Session.getInstance(new java.util.Properties()), "first@example.com",
+                    "recipient@example.com", "", "", "Prueba extensa", longBody, "<p>" + longBody + "</p>", uploads);
+            assert ((jakarta.mail.Multipart) longMessage.getContent()).getBodyPart(0).getContent().equals(longBody);
             var message = (jakarta.mail.internet.MimeMessage) buildMessage.invoke(null,
                     jakarta.mail.Session.getInstance(new java.util.Properties()), "first@example.com",
                     "recipient@example.com", "", "", "Prueba", "Hola", "<p>Hola</p>", uploads);
