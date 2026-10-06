@@ -7,6 +7,8 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.keycloak.component.ComponentModel;
 import org.keycloak.credential.CredentialInput;
@@ -14,12 +16,15 @@ import org.keycloak.credential.CredentialInputUpdater;
 import org.keycloak.credential.CredentialInputValidator;
 import org.keycloak.credential.UserCredentialManager;
 import org.keycloak.models.KeycloakSession;
+import org.keycloak.models.GroupModel;
+import org.keycloak.models.RoleModel;
 import org.keycloak.models.RealmModel;
 import org.keycloak.models.SubjectCredentialManager;
 import org.keycloak.models.UserCredentialModel;
 import org.keycloak.models.UserModel;
 import org.keycloak.models.credential.PasswordCredentialModel;
 import org.keycloak.storage.StorageId;
+import org.keycloak.storage.UserStorageUtil;
 import org.keycloak.storage.UserStorageProvider;
 import org.keycloak.storage.adapter.AbstractUserAdapter;
 import org.keycloak.storage.user.UserLookupProvider;
@@ -72,6 +77,27 @@ final class GatorUserStorageProvider implements UserStorageProvider, UserLookupP
         if (account == null) return null;
         loaded.put(account.username(), account);
         return new AbstractUserAdapter(session, realm, model) {
+            // Preserve the external identity and credential; only access grants live in Keycloak.
+            @Override protected Set<GroupModel> getGroupsInternal() {
+                return UserStorageUtil.userFederatedStorage(session).getGroupsStream(realm, getId())
+                        .collect(Collectors.toSet());
+            }
+            @Override public void joinGroup(GroupModel group) {
+                UserStorageUtil.userFederatedStorage(session).joinGroup(realm, getId(), group);
+            }
+            @Override public void leaveGroup(GroupModel group) {
+                UserStorageUtil.userFederatedStorage(session).leaveGroup(realm, getId(), group);
+            }
+            @Override protected Set<RoleModel> getRoleMappingsInternal() {
+                return UserStorageUtil.userFederatedStorage(session).getRoleMappingsStream(realm, getId())
+                        .collect(Collectors.toSet());
+            }
+            @Override public void grantRole(RoleModel role) {
+                UserStorageUtil.userFederatedStorage(session).grantRole(realm, getId(), role);
+            }
+            @Override public void deleteRoleMapping(RoleModel role) {
+                UserStorageUtil.userFederatedStorage(session).deleteRoleMapping(realm, getId(), role);
+            }
             @Override public String getUsername() { return account.username(); }
             @Override public String getEmail() { return account.email(); }
             @Override public boolean isEmailVerified() {

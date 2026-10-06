@@ -4,6 +4,9 @@ import java.lang.reflect.Proxy;
 import java.sql.*;
 import java.util.*;
 import org.keycloak.component.ComponentModel;
+import org.keycloak.models.*;
+import org.keycloak.storage.federated.UserFederatedStorageProvider;
+import java.util.stream.Stream;
 
 /** Exercises actual lookups through JDBC without contacting a customer database. */
 public final class GatorStorageSelfCheck {
@@ -60,6 +63,56 @@ public final class GatorStorageSelfCheck {
         assert lastQuery.contains("lower(u.usuario_id) = lower(?)");
         mail.getUserByUsername(null, "user@example.com");
         assert lastQuery.contains("lower(e.usuario_email_email)");
+
+        // Only access mappings live in Keycloak; keep the external subject and JDBC identity.
+        Set<GroupModel> groups = new HashSet<>();
+        Set<RoleModel> roles = new HashSet<>();
+        GroupModel group = proxy(GroupModel.class, (o, m, v) -> switch (m.getName()) {
+            case "getId" -> "pilot-group";
+            case "hashCode" -> 1;
+            case "equals" -> o == v[0];
+            default -> throw new UnsupportedOperationException(m.getName());
+        });
+        RoleModel role = proxy(RoleModel.class, (o, m, v) -> switch (m.getName()) {
+            case "getId" -> "access-role";
+            case "getCompositesStream" -> Stream.empty();
+            case "hashCode" -> 2;
+            case "equals" -> o == v[0];
+            default -> throw new UnsupportedOperationException(m.getName());
+        });
+        RealmModel realm = proxy(RealmModel.class, (o, m, v) -> switch (m.getName()) {
+            case "getDefaultGroupsStream" -> Stream.empty();
+            case "getDefaultRole" -> role;
+            default -> throw new UnsupportedOperationException(m.getName());
+        });
+        UserFederatedStorageProvider storage = proxy(UserFederatedStorageProvider.class, (o, m, v) -> {
+            assert v[0] == realm && v[1].equals("f:legacy:Admin");
+            return switch (m.getName()) {
+                case "getGroupsStream" -> groups.stream();
+                case "getRoleMappingsStream" -> roles.stream();
+                case "joinGroup" -> { groups.add((GroupModel) v[2]); yield null; }
+                case "leaveGroup" -> { groups.remove(v[2]); yield null; }
+                case "grantRole" -> { roles.add((RoleModel) v[2]); yield null; }
+                case "deleteRoleMapping" -> { roles.remove(v[2]); yield null; }
+                default -> throw new UnsupportedOperationException(m.getName());
+            };
+        });
+        KeycloakSession session = proxy(KeycloakSession.class, (o, m, v) -> {
+            if (m.getName().equals("getProvider") && v[0] == UserFederatedStorageProvider.class) return storage;
+            throw new UnsupportedOperationException(m.getName());
+        });
+        var mapped = new GatorUserStorageProvider(session, legacy).getUserByUsername(realm, "Admin");
+        mapped.joinGroup(group);
+        mapped.grantRole(role);
+        var reloaded = new GatorUserStorageProvider(session, legacy).getUserById(realm, mapped.getId());
+        assert reloaded.getId().equals("f:legacy:Admin") && reloaded.isEnabled();
+        assert reloaded.getGroupsStream().anyMatch(g -> g.getId().equals("pilot-group"));
+        assert reloaded.getRoleMappingsStream().anyMatch(r -> r.getId().equals("access-role"));
+        reloaded.leaveGroup(group);
+        reloaded.deleteRoleMapping(role);
+        assert mapped.getGroupsStream().count() == 0 && mapped.getRoleMappingsStream().count() == 0;
+        try { mapped.setUsername("other"); throw new AssertionError("Renaming would change the subject"); }
+        catch (org.keycloak.storage.ReadOnlyException expected) { }
 
         ComponentModel isolated = new ComponentModel(); isolated.setId("erm");
         isolated.put("connectionEnvironmentPrefix", "GATOR_LOMALINDA_ERM");
