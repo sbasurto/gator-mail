@@ -23,7 +23,13 @@ public final class GatorExactLoginSelfCheck {
     }
     public static void main(String[] args) {
         ComponentModel component = new ComponentModel(); component.setId("source");
-        component.setProviderId("gator-users"); component.put("literalUsernames", "true");
+        component.setProviderId("gator-users"); component.put("literalUsernames", "false");
+        boolean[] optIn = {true};
+        ClientModel client = proxy(ClientModel.class, (p,m,a) -> switch(m.getName()) {
+            case "getAttribute" -> optIn[0] ? "true" : null;
+            case "getId" -> "fixture-client";
+            default -> fallback(m);
+        });
         Map<String, String> notes = new HashMap<>();
         UserModel[] selected = {null}, nativeCandidate = {null};
         boolean[] missingFederated = {false}, emailAllowed = {false}, ambiguousEmail = {false}, enabled = {true};
@@ -75,6 +81,7 @@ public final class GatorExactLoginSelfCheck {
             @Override public void error(String error) { /* No external event store in this check. */ }
         }.event(EventType.LOGIN);
         AuthenticationSessionModel auth = proxy(AuthenticationSessionModel.class, (p,m,a) -> {
+            if (m.getName().equals("getClient")) return client;
             if (m.getName().equals("getAuthNote")) return notes.get(a[0]);
             if (m.getName().equals("removeAuthNote")) { notes.remove(a[0]); return null; }
             if (m.getName().equals("setAuthNote")) { notes.put((String)a[0],(String)a[1]); return null; }
@@ -167,6 +174,14 @@ public final class GatorExactLoginSelfCheck {
         ambiguousEmail[0] = false; enabled[0] = false; reset.action(context);
         assert selected[0] == null : "Disabled user cannot recover through this chooser";
         assert !notes.containsKey("RESET_CREDENTIAL_USER_CHOSEN");
+        // A global wrapper must invoke the unmodified built-in chooser for other clients.
+        optIn[0] = false; enabled[0] = true; emailAllowed[0] = false;
+        nativeCandidate[0] = emailCandidate[0]; requested[0] = null;
+        input.putSingle("username", "LegacyAlias");
+        reset.action(context);
+        assert requested[0] == null : "Legacy recovery must not use exact ID lookup";
+        assert selected[0] == nativeCandidate[0] : "Legacy chooser retains the built-in lookup result";
+        assert reset.getHelpText().contains("gator.exactIdentity");
         System.out.println("Exact federated/native login and recovery, passwords, rejection and reauthentication OK");
     }
 }

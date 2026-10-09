@@ -17,6 +17,8 @@ public final class GatorExactUsernamePasswordForm extends UsernamePasswordForm {
     public boolean validateUserAndPassword(AuthenticationFlowContext context, MultivaluedMap<String, String> input) {
         if (isUserAlreadySetBeforeUsernamePasswordAuth(context))
             return super.validateUserAndPassword(context, input);
+        if (!GatorExactIdentity.enabled(context.getAuthenticationSession().getClient()))
+            return super.validateUserAndPassword(context, input);
         context.clearUser();
         String username = input.getFirst("username");
         UserModel user = null;
@@ -39,7 +41,7 @@ public final class GatorExactUsernamePasswordForm extends UsernamePasswordForm {
 
     static UserModel findExactUser(KeycloakSession session, RealmModel realm, String username) {
         var providers = realm.getComponentsStream(realm.getId(), UserStorageProvider.class.getName())
-                .filter(model -> "gator-users".equals(model.getProviderId()) && model.get("literalUsernames", false))
+                .filter(model -> "gator-users".equals(model.getProviderId()))
                 .toList();
         if (providers.size() != 1)
             throw new IllegalStateException("Exact username login requires one Gator identity source");

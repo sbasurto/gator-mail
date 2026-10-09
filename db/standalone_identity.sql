@@ -80,41 +80,13 @@ create table if not exists app_usuario_mail (
 \ir mail_cache.sql
 \ir mail_sender_rankings.sql
 
-create or replace function app_fn_hash_password(v_password text, v_salt text, v_loops integer)
-returns text
-language plpgsql
-immutable strict
-as $function$
-declare
-    value bytea := digest(convert_to(v_salt || v_password, 'UTF8'), 'sha512');
-begin
-    for i in 2..greatest(v_loops, 1) loop
-        value := digest(value, 'sha512');
-    end loop;
-    return encode(value, 'hex');
-end;
-$function$;
-
-create or replace function app_usuarios_fn_encode2()
-returns trigger
-language plpgsql
-as $function$
-begin
-    if tg_op = 'INSERT' or new.usuario_password is distinct from old.usuario_password then
-        if new.usuario_password ~ '^[0-9A-Fa-f]{128}$'
-                and new.usuario_recover_hash is not null
-                and new.usuario_hash_loops::integer > 0 then
-            new.usuario_password := lower(new.usuario_password);
-        else
-            new.usuario_recover_hash := uuid_generate_v4();
-            new.usuario_hash_loops := 3000 + floor(random() * 17001)::integer;
-            new.usuario_password := app_fn_hash_password(
-                    new.usuario_password, new.usuario_recover_hash, new.usuario_hash_loops::integer);
-        end if;
-    end if;
-    return new;
-end;
-$function$;
+-- Set this psql variable to the canonical internal/app/postgresql/mail artifact.
+\if :{?gator_identity_password_hash_sql}
+\i :gator_identity_password_hash_sql
+\else
+\echo 'Required: -v gator_identity_password_hash_sql=/absolute/internal/app/postgresql/mail/app_pg_identity_password_hash.sql'
+\quit 1
+\endif
 
 create or replace function app_fn_admon_tablas_all(v_json text)
 returns text
@@ -173,8 +145,3 @@ end;
 $function$;
 
 revoke all on function app_fn_admon_tablas_all(text) from public;
-
-drop trigger if exists app_trg_usuarios on app_usuarios;
-create trigger app_trg_usuarios
-before insert or update of usuario_password on app_usuarios
-for each row execute function app_usuarios_fn_encode2();

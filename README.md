@@ -191,13 +191,26 @@ corrección del teléfono mediante `phoneCorrectionAllowed`.
 
 El vínculo **Contraseña** inicia directamente la acción OIDC `UPDATE_PASSWORD`
 con el formulario del tema de Gator Mail; no abre la consola de cuenta de
-Keycloak. Los cambios usan el proveedor Gator existente, que sincroniza
-`app_usuarios` mediante `app_fn_sync_identity_password` en la fuente central.
-La función compara usuarios exactamente y revisa todos los destinos antes de
-escribir; el proveedor rechaza respuestas de error antes de cambiar la fuente.
-Los commits dblink son independientes: un fallo puede dejar destinos parciales
-y requiere reconciliar con la misma contraseña prevista. La publicación SQL
-`allGatorIdentityPassword` debe preceder al JAR del proveedor.
+Keycloak. El proveedor conserva el comportamiento previo para clientes sin el
+atributo administrativo `gator.exactIdentity=true`: aliases, recuperación y
+sincronización por `app_fn_admon_tablas_all` no cambian. No habilitar el atributo
+en clientes compartidos (`account-console`, `admin-cli`, Mail o Mobile).
+
+Sólo los clientes seleccionados usan el formulario exacto y
+`app_fn_sync_identity_password`; la selección procede del cliente autenticado
+en Keycloak, nunca de un parámetro del navegador. El wrapper de recuperación
+delega al selector estándar para los demás clientes. El flujo browser global
+y `literalUsernames` permanecen intactos. Los cambios de contraseña de clientes
+exactos deben iniciar AIA `UPDATE_PASSWORD` desde ese mismo cliente, porque la
+consola compartida de cuenta conserva el comportamiento legacy.
+
+La sincronización exacta revisa todos los destinos antes de escribir y rechaza
+respuestas de error antes de cambiar la fuente. Los commits dblink son
+independientes: un fallo puede dejar destinos parciales y requiere reconciliar
+con la misma contraseña prevista. Publicar `allGatorIdentityPassword` antes de
+activar un cliente exacto. El bootstrap nuevo de Mail consume el único canónico
+`app_pg_identity_password_hash.sql`; su script legacy requiere la variable psql
+`gator_identity_password_hash_sql` con la ruta absoluta de ese artefacto.
 
 ## Aprovisionamiento de usuarios y buzones
 

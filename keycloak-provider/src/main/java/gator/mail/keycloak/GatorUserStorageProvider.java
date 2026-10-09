@@ -53,20 +53,21 @@ final class GatorUserStorageProvider implements UserStorageProvider, UserLookupP
 
     @Override
     public UserModel getUserByUsername(RealmModel realm, String username) {
-        Account exact = find("u.usuario_id = ?", username);
-        if (exact != null || model.get("literalUsernames", false)) return adapter(realm, exact);
+        if (model.get("literalUsernames", false))
+            return adapter(realm, find("u.usuario_id = ?", username));
         return adapter(realm, username != null && username.contains("@")
-                ? findByEmail(username) : find("lower(u.usuario_id) = lower(?)", username, true));
+                ? findLegacyEmail(username) : find("lower(u.usuario_id) = lower(?)", username));
     }
 
     @Override
     public UserModel getUserByEmail(RealmModel realm, String email) {
-        return adapter(realm, findByEmail(email));
+        return adapter(realm, GatorExactIdentity.enabled(session)
+                ? find("lower(e.usuario_email_email) = lower(?)", email, true) : findLegacyEmail(email));
     }
 
-    private Account findByEmail(String email) {
-        // A shared address must never select an arbitrary account for recovery.
-        return find("lower(e.usuario_email_email) = lower(?)", email, true);
+    private Account findLegacyEmail(String email) {
+        Account account = find("lower(e.usuario_email_email) = lower(?) and position('@' in u.usuario_id) = 0", email);
+        return account != null ? account : find("lower(e.usuario_email_email) = lower(?)", email);
     }
 
     @Override
@@ -180,7 +181,9 @@ final class GatorUserStorageProvider implements UserStorageProvider, UserLookupP
     }
     @Override public boolean isValid(RealmModel realm, UserModel user, CredentialInput input) {
         if (!supportsCredentialType(input.getType()) || !(input instanceof UserCredentialModel credential)) return false;
-        Account account = loaded.computeIfAbsent(user.getUsername(), key -> find("u.usuario_id = ?", key));
+        Account account = loaded.computeIfAbsent(user.getUsername(), key -> find(
+                model.get("literalUsernames", false) || GatorExactIdentity.enabled(session)
+                        ? "u.usuario_id = ?" : "lower(u.usuario_id) = lower(?)", key));
         return account != null && account.enabled()
                 && GatorPassword.matches(credential.getValue(), account.salt(), account.iterations(), account.hash());
     }
@@ -217,27 +220,36 @@ final class GatorUserStorageProvider implements UserStorageProvider, UserLookupP
     }
 
     private void updatePassword(String username, String password) {
+        boolean exact = GatorExactIdentity.enabled(session);
         try (Connection connection = DriverManager.getConnection(required("GATOR_IDP_JDBC_URL"),
                 required("GATOR_IDP_JDBC_USER"), required("GATOR_IDP_JDBC_PASSWORD"))) {
             connection.setAutoCommit(false);
             try (PreparedStatement sync = connection.prepareStatement(
-                        "select app_fn_sync_identity_password(json_build_object('usuario', ?, 'password', ?)::text)");
+                        "select " + (exact ? "app_fn_sync_identity_password" : "app_fn_admon_tablas_all")
+                        + "(json_build_object('usuario', ?, 'password', ?)::text)");
                  PreparedStatement update = connection.prepareStatement(
-                        "update app_usuarios set usuario_password = case "
+                        exact ? "update app_usuarios set usuario_password = case "
                         + "when ? ~ '^[0-9A-Fa-f]{128}$' and usuario_recover_hash is not null and usuario_hash_loops::integer > 0 "
                         + "then app_fn_hash_password(?, usuario_recover_hash, usuario_hash_loops::integer) else ? end, "
-                        + "usuario_hash_auth = null where usuario_id = ?")) {
+                        + "usuario_hash_auth = null where usuario_id = ?"
+                        : "update app_usuarios set usuario_password = ?, usuario_hash_auth = null where usuario_id = ?")) {
                 sync.setString(1, username);
                 sync.setString(2, password);
                 try (ResultSet response = sync.executeQuery()) {
-                    if (!response.next()) throw new IllegalStateException("Missing password synchronization response");
-                    requireSyncSuccess(response.getString(1));
+                    if (exact) {
+                        if (!response.next()) throw new IllegalStateException("Missing password synchronization response");
+                        requireSyncSuccess(response.getString(1));
+                    }
                 }
                 update.setString(1, password);
-                // A literal 128-hex password must not be mistaken for an imported legacy hash by the source trigger.
-                update.setString(2, password);
-                update.setString(3, password);
-                update.setString(4, username);
+                if (exact) {
+                    // A literal 128-hex password is not an imported source hash.
+                    update.setString(2, password);
+                    update.setString(3, password);
+                    update.setString(4, username);
+                } else {
+                    update.setString(2, username);
+                }
                 if (update.executeUpdate() != 1) throw new IllegalStateException("Usuario Gator no encontrado");
                 connection.commit();
             } catch (SQLException | RuntimeException e) {

@@ -12,10 +12,15 @@ import org.keycloak.models.UserModel;
 /** Recovery uses the same case-sensitive identity selection as login. */
 public final class GatorExactResetCredentialChooseUser extends ResetCredentialChooseUser {
     @Override public String getId() { return "gator-exact-reset-credentials-user"; }
+    @Override public String getHelpText() { return "Exact identity recovery only for server client attribute gator.exactIdentity=true; otherwise standard Keycloak recovery."; }
     @Override public String getDisplayType() { return "Gator exact recovery user"; }
     @Override public Authenticator create(KeycloakSession session) { return this; }
 
     @Override public void action(AuthenticationFlowContext context) {
+        if (!GatorExactIdentity.enabled(context.getAuthenticationSession().getClient())) {
+            super.action(context);
+            return;
+        }
         String username = context.getHttpRequest().getDecodedFormParameters().getFirst("username");
         if (username == null || username.isBlank()) {
             super.action(context);

@@ -12,6 +12,7 @@ import java.util.stream.Stream;
 public final class GatorStorageSelfCheck {
     static String lastUrl;
     static String lastQuery;
+    static String lastSyncQuery;
     static String lastUser;
     static String email;
     static int rowCount = 1;
@@ -43,10 +44,11 @@ public final class GatorStorageSelfCheck {
                         return proxy(PreparedStatement.class, (statement, operation, parameters) -> {
                             if (operation.getName().equals("setString")) { lastUser = (String) parameters[1]; bindings.put((Integer) parameters[0], lastUser); return null; }
                             if (operation.getName().equals("executeQuery")) {
-                                List<String> names = preparedSql.contains("app_fn_sync_identity_password") ? List.of(syncResponse)
+                                if (preparedSql.contains("json_build_object")) lastSyncQuery = preparedSql;
+                                List<String> names = preparedSql.contains("json_build_object") ? List.of(syncResponse)
                                         : fixtureAccounts == null ? Collections.nCopies(rowCount, lastUser)
                                         : fixtureAccounts.keySet().stream().filter(name -> {
-                                            if (lastQuery.contains("lower(e.usuario_email_email)")) return fixtureAccounts.get(name).equalsIgnoreCase(lastUser);
+                                            if (lastQuery.contains("lower(e.usuario_email_email)")) return fixtureAccounts.get(name).equalsIgnoreCase(lastUser) && (!lastQuery.contains("position") || !name.contains("@"));
                                             if (lastQuery.contains("lower(u.usuario_id)")) return name.equalsIgnoreCase(lastUser);
                                             return name.equals(lastUser);
                                         }).toList();
@@ -93,29 +95,74 @@ public final class GatorStorageSelfCheck {
         var mail = new GatorUserStorageProvider(null, legacy);
         mail.getUserByUsername(null, "Admin");
         assert lastUrl.equals("jdbc:gator-test:mail");
-        assert lastQuery.contains("u.usuario_id = ?");
+        assert lastQuery.contains("lower(u.usuario_id) = lower(?)") && lastQuery.endsWith("limit 1");
         mail.getUserByUsername(null, "user@example.com");
-        assert lastQuery.contains("u.usuario_id = ?");
-
-        fixtureAccounts = Map.of("Admin", "shared@example.invalid", "admin", "shared@example.invalid",
-                "user@example.com", "different@example.invalid", "Only", "alias@example.invalid");
-        assert mail.getUserByUsername(null, "Admin").getUsername().equals("Admin");
-        assert mail.getUserByUsername(null, "admin").getUsername().equals("admin");
-        assert mail.getUserByUsername(null, "ADMIN") == null;
-        assert mail.getUserByUsername(null, "user@example.com").getUsername().equals("user@example.com");
-        assert mail.getUserByUsername(null, "alias@example.invalid").getUsername().equals("Only");
-        assert mail.getUserByUsername(null, "only").getUsername().equals("Only");
-        assert mail.getUserByEmail(null, "shared@example.invalid") == null;
+        assert lastQuery.contains("position('@' in u.usuario_id) = 0");
+        fixtureAccounts = new LinkedHashMap<>();
+        fixtureAccounts.put("Admin", "shared@example.invalid");
+        fixtureAccounts.put("admin", "shared@example.invalid");
+        fixtureAccounts.put("user@example.com", "different@example.invalid");
+        fixtureAccounts.put("Alias", "user@example.com");
+        assert mail.getUserByUsername(null, "admin").getUsername().equals("Admin") : "Legacy case-fold lookup unchanged";
+        assert mail.getUserByUsername(null, "user@example.com").getUsername().equals("Alias") : "Legacy email alias precedence unchanged";
+        assert mail.getUserByEmail(null, "shared@example.invalid").getUsername().equals("Admin");
+        boolean[] optIn = {true};
+        ClientModel exactClient = proxy(ClientModel.class, (o,m,v) -> switch(m.getName()) {
+            case "getAttribute" -> optIn[0] ? "true" : null;
+            case "getId" -> "exact-client";
+            default -> null;
+        });
+        KeycloakContext clientContext = proxy(KeycloakContext.class, (o,m,v) ->
+            m.getName().equals("getClient") ? exactClient : null);
+        KeycloakSession exactSession = proxy(KeycloakSession.class, (o,m,v) ->
+            m.getName().equals("getContext") ? clientContext : null);
+        assert !GatorExactIdentity.enabled((KeycloakSession)null);
+        assert GatorExactIdentity.enabled(exactSession);
+        optIn[0] = false;
+        assert !GatorExactIdentity.enabled(exactSession) : "Shared clients remain legacy by default";
+        optIn[0] = true;
+        ClientModel otherClient = proxy(ClientModel.class, (o,m,v) -> m.getName().equals("getId") ? "other-client" : null);
+        ClientModel[] authClient = {exactClient};
+        org.keycloak.sessions.AuthenticationSessionModel authenticated = proxy(
+            org.keycloak.sessions.AuthenticationSessionModel.class, (o,m,v) -> m.getName().equals("getClient") ? authClient[0] : null);
+        ClientModel[] contextual = {null};
+        KeycloakContext authenticationContext = proxy(KeycloakContext.class, (o,m,v) -> switch(m.getName()) {
+            case "getAuthenticationSession" -> authenticated;
+            case "getClient" -> contextual[0];
+            default -> null;
+        });
+        KeycloakSession authenticationSession = proxy(KeycloakSession.class, (o,m,v) ->
+            m.getName().equals("getContext") ? authenticationContext : null);
+        assert GatorExactIdentity.enabled(authenticationSession) : "Browser required action uses its authenticated client";
+        contextual[0] = otherClient;
+        try { GatorExactIdentity.enabled(authenticationSession); throw new AssertionError("Conflicting context downgraded to legacy"); }
+        catch (IllegalStateException expected) { }
+        contextual[0] = exactClient;
+        assert GatorExactIdentity.enabled(authenticationSession);
+        authClient[0] = null;
+        try { GatorExactIdentity.enabled(authenticationSession); throw new AssertionError("Missing authenticated client downgraded"); }
+        catch (IllegalStateException expected) { }
+        authClient[0] = exactClient;
+        var exactMail = new GatorUserStorageProvider(exactSession, legacy);
+        assert exactMail.getUserByEmail(null, "shared@example.invalid") == null;
+        assert exactMail.getUserById(null, "f:legacy:admin").getUsername().equals("admin");
         fixtureAccounts = null;
 
         email = "verified-source@example.invalid";
         var account = mail.getUserByUsername(null, "Admin");
         new GatorUserStorageProvider(null, legacy).isValid(null, account, UserCredentialModel.password("incorrect"));
-        assert lastQuery.endsWith(" where u.usuario_id = ? limit 1") : "Credential reload must preserve exact username";
+        assert lastQuery.endsWith(" where lower(u.usuario_id) = lower(?) limit 1") : "Legacy reload unchanged";
+        syncResponse = "{\"codigo\":\"0\"}";
+        assert mail.updateCredential(null, account, UserCredentialModel.password("legacy-password"));
+        assert lastSyncQuery.contains("app_fn_admon_tablas_all") && passwordBindings.equals(Map.of(1,"legacy-password",2,"Admin"));
+        syncResponse = "{\"responses\":[{\"resNum\":\"0\"}]}";
+        commits = rollbacks = passwordUpdates = 0;
+        mail = exactMail;
         String hexPassword = "ab".repeat(64);
         assert mail.updateCredential(null, account, UserCredentialModel.password(hexPassword));
         assert passwordBindings.equals(Map.of(1, hexPassword, 2, hexPassword, 3, hexPassword, 4, "Admin"));
         assert commits == 1 && passwordUpdates == 1;
+        assert lastSyncQuery.contains("app_fn_sync_identity_password");
         syncResponse = "{\"responses\":[{\"resNum\":\"42501\"}]}";
         try { mail.updateCredential(null, account, UserCredentialModel.password("rejected-password"));
             throw new AssertionError("Downstream failure accepted"); }
