@@ -7,6 +7,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -52,10 +53,10 @@ final class GatorUserStorageProvider implements UserStorageProvider, UserLookupP
 
     @Override
     public UserModel getUserByUsername(RealmModel realm, String username) {
-        if (model.get("literalUsernames", false))
-            return adapter(realm, find("u.usuario_id = ?", username));
+        Account exact = find("u.usuario_id = ?", username);
+        if (exact != null || model.get("literalUsernames", false)) return adapter(realm, exact);
         return adapter(realm, username != null && username.contains("@")
-                ? findByEmail(username) : find("lower(u.usuario_id) = lower(?)", username));
+                ? findByEmail(username) : find("lower(u.usuario_id) = lower(?)", username, true));
     }
 
     @Override
@@ -64,13 +65,15 @@ final class GatorUserStorageProvider implements UserStorageProvider, UserLookupP
     }
 
     private Account findByEmail(String email) {
-        Account account = find("lower(e.usuario_email_email) = lower(?) and position('@' in u.usuario_id) = 0", email);
-        return account != null ? account : find("lower(e.usuario_email_email) = lower(?)", email);
+        // A shared address must never select an arbitrary account for recovery.
+        return find("lower(e.usuario_email_email) = lower(?)", email, true);
     }
 
     @Override
     public UserModel getUserById(RealmModel realm, String id) {
-        return getUserByUsername(realm, new StorageId(id).getExternalId());
+        StorageId stored = new StorageId(id);
+        if (!model.getId().equals(stored.getProviderId())) return null;
+        return adapter(realm, find("u.usuario_id = ?", stored.getExternalId()));
     }
 
     private UserModel adapter(RealmModel realm, Account account) {
@@ -100,8 +103,30 @@ final class GatorUserStorageProvider implements UserStorageProvider, UserLookupP
             }
             @Override public String getUsername() { return account.username(); }
             @Override public String getEmail() { return account.email(); }
+            @Override public String getFirstAttribute(String name) {
+                return UserModel.EMAIL.equals(name) ? getEmail() : super.getFirstAttribute(name);
+            }
+            @Override public List<String> getAttribute(String name) {
+                if (!UserModel.EMAIL.equals(name)) return super.getAttribute(name);
+                return getEmail() == null || getEmail().isBlank() ? List.of() : List.of(getEmail());
+            }
+            @Override public Map<String, List<String>> getAttributes() {
+                Map<String, List<String>> attributes = new HashMap<>(super.getAttributes());
+                if (!getAttribute(UserModel.EMAIL).isEmpty()) attributes.put(UserModel.EMAIL, getAttribute(UserModel.EMAIL));
+                return attributes;
+            }
+            // Keycloak confirms the current address after the reset-email action token.
+            // A later change in the authoritative source invalidates that confirmation.
             @Override public boolean isEmailVerified() {
-                return account.email() != null && !account.email().isBlank();
+                return getEmail() != null && !getEmail().isBlank() && getEmail().equals(
+                        UserStorageUtil.userFederatedStorage(session).getAttributes(realm, getId())
+                                .getFirst("gator.verifiedEmail"));
+            }
+            @Override public void setEmailVerified(boolean verified) {
+                var storage = UserStorageUtil.userFederatedStorage(session);
+                if (verified && getEmail() != null && !getEmail().isBlank())
+                    storage.setSingleAttribute(realm, getId(), "gator.verifiedEmail", getEmail());
+                else storage.removeAttribute(realm, getId(), "gator.verifiedEmail");
             }
             @Override public boolean isEnabled() { return account.enabled(); }
             @Override public SubjectCredentialManager credentialManager() {
@@ -118,14 +143,20 @@ final class GatorUserStorageProvider implements UserStorageProvider, UserLookupP
     }
 
     private Account find(String condition, String value) {
+        return find(condition, value, false);
+    }
+
+    private Account find(String condition, String value, boolean unique) {
         if (value == null || value.isBlank()) return null;
         try (Connection connection = DriverManager.getConnection(required("GATOR_IDP_JDBC_URL"),
                 required("GATOR_IDP_JDBC_USER"), required("GATOR_IDP_JDBC_PASSWORD"));
-             PreparedStatement statement = connection.prepareStatement(SELECT + " where " + condition + " limit 1")) {
+             PreparedStatement statement = connection.prepareStatement(SELECT + " where " + condition + (unique ? " limit 2" : " limit 1"))) {
             statement.setString(1, value);
             try (ResultSet rs = statement.executeQuery()) {
-                return rs.next() ? new Account(rs.getString(1), rs.getString(2), rs.getString(3), rs.getInt(4),
-                        "1".equals(rs.getString(5)), rs.getString(6), "UPDATE_PASSWORD".equals(rs.getString(7))) : null;
+                if (!rs.next()) return null;
+                Account account = new Account(rs.getString(1), rs.getString(2), rs.getString(3), rs.getInt(4),
+                        "1".equals(rs.getString(5)), rs.getString(6), "UPDATE_PASSWORD".equals(rs.getString(7)));
+                return unique && rs.next() ? null : account;
             }
         } catch (SQLException e) {
             throw new IllegalStateException("No fue posible consultar usuarios Gator", e);
@@ -138,8 +169,7 @@ final class GatorUserStorageProvider implements UserStorageProvider, UserLookupP
     }
     @Override public boolean isValid(RealmModel realm, UserModel user, CredentialInput input) {
         if (!supportsCredentialType(input.getType()) || !(input instanceof UserCredentialModel credential)) return false;
-        Account account = loaded.computeIfAbsent(user.getUsername(), key -> find(
-                model.get("literalUsernames", false) ? "u.usuario_id = ?" : "lower(u.usuario_id) = lower(?)", key));
+        Account account = loaded.computeIfAbsent(user.getUsername(), key -> find("u.usuario_id = ?", key));
         return account != null && account.enabled()
                 && GatorPassword.matches(credential.getValue(), account.salt(), account.iterations(), account.hash());
     }

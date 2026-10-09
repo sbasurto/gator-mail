@@ -13,6 +13,9 @@ public final class GatorStorageSelfCheck {
     static String lastUrl;
     static String lastQuery;
     static String lastUser;
+    static String email;
+    static int rowCount = 1;
+    static Map<String, String> fixtureAccounts;
 
     public static void main(String[] args) throws Exception {
         assert new GatorUserStorageProviderFactory().getConfigProperties().stream()
@@ -28,13 +31,20 @@ public final class GatorStorageSelfCheck {
                         return proxy(PreparedStatement.class, (statement, operation, parameters) -> {
                             if (operation.getName().equals("setString")) { lastUser = (String) parameters[1]; return null; }
                             if (operation.getName().equals("executeQuery")) {
-                                boolean[] first = {true};
+                                List<String> names = fixtureAccounts == null ? Collections.nCopies(rowCount, lastUser)
+                                        : fixtureAccounts.keySet().stream().filter(name -> {
+                                            if (lastQuery.contains("lower(e.usuario_email_email)")) return fixtureAccounts.get(name).equalsIgnoreCase(lastUser);
+                                            if (lastQuery.contains("lower(u.usuario_id)")) return name.equalsIgnoreCase(lastUser);
+                                            return name.equals(lastUser);
+                                        }).toList();
+                                int[] index = {-1};
                                 return proxy(ResultSet.class, (row, getter, column) -> {
-                                    if (getter.getName().equals("next")) { boolean result = first[0]; first[0] = false; return result; }
+                                    if (getter.getName().equals("next")) { return ++index[0] < names.size(); }
                                     if (getter.getName().equals("getInt")) return 3;
                                     if (getter.getName().equals("getString")) return switch ((int) column[0]) {
-                                        case 1 -> lastUser;
+                                        case 1 -> names.get(index[0]);
                                         case 5 -> "1";
+                                        case 6 -> fixtureAccounts == null ? email : fixtureAccounts.get(names.get(index[0]));
                                         default -> null;
                                     };
                                     if (getter.getName().equals("close")) return null;
@@ -60,11 +70,41 @@ public final class GatorStorageSelfCheck {
         var mail = new GatorUserStorageProvider(null, legacy);
         mail.getUserByUsername(null, "Admin");
         assert lastUrl.equals("jdbc:gator-test:mail");
-        assert lastQuery.contains("lower(u.usuario_id) = lower(?)");
+        assert lastQuery.contains("u.usuario_id = ?");
         mail.getUserByUsername(null, "user@example.com");
-        assert lastQuery.contains("lower(e.usuario_email_email)");
+        assert lastQuery.contains("u.usuario_id = ?");
+
+        fixtureAccounts = Map.of("Admin", "shared@example.invalid", "admin", "shared@example.invalid",
+                "user@example.com", "different@example.invalid", "Only", "alias@example.invalid");
+        assert mail.getUserByUsername(null, "Admin").getUsername().equals("Admin");
+        assert mail.getUserByUsername(null, "admin").getUsername().equals("admin");
+        assert mail.getUserByUsername(null, "ADMIN") == null;
+        assert mail.getUserByUsername(null, "user@example.com").getUsername().equals("user@example.com");
+        assert mail.getUserByUsername(null, "alias@example.invalid").getUsername().equals("Only");
+        assert mail.getUserByUsername(null, "only").getUsername().equals("Only");
+        assert mail.getUserByEmail(null, "shared@example.invalid") == null;
+        fixtureAccounts = null;
+
+        email = "verified-source@example.invalid";
+        var account = mail.getUserByUsername(null, "Admin");
+        new GatorUserStorageProvider(null, legacy).isValid(null, account, UserCredentialModel.password("incorrect"));
+        assert lastQuery.endsWith(" where u.usuario_id = ? limit 1") : "Credential reload must preserve exact username";
+        assert account.getEmail().equals(email);
+        assert account.getFirstAttribute(UserModel.EMAIL).equals(email);
+        assert account.getAttributeStream(UserModel.EMAIL).toList().equals(List.of(email));
+        assert account.getAttributes().get(UserModel.EMAIL).equals(List.of(email));
+        assert mail.getUserByEmail(null, email) != null;
+        rowCount = 2;
+        assert mail.getUserByEmail(null, email) == null : "Ambiguous recovery email must fail closed";
+        rowCount = 1;
+        assert mail.getUserById(null, "f:legacy:user@example.com").getUsername().equals("user@example.com");
+        assert lastQuery.endsWith(" where u.usuario_id = ? limit 1");
+        assert mail.getUserById(null, "f:other:Admin") == null;
+        email = null;
+        assert mail.getUserByUsername(null, "Admin").getAttributeStream(UserModel.EMAIL).count() == 0;
 
         // Only access mappings live in Keycloak; keep the external subject and JDBC identity.
+        var attributes = new org.keycloak.common.util.MultivaluedHashMap<String, String>();
         Set<GroupModel> groups = new HashSet<>();
         Set<RoleModel> roles = new HashSet<>();
         GroupModel group = proxy(GroupModel.class, (o, m, v) -> switch (m.getName()) {
@@ -88,6 +128,9 @@ public final class GatorStorageSelfCheck {
         UserFederatedStorageProvider storage = proxy(UserFederatedStorageProvider.class, (o, m, v) -> {
             assert v[0] == realm && v[1].equals("f:legacy:Admin");
             return switch (m.getName()) {
+                case "getAttributes" -> attributes;
+                case "setSingleAttribute" -> { attributes.put((String) v[2], List.of((String) v[3])); yield null; }
+                case "removeAttribute" -> { attributes.remove(v[2]); yield null; }
                 case "getGroupsStream" -> groups.stream();
                 case "getRoleMappingsStream" -> roles.stream();
                 case "joinGroup" -> { groups.add((GroupModel) v[2]); yield null; }
@@ -101,7 +144,21 @@ public final class GatorStorageSelfCheck {
             if (m.getName().equals("getProvider") && v[0] == UserFederatedStorageProvider.class) return storage;
             throw new UnsupportedOperationException(m.getName());
         });
+        email = "source@example.invalid";
         var mapped = new GatorUserStorageProvider(session, legacy).getUserByUsername(realm, "Admin");
+        assert !mapped.isEmailVerified() : "Source address is not verification evidence";
+        mapped.setEmailVerified(true);
+        assert mapped.isEmailVerified();
+        email = "changed@example.invalid";
+        var changedEmail = new GatorUserStorageProvider(session, legacy).getUserByUsername(realm, "Admin");
+        assert !changedEmail.isEmailVerified() : "Verification cannot survive an address change";
+        changedEmail.setEmailVerified(true);
+        assert changedEmail.isEmailVerified() && !mapped.isEmailVerified();
+        changedEmail.setEmailVerified(false);
+        assert !changedEmail.isEmailVerified();
+        try { changedEmail.setEmail("attacker@example.invalid"); throw new AssertionError("Email source is read only"); }
+        catch (org.keycloak.storage.ReadOnlyException expected) { }
+
         mapped.joinGroup(group);
         mapped.grantRole(role);
         var reloaded = new GatorUserStorageProvider(session, legacy).getUserById(realm, mapped.getId());
