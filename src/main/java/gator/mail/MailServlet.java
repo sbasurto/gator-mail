@@ -119,8 +119,12 @@ public final class MailServlet extends HttpServlet {
         }
 
         Map<String, Object> model = baseModel(request, "");
-        String user = String.valueOf(session.getAttribute("oidc.user"));
+        String user = "";
         try {
+            JsonObject identity = OAuthServlet.identityRequest(request, new JsonObject());
+            String configuration = getServletContext().getInitParameter("gappConfigFile");
+            user = operationalUser(session, identity,
+                    (issuer, subject) -> gator.lib.sec.GatorOidcIdentity.resolve(configuration, issuer, subject));
             JsonObject access = call("app_fn_has_mail_access", json("usuario", user));
             if (!"0".equals(access.get("codigo").getAsString())) {
                 response.sendError(HttpServletResponse.SC_FORBIDDEN);
@@ -169,6 +173,9 @@ public final class MailServlet extends HttpServlet {
             } else {
                 mailboxModel(model, request, mailbox, OAuthServlet.accessToken(request));
             }
+        } catch (SecurityException denied) {
+            response.sendError(HttpServletResponse.SC_FORBIDDEN);
+            return;
         } catch (IllegalArgumentException error) {
             if (jsonRequest(request)) {
                 response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
@@ -189,6 +196,21 @@ public final class MailServlet extends HttpServlet {
             model.put(causedBy(error, AuthenticationFailedException.class) ? "pending" : "error", true);
         }
         response.getWriter().print(view.renderResource("gator-mail/screens/mail.json", model));
+    }
+
+    static String operationalUser(HttpSession session, JsonObject authenticatedIdentity,
+            java.util.function.BiFunction<String, String, String> resolver) {
+        String user = resolver.apply(authenticatedIdentity.get("issuer").getAsString(),
+                authenticatedIdentity.get("subject").getAsString());
+        if (user == null || user.isBlank()) throw new SecurityException("Identity is not assigned");
+        synchronized (session) {
+            if (!user.equals(session.getAttribute("mail.local.user"))) {
+                java.util.Collections.list(session.getAttributeNames()).stream()
+                        .filter(name -> name.startsWith("mail.")).forEach(session::removeAttribute);
+            }
+            session.setAttribute("mail.local.user", user);
+        }
+        return user;
     }
 
     static void prepare(HttpServletResponse response) {
@@ -343,7 +365,7 @@ public final class MailServlet extends HttpServlet {
             cancellation.addProperty("action", "cancel");
             cancellation.addProperty("authorizationId", String.valueOf(session.getAttribute("mail.challenge.mobile.id")));
             cancellation.addProperty("requestToken", mobileRequestToken(session));
-            sms(cancellation);
+            sms(OAuthServlet.identityRequest(request,cancellation));
             clearMobileAuthorization(session);
             mobilePending = false;
             fallback = true;
@@ -354,7 +376,7 @@ public final class MailServlet extends HttpServlet {
             status.addProperty("action", "status");
             status.addProperty("authorizationId", String.valueOf(session.getAttribute("mail.challenge.mobile.id")));
             status.addProperty("requestToken", mobileRequestToken(session));
-            JsonObject result = sms(status);
+            JsonObject result = sms(OAuthServlet.identityRequest(request,status));
             String state = result.has("status") ? result.get("status").getAsString() : "";
             if (result.has("authorized") && result.get("authorized").getAsBoolean()) {
                 session.setAttribute("mail.challenge.verified", true);
@@ -383,7 +405,7 @@ public final class MailServlet extends HttpServlet {
             requestJson.addProperty("telefono", phone(request.getParameter("phone")));
             requestJson.addProperty("application", applicationLabel("Gator Mail"));
             requestJson.addProperty("userHint", userHint(user));
-            JsonObject result = sms(requestJson);
+            JsonObject result = sms(OAuthServlet.identityRequest(request,requestJson));
             session.setAttribute("mail.phone.correction.used", true);
             session.removeAttribute("mail.phone.correction");
             if (!"0".equals(string(result, "codigo")) || !bool(result, "phoneSent"))
@@ -422,7 +444,7 @@ public final class MailServlet extends HttpServlet {
             requestJson.addProperty("requestToken", mobileRequestToken(session));
             requestJson.addProperty("fallback", resend || fallback);
             requestJson.addProperty("mobileOnly", retryMobile);
-            JsonObject result = sms(requestJson);
+            JsonObject result = sms(OAuthServlet.identityRequest(request,requestJson));
             if (bool(result, "mobilePending") && result.has("authorizationId") && result.has("expiresAt")) {
                 session.setAttribute("mail.challenge.mobile.id", result.get("authorizationId").getAsString());
                 session.setAttribute("mail.challenge.expires", result.get("expiresAt").getAsLong());
@@ -1884,7 +1906,7 @@ public final class MailServlet extends HttpServlet {
             JsonObject value = new JsonObject();
             value.addProperty("actor", mailbox);
             if ("optionsSave".equals(action)) {
-                value.addProperty("user", String.valueOf(session.getAttribute("oidc.user")));
+                value.addProperty("user", String.valueOf(session.getAttribute("mail.local.user")));
                 value.addProperty("smsEnabled", request.getParameter("smsEnabled") != null);
                 checked(mailDbCall("mail_fn_usuario_opciones_guardar", gson.toJson(value)));
                 response.sendRedirect("mail?action=settings&section=options");
@@ -2001,13 +2023,13 @@ public final class MailServlet extends HttpServlet {
                         sync.addProperty("email", request.getParameter("email"));
                         sync.addProperty("name", request.getParameter("name"));
                         sync.addProperty("telefono", number);
-                        checked(sms(sync));
+                        checked(sms(OAuthServlet.identityRequest(request,sync)));
                     }
                     if ("userSafeList".equals(action)) {
                         JsonObject safeList = json("action", "safeList");
                         safeList.addProperty("usuario", request.getParameter("user"));
                         safeList.addProperty("telefono", number);
-                        checked(sms(safeList));
+                        checked(sms(OAuthServlet.identityRequest(request,safeList)));
                         checked(mailDbCall("mail_fn_admin_usuario_safe_list", gson.toJson(value)));
                         session.setAttribute("mail.user.admin.notice",
                                 "El teléfono quedó registrado en Global Safe List");
@@ -2074,7 +2096,7 @@ public final class MailServlet extends HttpServlet {
             signatureModel(model, mailbox);
             model.put("signatureSaved", "1".equals(request.getParameter("signatureSaved")));
             JsonObject result = checked(mailDbCall("mail_fn_usuario_opciones",
-                    String.valueOf(session.getAttribute("oidc.user"))));
+                    String.valueOf(session.getAttribute("mail.local.user"))));
             model.put("smsAuthenticationEnabled", result.get("smsEnabled").getAsBoolean());
         } else if ("folders".equals(section)) {
             List<Map<String, Object>> folders = mailFolders.stream()

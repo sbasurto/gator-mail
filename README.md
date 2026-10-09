@@ -192,7 +192,12 @@ corrección del teléfono mediante `phoneCorrectionAllowed`.
 El vínculo **Contraseña** inicia directamente la acción OIDC `UPDATE_PASSWORD`
 con el formulario del tema de Gator Mail; no abre la consola de cuenta de
 Keycloak. Los cambios usan el proveedor Gator existente, que sincroniza
-`app_usuarios` mediante `app_fn_admon_tablas_all`.
+`app_usuarios` mediante `app_fn_sync_identity_password` en la fuente central.
+La función compara usuarios exactamente y revisa todos los destinos antes de
+escribir; el proveedor rechaza respuestas de error antes de cambiar la fuente.
+Los commits dblink son independientes: un fallo puede dejar destinos parciales
+y requiere reconciliar con la misma contraseña prevista. La publicación SQL
+`allGatorIdentityPassword` debe preceder al JAR del proveedor.
 
 ## Aprovisionamiento de usuarios y buzones
 
@@ -300,3 +305,8 @@ Keycloak debe permitir como retornos de salida las rutas exactas
 `/gator-mail/oauth/logged-out`, también con `?language=es` y `?language=en`,
 en los mismos orígenes ya registrados para el callback de Mail. No usar
 comodines ni modificar callbacks, roles o las políticas de acceso.
+
+La función compartida `mail_fn_usuario_opciones(text)` conserva su firma y ahora
+se publica desde el repositorio SQL, `app/postgresql/mail/mail_pg_fn_usuario_opciones.sql`,
+mediante `deploy/toUpload/allGatorMailService`. Publicar ese manifiesto antes de
+instalar `db/mail_admin.sql`; el archivo de administración ya no mantiene otra copia.

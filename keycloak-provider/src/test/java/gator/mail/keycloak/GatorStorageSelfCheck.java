@@ -16,8 +16,18 @@ public final class GatorStorageSelfCheck {
     static String email;
     static int rowCount = 1;
     static Map<String, String> fixtureAccounts;
+    static String syncResponse = "{\"responses\":[{\"resNum\":\"0\"}]}";
+    static Map<Integer, String> passwordBindings;
+    static int commits, rollbacks, passwordUpdates;
+    static boolean rejectPasswordUpdate;
 
     public static void main(String[] args) throws Exception {
+        GatorUserStorageProvider.requireSyncSuccess("{\"responses\":[{\"resNum\":\"0\"}]}");
+        for (String failed : List.of("{}", "not-json", "{\"responses\":[{\"resNum\":\"08001\"}]}",
+                "{\"responses\":[]}", "{\"responses\":[{\"resNum\":\"0\"},{\"resNum\":\"0\"}]}")) {
+            try { GatorUserStorageProvider.requireSyncSuccess(failed); throw new AssertionError("Invalid sync accepted"); }
+            catch (IllegalStateException expected) { assert !expected.getMessage().contains(failed); }
+        }
         assert new GatorUserStorageProviderFactory().getConfigProperties().stream()
                 .map(p -> p.getName()).collect(java.util.stream.Collectors.toSet())
                 .containsAll(Set.of("connectionEnvironmentPrefix", "literalUsernames"));
@@ -27,11 +37,14 @@ public final class GatorStorageSelfCheck {
                 lastUrl = url;
                 return proxy(Connection.class, (object, method, values) -> {
                     if (method.getName().equals("prepareStatement")) {
-                        lastQuery = (String) values[0];
+                        String preparedSql = (String) values[0];
+                        lastQuery = preparedSql;
+                        Map<Integer, String> bindings = new HashMap<>();
                         return proxy(PreparedStatement.class, (statement, operation, parameters) -> {
-                            if (operation.getName().equals("setString")) { lastUser = (String) parameters[1]; return null; }
+                            if (operation.getName().equals("setString")) { lastUser = (String) parameters[1]; bindings.put((Integer) parameters[0], lastUser); return null; }
                             if (operation.getName().equals("executeQuery")) {
-                                List<String> names = fixtureAccounts == null ? Collections.nCopies(rowCount, lastUser)
+                                List<String> names = preparedSql.contains("app_fn_sync_identity_password") ? List.of(syncResponse)
+                                        : fixtureAccounts == null ? Collections.nCopies(rowCount, lastUser)
                                         : fixtureAccounts.keySet().stream().filter(name -> {
                                             if (lastQuery.contains("lower(e.usuario_email_email)")) return fixtureAccounts.get(name).equalsIgnoreCase(lastUser);
                                             if (lastQuery.contains("lower(u.usuario_id)")) return name.equalsIgnoreCase(lastUser);
@@ -51,10 +64,20 @@ public final class GatorStorageSelfCheck {
                                     throw new UnsupportedOperationException(getter.getName());
                                 });
                             }
+                            if (operation.getName().equals("executeUpdate")) {
+                                if (preparedSql.contains("usuario_password")) {
+                                    if (rejectPasswordUpdate) throw new SQLException("private SQL/password context", "XX000");
+                                    passwordBindings = Map.copyOf(bindings); passwordUpdates++;
+                                }
+                                return 1;
+                            }
                             if (operation.getName().equals("close")) return null;
                             throw new UnsupportedOperationException(operation.getName());
                         });
                     }
+                    if (method.getName().equals("setAutoCommit")) { assert values[0].equals(false); return null; }
+                    if (method.getName().equals("commit")) { commits++; return null; }
+                    if (method.getName().equals("rollback")) { rollbacks++; return null; }
                     if (method.getName().equals("close")) return null;
                     throw new UnsupportedOperationException(method.getName());
                 });
@@ -89,6 +112,24 @@ public final class GatorStorageSelfCheck {
         var account = mail.getUserByUsername(null, "Admin");
         new GatorUserStorageProvider(null, legacy).isValid(null, account, UserCredentialModel.password("incorrect"));
         assert lastQuery.endsWith(" where u.usuario_id = ? limit 1") : "Credential reload must preserve exact username";
+        String hexPassword = "ab".repeat(64);
+        assert mail.updateCredential(null, account, UserCredentialModel.password(hexPassword));
+        assert passwordBindings.equals(Map.of(1, hexPassword, 2, hexPassword, 3, hexPassword, 4, "Admin"));
+        assert commits == 1 && passwordUpdates == 1;
+        syncResponse = "{\"responses\":[{\"resNum\":\"42501\"}]}";
+        try { mail.updateCredential(null, account, UserCredentialModel.password("rejected-password"));
+            throw new AssertionError("Downstream failure accepted"); }
+        catch (IllegalStateException expected) { assert expected.getMessage().contains("42501"); }
+        assert rollbacks == 1 && commits == 1 && passwordUpdates == 1;
+        syncResponse = "{\"responses\":[{\"resNum\":\"0\"}]}";
+        rejectPasswordUpdate = true;
+        try { mail.updateCredential(null, account, UserCredentialModel.password("synthetic-secret"));
+            throw new AssertionError("SQL failure accepted"); }
+        catch (IllegalStateException expected) {
+            assert expected.getCause() == null && expected.getMessage().contains("XX000");
+            assert !expected.getMessage().contains("private SQL");
+        }
+        rejectPasswordUpdate = false;
         assert account.getEmail().equals(email);
         assert account.getFirstAttribute(UserModel.EMAIL).equals(email);
         assert account.getAttributeStream(UserModel.EMAIL).toList().equals(List.of(email));
@@ -159,6 +200,10 @@ public final class GatorStorageSelfCheck {
         try { changedEmail.setEmail("attacker@example.invalid"); throw new AssertionError("Email source is read only"); }
         catch (org.keycloak.storage.ReadOnlyException expected) { }
 
+        mapped.removeRequiredAction(UserModel.RequiredAction.UPDATE_PASSWORD);
+        assert lastQuery.contains("usuario_hash_auth = null") && lastUser.equals("Admin");
+        mapped.addRequiredAction(UserModel.RequiredAction.UPDATE_PASSWORD);
+        assert lastQuery.contains("usuario_hash_auth = 'UPDATE_PASSWORD'") && lastUser.equals("Admin");
         mapped.joinGroup(group);
         mapped.grantRole(role);
         var reloaded = new GatorUserStorageProvider(session, legacy).getUserById(realm, mapped.getId());

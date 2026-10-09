@@ -12,6 +12,87 @@ import java.util.Map;
 
 public final class AccessCodeSelfCheck {
     public static void main(String[] args) throws Exception {
+        var identityBody = com.google.gson.JsonParser.parseString("{\"issuer\":\"forged\",\"subject\":\"forged\",\"usuario\":\"Admin\"}").getAsJsonObject();
+        var authenticatedUser = com.google.gson.JsonParser.parseString("{\"sub\":\"Exact-Subject\",\"preferred_username\":\"renamed\"}").getAsJsonObject();
+        var identityRequest = OAuthServlet.identityRequest(identityBody,authenticatedUser);
+        assert identityRequest.get("issuer").getAsString().equals("https://identity.example/realms/test");
+        assert identityRequest.get("subject").getAsString().equals("Exact-Subject");
+        assert identityRequest.get("usuario").getAsString().equals("Admin");
+        assert identityBody.get("subject").getAsString().equals("forged");
+        for (String action : List.of("sync", "safeList")) {
+            var target = JsonParser.parseString("{\"usuario\":\"admin\",\"issuer\":\"forged\",\"subject\":\"forged\"}").getAsJsonObject();
+            target.addProperty("action", action);
+            var actor = JsonParser.parseString("{\"sub\":\"actor-A\",\"preferred_username\":\"Admin\"}").getAsJsonObject();
+            var administrative = OAuthServlet.identityRequest(target, actor);
+            assert administrative.get("usuario").getAsString().equals("admin") : "Admin action must retain its exact target";
+            assert administrative.get("subject").getAsString().equals("actor-A") : "Actor must come from authentication";
+            assert administrative.get("issuer").getAsString().equals("https://identity.example/realms/test");
+        }
+        try { OAuthServlet.identityRequest(identityBody,new com.google.gson.JsonObject()); throw new AssertionError("Missing subject accepted"); }
+        catch (IllegalArgumentException expected) { }
+        assert OAuthServlet.authenticatedSubject(authenticatedUser).equals("Exact-Subject");
+        for (String invalid : List.of("null", "42", "true", "[]", "{}", "\"\"", "\"   \"")) {
+            var malformed = JsonParser.parseString("{\"sub\":" + invalid + "}").getAsJsonObject();
+            try { OAuthServlet.authenticatedSubject(malformed); throw new AssertionError("Malformed subject accepted: " + invalid); }
+            catch (IllegalArgumentException expected) { }
+        }
+        var oauthAttributes = new java.util.HashMap<String,Object>();
+        oauthAttributes.put("oidc.subject", "previous-subject");
+        oauthAttributes.put("oidc.user", "previous-user");
+        oauthAttributes.put("oidc.access", "previous-token");
+        oauthAttributes.put("oidc.refresh", "previous-refresh");
+        oauthAttributes.put("oidc.id", "previous-id");
+        oauthAttributes.put("mail.challenge.verified", true);
+        var oauthSession = (jakarta.servlet.http.HttpSession) java.lang.reflect.Proxy.newProxyInstance(
+                AccessCodeSelfCheck.class.getClassLoader(), new Class<?>[]{jakarta.servlet.http.HttpSession.class},
+                (proxy, method, values) -> switch (method.getName()) {
+                    case "getAttribute" -> oauthAttributes.get(values[0]);
+                    case "getAttributeNames" -> java.util.Collections.enumeration(new java.util.ArrayList<>(oauthAttributes.keySet()));
+                    case "setAttribute" -> { oauthAttributes.put((String) values[0], values[1]); yield null; }
+                    case "removeAttribute" -> { oauthAttributes.remove(values[0]); yield null; }
+                    default -> null;
+                });
+        var oauthRequest = (jakarta.servlet.http.HttpServletRequest) java.lang.reflect.Proxy.newProxyInstance(
+                AccessCodeSelfCheck.class.getClassLoader(), new Class<?>[]{jakarta.servlet.http.HttpServletRequest.class},
+                (proxy, method, values) -> switch (method.getName()) {
+                    case "getSession" -> oauthSession;
+                    case "changeSessionId" -> "rotated";
+                    default -> null;
+                });
+        var freshToken = JsonParser.parseString("{\"access_token\":\"new-token\",\"expires_in\":300}").getAsJsonObject();
+        for (String malformed : List.of("{\"sub\":42,\"preferred_username\":\"new-user\"}",
+                "{\"sub\":\"new-subject\"}", "{\"sub\":\"new-subject\",\"preferred_username\":42}")) {
+            try { OAuthServlet.saveAuthenticatedSession(oauthRequest, freshToken, JsonParser.parseString(malformed).getAsJsonObject());
+                throw new AssertionError("Malformed callback changed session"); }
+            catch (IllegalArgumentException expected) { }
+            assert oauthAttributes.get("oidc.access").equals("previous-token");
+            assert oauthAttributes.get("oidc.subject").equals("previous-subject");
+            assert Boolean.TRUE.equals(oauthAttributes.get("mail.challenge.verified"));
+        }
+        var sameIdentity = JsonParser.parseString("{\"sub\":\"previous-subject\",\"preferred_username\":\"previous-user\"}").getAsJsonObject();
+        OAuthServlet.saveAuthenticatedSession(oauthRequest, freshToken, sameIdentity);
+        assert Boolean.TRUE.equals(oauthAttributes.get("mail.challenge.verified"));
+        OAuthServlet.saveAuthenticatedSession(oauthRequest, freshToken, authenticatedUser);
+        assert oauthAttributes.get("oidc.subject").equals("Exact-Subject");
+        assert oauthAttributes.get("oidc.user").equals("renamed");
+        assert !oauthAttributes.containsKey("oidc.refresh");
+        assert !oauthAttributes.containsKey("oidc.id");
+        assert !oauthAttributes.containsKey("mail.challenge.verified") : "A new identity must not inherit another account's challenge";
+        var principal = JsonParser.parseString("{\"issuer\":\"https://identity.example/realms/test\",\"subject\":\"Exact-Subject\",\"preferred_username\":\"untrusted-label\"}").getAsJsonObject();
+        assert MailServlet.operationalUser(oauthSession, principal, (issuer, subject) -> {
+            assert issuer.equals("https://identity.example/realms/test");
+            assert subject.equals("Exact-Subject");
+            return "OperationalCase";
+        }).equals("OperationalCase");
+        oauthAttributes.put("mail.challenge.verified", true);
+        principal.addProperty("preferred_username", "renamed-again");
+        assert MailServlet.operationalUser(oauthSession, principal, (issuer, subject) -> "OperationalCase").equals("OperationalCase");
+        assert Boolean.TRUE.equals(oauthAttributes.get("mail.challenge.verified"));
+        try { MailServlet.operationalUser(oauthSession, principal, (issuer, subject) -> { throw new SecurityException("unlinked"); });
+            throw new AssertionError("Unlinked identity accepted"); }
+        catch (SecurityException expected) { }
+        assert MailServlet.operationalUser(oauthSession, principal, (issuer, subject) -> "DifferentCase").equals("DifferentCase");
+        assert !oauthAttributes.containsKey("mail.challenge.verified") : "Changed local mapping must clear account state";
         LogoutSelfCheck.run();
         MailImagesSelfCheck.run();
         MailHtmlSelfCheck.run();

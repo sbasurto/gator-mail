@@ -67,12 +67,8 @@ returns text language sql stable security definer set search_path = public as $$
     select json_build_object('codigo', '0', 'admin', mail_fn_es_admin(v_email))::text;
 $$;
 
-create or replace function mail_fn_usuario_opciones(v_usuario text)
-returns text language sql stable security definer set search_path = public as $$
-    select json_build_object('codigo', case when count(*) = 1 then '0' else '-1' end,
-           'smsEnabled', coalesce(bool_or(usuario_sms_auth), false))::text
-      from app_usuarios where usuario_id = trim(v_usuario);
-$$;
+-- mail_fn_usuario_opciones is published from the canonical App artifact:
+-- app/postgresql/mail/mail_pg_fn_usuario_opciones.sql (allGatorMailService).
 
 create or replace function mail_fn_usuario_opciones_guardar(v_json text)
 returns text language plpgsql security definer set search_path = public as $$

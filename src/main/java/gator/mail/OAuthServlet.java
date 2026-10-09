@@ -89,19 +89,45 @@ public final class OAuthServlet extends HttpServlet {
         try {
             JsonObject token = token("grant_type=authorization_code&client_id=gator-mail&code=" + enc(req.getParameter("code"))
                     + "&redirect_uri=" + enc(redirect(req)) + "&code_verifier=" + enc(String.valueOf(s.getAttribute("oidc.verifier"))));
-            save(s, token);
             HttpRequest infoReq = HttpRequest.newBuilder(URI.create(issuer() + "/protocol/openid-connect/userinfo"))
+                    .timeout(java.time.Duration.ofSeconds(10))
                     .header("Authorization", "Bearer " + token.get("access_token").getAsString()).GET().build();
             HttpResponse<String> info = HTTP.send(infoReq, HttpResponse.BodyHandlers.ofString());
-            if (info.statusCode() != 200) throw new IllegalStateException();
+            if (info.statusCode() != 200 || info.body().length() > 65_536) throw new IllegalStateException();
             JsonObject user = JsonParser.parseString(info.body()).getAsJsonObject();
-            req.changeSessionId();
-            s.setAttribute("oidc.user", user.get("preferred_username").getAsString());
-            if (user.has("locale") && !user.get("locale").isJsonNull()) s.setAttribute("oidc.locale", user.get("locale").getAsString());
-            s.removeAttribute("oidc.state"); s.removeAttribute("oidc.verifier");
+            saveAuthenticatedSession(req, token, user);
             res.sendRedirect(req.getContextPath() + "/mail");
         } catch (Exception e) { res.sendError(503, "No fue posible completar el acceso OAuth"); }
     }
+    static void saveAuthenticatedSession(HttpServletRequest request, JsonObject token, JsonObject user) {
+        String subject = authenticatedSubject(user);
+        if (!user.has("preferred_username") || !user.get("preferred_username").isJsonPrimitive()
+                || !user.get("preferred_username").getAsJsonPrimitive().isString()
+                || user.get("preferred_username").getAsString().isBlank())
+            throw new IllegalArgumentException("Missing username");
+        String username = user.get("preferred_username").getAsString();
+        String locale = user.has("locale") && !user.get("locale").isJsonNull()
+                ? user.get("locale").getAsString() : null;
+        HttpSession session = request.getSession(false);
+        synchronized (session) {
+            save(session, token);
+            if (!token.has("refresh_token")) session.removeAttribute("oidc.refresh");
+            if (!token.has("id_token")) session.removeAttribute("oidc.id");
+            request.changeSessionId();
+            if (!subject.equals(session.getAttribute("oidc.subject"))
+                    || !username.equals(session.getAttribute("oidc.user"))) {
+                java.util.Collections.list(session.getAttributeNames()).stream()
+                        .filter(name -> name.startsWith("mail.")).forEach(session::removeAttribute);
+            }
+            session.setAttribute("oidc.subject", subject);
+            session.setAttribute("oidc.user", username);
+            if (locale == null) session.removeAttribute("oidc.locale");
+            else session.setAttribute("oidc.locale", locale);
+            session.removeAttribute("oidc.state");
+            session.removeAttribute("oidc.verifier");
+        }
+    }
+
     static String accessToken(HttpServletRequest req) throws Exception {
         HttpSession s = req.getSession(false);
         if (s == null) throw new ReauthenticationRequired();
@@ -116,6 +142,40 @@ public final class OAuthServlet extends HttpServlet {
             }
             return String.valueOf(s.getAttribute("oidc.access"));
         }
+    }
+
+    static JsonObject identityRequest(HttpServletRequest request, JsonObject body) {
+        try {
+            HttpRequest info = HttpRequest.newBuilder(URI.create(issuer()+"/protocol/openid-connect/userinfo"))
+                    .timeout(java.time.Duration.ofSeconds(10))
+                    .header("Authorization","Bearer "+accessToken(request)).GET().build();
+            var response = HTTP.send(info,HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode()==401 || response.statusCode()==403) throw new ReauthenticationRequired();
+            if (response.statusCode()!=200 || response.body().length()>65536) throw new IOException("Identity service unavailable");
+            JsonObject identity = JsonParser.parseString(response.body()).getAsJsonObject();
+            HttpSession session = request.getSession(false);
+            String subject = authenticatedSubject(identity);
+            if (session.getAttribute("oidc.subject") instanceof String previous && !previous.equals(subject))
+                throw new ReauthenticationRequired();
+            session.setAttribute("oidc.subject",subject);
+            return identityRequest(body,identity);
+        } catch (Exception failure) { throw new IllegalStateException("No fue posible verificar la identidad",failure); }
+    }
+
+    static String authenticatedSubject(JsonObject authenticatedUser) {
+        if (!authenticatedUser.has("sub") || !authenticatedUser.get("sub").isJsonPrimitive()
+                || !authenticatedUser.get("sub").getAsJsonPrimitive().isString()
+                || authenticatedUser.get("sub").getAsString().isBlank())
+            throw new IllegalArgumentException("Missing subject");
+        return authenticatedUser.get("sub").getAsString();
+    }
+
+    static JsonObject identityRequest(JsonObject body, JsonObject authenticatedUser) {
+        String subject = authenticatedSubject(authenticatedUser);
+        JsonObject result = body.deepCopy();
+        result.addProperty("issuer", issuer());
+        result.addProperty("subject", subject);
+        return result;
     }
 
     static boolean active(HttpServletRequest req) {
@@ -144,7 +204,16 @@ public final class OAuthServlet extends HttpServlet {
         if (status != 200) throw new IOException("No fue posible renovar OAuth: HTTP " + status);
         return JsonParser.parseString(body).getAsJsonObject();
     }
-    private static void save(HttpSession s, JsonObject token) { s.setAttribute("oidc.access", token.get("access_token").getAsString()); if (token.has("refresh_token")) s.setAttribute("oidc.refresh", token.get("refresh_token").getAsString()); if (token.has("id_token")) s.setAttribute("oidc.id", token.get("id_token").getAsString()); s.setAttribute("oidc.expires", System.currentTimeMillis() + token.get("expires_in").getAsLong() * 1000); }
+    private static void save(HttpSession session, JsonObject token) {
+        String access = token.get("access_token").getAsString();
+        long expires = System.currentTimeMillis() + token.get("expires_in").getAsLong() * 1000;
+        String refresh = token.has("refresh_token") ? token.get("refresh_token").getAsString() : null;
+        String id = token.has("id_token") ? token.get("id_token").getAsString() : null;
+        session.setAttribute("oidc.access", access);
+        session.setAttribute("oidc.expires", expires);
+        if (refresh != null) session.setAttribute("oidc.refresh", refresh);
+        if (id != null) session.setAttribute("oidc.id", id);
+    }
     static String endSession(String idToken) {
         String hint = idToken.isBlank() || "null".equals(idToken) ? "" : "&id_token_hint=" + enc(idToken);
         return issuer() + "/protocol/openid-connect/logout?client_id=gator-mail" + hint;

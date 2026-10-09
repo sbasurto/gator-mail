@@ -136,6 +136,17 @@ final class GatorUserStorageProvider implements UserStorageProvider, UserLookupP
                 return account.passwordChangeRequired()
                         ? Stream.of(UserModel.RequiredAction.UPDATE_PASSWORD.name()) : Stream.empty();
             }
+            @Override public void addRequiredAction(String action) {
+                if (UserModel.RequiredAction.UPDATE_PASSWORD.name().equals(action))
+                    execute("update app_usuarios set usuario_hash_auth = 'UPDATE_PASSWORD' where usuario_id = ?", account.username());
+                else super.addRequiredAction(action);
+            }
+            @Override public void addRequiredAction(UserModel.RequiredAction action) {
+                addRequiredAction(action.name());
+            }
+            @Override public void removeRequiredAction(UserModel.RequiredAction action) {
+                removeRequiredAction(action.name());
+            }
             @Override public void removeRequiredAction(String action) {
                 if (UserModel.RequiredAction.UPDATE_PASSWORD.name().equals(action)) clearPasswordChange(account.username());
             }
@@ -190,19 +201,43 @@ final class GatorUserStorageProvider implements UserStorageProvider, UserLookupP
         execute("update app_usuarios set usuario_hash_auth = null where usuario_id = ?", username);
     }
 
+    static void requireSyncSuccess(String response) {
+        String errorCode = "invalid-response";
+        try {
+            Map<?, ?> result = org.keycloak.util.JsonSerialization.readValue(response, Map.class);
+            if (result.get("responses") instanceof List<?> entries && entries.size() == 1
+                    && entries.get(0) instanceof Map<?, ?> entry && entry.get("resNum") instanceof String code) {
+                if ("0".equals(code)) return;
+                if (code.matches("[A-Z0-9]{1,12}")) errorCode = code;
+            }
+        } catch (java.io.IOException | RuntimeException invalid) {
+            // Downstream output can contain sensitive context; never echo it in server logs.
+        }
+        throw new IllegalStateException("Password synchronization rejected: " + errorCode);
+    }
+
     private void updatePassword(String username, String password) {
         try (Connection connection = DriverManager.getConnection(required("GATOR_IDP_JDBC_URL"),
                 required("GATOR_IDP_JDBC_USER"), required("GATOR_IDP_JDBC_PASSWORD"))) {
             connection.setAutoCommit(false);
             try (PreparedStatement sync = connection.prepareStatement(
-                        "select app_fn_admon_tablas_all(json_build_object('usuario', ?, 'password', ?)::text)");
+                        "select app_fn_sync_identity_password(json_build_object('usuario', ?, 'password', ?)::text)");
                  PreparedStatement update = connection.prepareStatement(
-                        "update app_usuarios set usuario_password = ?, usuario_hash_auth = null where usuario_id = ?")) {
+                        "update app_usuarios set usuario_password = case "
+                        + "when ? ~ '^[0-9A-Fa-f]{128}$' and usuario_recover_hash is not null and usuario_hash_loops::integer > 0 "
+                        + "then app_fn_hash_password(?, usuario_recover_hash, usuario_hash_loops::integer) else ? end, "
+                        + "usuario_hash_auth = null where usuario_id = ?")) {
                 sync.setString(1, username);
                 sync.setString(2, password);
-                sync.executeQuery();
+                try (ResultSet response = sync.executeQuery()) {
+                    if (!response.next()) throw new IllegalStateException("Missing password synchronization response");
+                    requireSyncSuccess(response.getString(1));
+                }
                 update.setString(1, password);
-                update.setString(2, username);
+                // A literal 128-hex password must not be mistaken for an imported legacy hash by the source trigger.
+                update.setString(2, password);
+                update.setString(3, password);
+                update.setString(4, username);
                 if (update.executeUpdate() != 1) throw new IllegalStateException("Usuario Gator no encontrado");
                 connection.commit();
             } catch (SQLException | RuntimeException e) {
@@ -210,7 +245,10 @@ final class GatorUserStorageProvider implements UserStorageProvider, UserLookupP
                 throw e;
             }
         } catch (SQLException e) {
-            throw new IllegalStateException("No fue posible sincronizar la contraseña Gator", e);
+            String state = e.getSQLState();
+            String code = state != null && state.matches("[A-Z0-9]{5}") ? state : "SQL";
+            // JDBC exception details can contain the password from the source UPDATE.
+            throw new IllegalStateException("No fue posible sincronizar la contraseña Gator (" + code + ")");
         }
     }
 
