@@ -24,6 +24,10 @@
         <servlet-name>OAuth</servlet-name>
         <url-pattern>/oauth/*</url-pattern>
     </servlet-mapping>
+    <error-page>
+        <error-code>403</error-code>
+        <location>/errors/403.jsp</location>
+    </error-page>
     <welcome-file-list><welcome-file>index.jsp</welcome-file></welcome-file-list>
     <context-param>
         <param-name>gappConfigFile</param-name>

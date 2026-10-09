@@ -78,7 +78,8 @@ public final class OAuthServlet extends HttpServlet {
         s.setAttribute("oidc.state", state); s.setAttribute("oidc.verifier", verifier);
         res.sendRedirect(issuer() + "/protocol/openid-connect/auth?response_type=code&scope=openid%20profile%20email&client_id=gator-mail&redirect_uri="
                 + enc(redirect(req)) + "&state=" + enc(state) + "&code_challenge_method=S256&code_challenge=" + enc(challenge(verifier))
-                + (action.isBlank() ? "" : "&kc_action=" + enc(action)));
+                + (action.isBlank() ? "" : "&kc_action=" + enc(action))
+                + ("login".equals(req.getParameter("prompt")) ? "&prompt=login" : ""));
     }
     private void callback(HttpServletRequest req, HttpServletResponse res) throws IOException {
         HttpSession s = req.getSession(false);

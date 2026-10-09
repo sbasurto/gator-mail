@@ -14,9 +14,12 @@ repositories {
     mavenCentral()
 }
 
+configurations { sharedErrorPages }
+
 dependencies {
     implementation 'gator.lib:gator-lib:1.0.0-SNAPSHOT'
     implementation 'gator.lib:gator-lib-web-gui:1.0.0-SNAPSHOT'
+    sharedErrorPages('gator.lib:gator-lib-web-resources:1.0.0-SNAPSHOT') { transitive = false }
     implementation 'org.eclipse.angus:angus-mail:2.0.4'
     implementation 'org.postgresql:postgresql:42.7.10'
     implementation 'com.googlecode.owasp-java-html-sanitizer:owasp-java-html-sanitizer:20260313.1'
@@ -32,7 +35,14 @@ application {
 tasks.withType(JavaCompile).configureEach { options.encoding = 'UTF-8' }
 
 tasks.named('war') {
+    dependsOn configurations.sharedErrorPages
     webAppDirectory = file('web')
+    // Mail needs the shared error presentation, without exposing the other applications' JSP endpoints.
+    from({ zipTree(configurations.sharedErrorPages.singleFile) }) {
+        include 'META-INF/resources/errors/access-error.jspf'
+        eachFile { path = 'errors/access-error.jspf' }
+        includeEmptyDirs = false
+    }
     archiveFileName = 'gator-mail.war'
     destinationDirectory = file('dist')
 }

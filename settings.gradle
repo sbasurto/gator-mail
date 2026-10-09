@@ -8,3 +8,7 @@ if (gatorLibDir.isDirectory()) { includeBuild(gatorLibDir) }
 def gatorWebGuiDir = file('../gator-lib-web-gui')
 if (!gatorWebGuiDir.isDirectory()) { gatorWebGuiDir = file('../javaProjects/gator-lib-web-gui') }
 if (gatorWebGuiDir.isDirectory()) { includeBuild(gatorWebGuiDir) }
+
+def gatorWebResourcesDir = file('../gator-lib-web-resources')
+if (!gatorWebResourcesDir.isDirectory()) { gatorWebResourcesDir = file('../javaProjects/gator-lib-web-resources') }
+if (gatorWebResourcesDir.isDirectory()) { includeBuild(gatorWebResourcesDir) }

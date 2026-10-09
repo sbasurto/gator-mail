@@ -57,6 +57,17 @@ final class LogoutSelfCheck {
         path[0] = "/logged-out";
         servlet.doGet(request, response);
         assert body.toString().contains("Tu sesión ha finalizado");
+        path[0] = "/login";
+        parameter[0] = "login";
+        servlet.doGet(request, response);
+        assert redirect[0].contains("&prompt=login") : "Denied users need to choose a different account";
+        assert redirect[0].contains("code_challenge_method=S256");
+        for (String prompt : new String[]{null, "none", "login&redirect_uri=https://invalid.example"}) {
+            parameter[0] = prompt;
+            servlet.doGet(request, response);
+            assert !redirect[0].contains("&prompt=");
+            assert !redirect[0].contains("invalid.example");
+        }
     }
 
     private interface Call { Object invoke(String method, Object[] args); }
