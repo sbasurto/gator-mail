@@ -61,6 +61,18 @@ public final class GatorIdentityAdminFixtureDriver implements Driver {
         Map<String,Map<String,Object>> source=(Map)state.get("source"),operations=(Map)state.get("operations"),projected=(Map)state.get("projected");
         if(action.equals("authorize")) {
             boolean allowed=Objects.equals(state.get("adminSubject"),input.get("actorSubject"))&&"1".equals(input.get("destinationDbId"));
+            if ("get".equals(input.get("operation")) && state.containsKey("listOnlySubject"))
+                allowed = allowed && Objects.equals(state.get("listOnlySubject"), input.get("targetSubject"));
+            if ("list".equals(input.get("operation"))) {
+                Set<String> subjects = new HashSet<>();
+                if (state.containsKey("listOnlySubject")) subjects.add((String)state.get("listOnlySubject"));
+                else {
+                    subjects.addAll((Collection<String>)state.getOrDefault("knownSubjects",List.of()));
+                    subjects.addAll(projected.keySet());
+                    source.keySet().forEach(name -> subjects.add("f:"+state.get("componentId")+":"+name));
+                }
+                return Map.of("authorized",allowed,"authorizedSubjects",subjects);
+            }
             return Map.of("authorized",allowed);
         }
         if(action.equals("sourceUpdate")) {
@@ -83,7 +95,9 @@ public final class GatorIdentityAdminFixtureDriver implements Driver {
             projected.put((String)event.get("targetSubject"),new LinkedHashMap<>(event));event.put("status","applied");return Map.of("status","applied");
         }
         if(action.equals("status")) {
-            Map<String,Object> event=operations.get(input.get("operationId"));if(Objects.equals(state.get("pendingGrantSubject"),input.get("targetSubject")))return Map.of("status","pending");return event==null?Map.of("status","pending"):Map.of("status",event.get("status"));
+            if (Objects.equals(state.get("hiddenStatusOperation"),input.get("operationId"))) return Map.of("status","notFound");
+            if (Objects.equals(state.get("failedStatusOperation"),input.get("operationId"))) return Map.of("status","failed");
+            Map<String,Object> event=operations.get(input.get("operationId"));if(Objects.equals(state.get("pendingGrantSubject"),input.get("targetSubject")))return Map.of("status","pending");return event==null?Map.of("status","notFound"):Map.of("status",event.get("status"));
         }
         throw new IllegalArgumentException("Unsupported synthetic contract");
     }

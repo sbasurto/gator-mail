@@ -10,6 +10,24 @@ import java.lang.reflect.Proxy;
 /** Security and retry checks use synthetic identities and no network/database. */
 public final class GatorIdentityAdminSelfCheck {
     public static void main(String[] args) {
+        String requestId="11111111-2222-3333-4444-555555555555";
+        assert GatorIdentityAdminResource.createSubject("https://id/realms/gator","client",requestId)
+                .equals(GatorIdentityAdminResource.createSubject("https://id/realms/gator","client",requestId));
+        assert !GatorIdentityAdminResource.createSubject("https://id/realms/gator","client",requestId)
+                .equals(GatorIdentityAdminResource.createSubject("https://id/realms/gator","other",requestId));
+        assert GatorIdentityAdminResource.createFingerprint(Map.of("username","exact","name","Name"))
+                .equals(GatorIdentityAdminResource.createFingerprint(Map.of("name","Name","username","exact")));
+        assert !GatorIdentityAdminResource.createFingerprint(Map.of("name","Before"))
+                .equals(GatorIdentityAdminResource.createFingerprint(Map.of("name","After")));
+        assert GatorIdentityAdminResource.authorizedSubjects(Map.of("authorizedSubjects",List.of("exact-A","exact-B")))
+                .equals(Set.of("exact-A","exact-B"));
+        assert GatorIdentityAdminResource.authorizedSubjects(Map.of("authorizedSubjects",List.of())).isEmpty();
+        for (Map<String,Object> invalid : List.of(Map.<String,Object>of(),Map.<String,Object>of("authorizedSubjects","all"),
+                Map.<String,Object>of("authorizedSubjects",List.of(42)),Map.<String,Object>of("authorizedSubjects",List.of("")),
+                Map.<String,Object>of("authorizedSubjects",List.of("same","same")))) {
+            try { GatorIdentityAdminResource.authorizedSubjects(invalid); throw new AssertionError("Malformed SQL scope accepted"); }
+            catch (IllegalStateException expected) { }
+        }
         assert !GatorIdentityAdmin.enabled("gator", null);
         assert !GatorIdentityAdmin.enabled("legacy", "true");
         assert GatorIdentityAdmin.enabled("gator", "true");
@@ -34,11 +52,34 @@ public final class GatorIdentityAdminSelfCheck {
             try { GatorIdentityAdminSql.response(failed); throw new AssertionError("Failure accepted"); }
             catch (IllegalStateException expected) { assert !expected.getMessage().contains("private"); }
         }
+        retainedOperation();
+        authorizedPagination();
         accessGroup();
         tokenScope();
         replayFailure();
         enqueueFailure();
         System.out.println("Identity administration security checks passed");
+    }
+    static void retainedOperation() {
+        AdminEvent event=new AdminEvent();event.setResourceType(org.keycloak.events.admin.ResourceType.USER);
+        event.setOperationType(org.keycloak.events.admin.OperationType.UPDATE);event.setResourcePath("users/exact-target");
+        event.setDetails(new java.util.HashMap<>(Map.of("gator.operationId","operation-fixture","gator.destinationDbId","1")));
+        assert GatorIdentityAdminResource.retainedOperation(event,"operation-fixture","exact-target","1");
+        assert !GatorIdentityAdminResource.retainedOperation(event,"unknown-operation","exact-target","1");
+        assert !GatorIdentityAdminResource.retainedOperation(event,"operation-fixture","other-target","1");
+        assert !GatorIdentityAdminResource.retainedOperation(event,"operation-fixture","exact-target","2");
+        event.setError("Denied");assert !GatorIdentityAdminResource.retainedOperation(event,"operation-fixture","exact-target","1");
+    }
+    static void authorizedPagination() {
+        List<Integer> raw=java.util.stream.IntStream.range(0,240).boxed().toList();
+        List<Integer> requests=new ArrayList<>();
+        java.util.function.IntFunction<List<Integer>> pages=offset->{requests.add(offset);return raw.subList(Math.min(offset,raw.size()),Math.min(offset+100,raw.size()));};
+        java.util.function.Predicate<Integer> allowed=value->value>=105 && value%2==1;
+        assert GatorIdentityAdminResource.authorizedPage(pages,allowed,1,3).equals(List.of(107,109,111)):"Pagination must count only authorized identities";
+        assert requests.equals(List.of(0,100)):"Stop after the requested authorized slice";
+        assert GatorIdentityAdminResource.authorizedPage(pages,allowed,67,10).equals(List.of(239));
+        assert GatorIdentityAdminResource.authorizedPage(pages,allowed,68,10).isEmpty();
+        requests.clear();assert GatorIdentityAdminResource.authorizedPage(pages,allowed,0,0).isEmpty() && requests.isEmpty();
     }
     static void accessGroup() {
         RoleModel access=proxy(RoleModel.class,(o,m,v)->switch(m.getName()) {case "getId"->"access";case "isComposite"->false;default->null;});

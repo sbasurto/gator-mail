@@ -111,6 +111,25 @@ omisión. La habilitación y las concesiones de instalación siguen siendo pasos
 explícitos posteriores a la proyección confirmada; los permisos de negocio no
 se conceden como efecto de actualizar una identidad.
 
+CREATE admite un `requestId` UUID opcional. El cliente debe conservarlo antes
+del primer envío y reutilizarlo ante una respuesta perdida. El servidor deriva
+un subject nativo inmutable de issuer/cliente/UUID y registra actor, destino,
+huella de parámetros y operación en atributos protegidos. Reintentar exige
+autorización vigente y la misma procedencia SQL; devuelve el mismo subject y
+operación, sin volver a crear, actualizar contraseñas, habilitar o conceder
+roles. Un actor/destino diferente recibe 403; reutilizar la clave con otros
+parámetros recibe 409. No se buscan identidades por nombre para recuperarlas.
+
+`get` devuelve `{user, status:"complete"}`. `list` acepta `first` y `max` (hasta
+100); los desplazamientos cuentan usuarios autorizados después de aplicar el
+alcance SQL. `authorize/list` debe devolver `authorizedSubjects`, el conjunto
+exacto permitido; no se hacen consultas SQL individuales para filtrar cada
+usuario. Una respuesta de alcance ausente o malformada falla cerrada. La
+exploración se limita a 10.000 usuarios de realm y falla
+explícitamente si supera el límite. Una operación desconocida devuelve 404;
+un evento durable todavía no proyectado puede devolver pending, sólo para el
+subject y destino exactos retenidos. Un estado SQL failed permanece failed.
+
 `grant` acepta solamente `targetSubject`. El atributo privado del cliente
 `gator.identityAdmin.accessGroupId` identifica un grupo existente que concede
 únicamente el rol no compuesto `access` de ese cliente. Se rechazan grupos o

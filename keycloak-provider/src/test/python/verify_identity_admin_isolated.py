@@ -2,13 +2,13 @@
 Usage: python3 verify_identity_admin_isolated.py /path/to/keycloak-26.7.0.tar.gz
 No production URLs/credentials accepted. Artifacts remain private under /tmp.
 """
-import hashlib,json,os,secrets,shutil,socket,subprocess,sys,tarfile,tempfile,time,urllib.error,urllib.parse,urllib.request
+import hashlib,importlib.util,json,os,secrets,shutil,socket,subprocess,sys,tarfile,tempfile,time,urllib.error,urllib.parse,urllib.request
 from pathlib import Path
 
 BASE='http://127.0.0.1:18881'
 ISSUER='https://127.0.0.1:18881/realms/gator'
 module=Path(__file__).resolve().parents[3]
-if len(sys.argv)!=2:raise SystemExit('Usage: verify_identity_admin_isolated.py keycloak-26.7.0.tar.gz')
+if len(sys.argv) not in (2,3):raise SystemExit('Usage: verify_identity_admin_isolated.py keycloak-26.7.0.tar.gz [identity_access.py]')
 with socket.socket() as s:
     if s.connect_ex(('127.0.0.1',18881))==0:raise SystemExit('Refusing an occupied test port')
 root=Path(tempfile.mkdtemp(prefix='gator-identity-admin-isolated-'))
@@ -78,6 +78,26 @@ try:
     fedpath='/admin/realms/gator/users/'+urllib.parse.quote(federated,safe='')
     request('POST','/admin/realms/gator/users',{'username':'synthetic-admin','firstName':'Synthetic','lastName':'Administrator','enabled':True,'emailVerified':True,'email':'admin@example.invalid','credentials':[{'type':'password','value':password,'temporary':False}]},master)
     admin=request('GET','/admin/realms/gator/users?username=synthetic-admin&exact=true',bearer=master)[0]
+    if len(sys.argv)==3:
+        spec=importlib.util.spec_from_file_location('isolated_identity_access',sys.argv[2]);helper=importlib.util.module_from_spec(spec);spec.loader.exec_module(helper)
+        request('POST','/admin/realms/gator/clients',{'clientId':'gator-mail','enabled':True,'publicClient':False,
+            'standardFlowEnabled':True,'directAccessGrantsEnabled':False,'implicitFlowEnabled':False,'serviceAccountsEnabled':False,
+            'fullScopeAllowed':True,'attributes':{'pkce.code.challenge.method':'S256'}},master)
+        def transport(path,data=None,method='GET'):
+            return request(method,'/admin/realms/gator'+('/'+path if path else ''),data,master)
+        plan={'version':1,'server':'isolated','issuer':ISSUER,'identityAdministration':{'enabled':False,'componentId':component['id'],
+            'expectedSha256':'0'*64,'clients':[{'clientId':'gator-mail','destinationDbId':1,'system':'mail',
+            'accessGroupName':'gator-mail-central-users','admins':[{'subject':admin['id'],'username':admin['username'],'confirmed':True}]}]}}
+        before=helper.administration_snapshot(transport,plan);plan['identityAdministration']['expectedSha256']=helper.administration_digest(before)
+        helper.configure_administration(transport,plan,True,str(root/'configuration-journal.json'))
+        after=helper.administration_snapshot(transport,plan)
+        assert after['clients']['gator-mail']['people'][admin['id']]['user']==before['clients']['gator-mail']['people'][admin['id']]['user']
+        assert transport('groups/'+after['clients']['gator-mail']['group']['id']+'/members')==[]
+        plan['identityAdministration']['expectedSha256']=helper.administration_digest(after)
+        helper.configure_administration(transport,plan,True,str(root/'configuration-idempotent-journal.json'))
+        assert helper.administration_snapshot(transport,plan)==after
+        component['config']['identityAdministrationEnabled']=['true']
+        request('PUT','/admin/realms/gator/components/'+component['id'],component,master)
     state=json.loads(fixture.read_text());state['adminSubject']=admin['id'];fixture.write_text(json.dumps(state))
     request('POST','/admin/realms/gator/clients',{'clientId':'installation-client','enabled':True,'publicClient':True,'directAccessGrantsEnabled':True,
         'attributes':{'gator.identityAdmin.destinationDbId':'1'},'fullScopeAllowed':True},master)
@@ -101,6 +121,7 @@ try:
         'requiredActions':['UPDATE_PASSWORD'],'credentials':[{'type':'password','value':secrets.token_urlsafe(20),'temporary':True}]},master)
     native=request('GET','/admin/realms/gator/users?username=synthetic-native&exact=true',bearer=master)[0]
     np='/admin/realms/gator/users/'+native['id']
+    state=json.loads(fixture.read_text());state['componentId']=component['id'];state['knownSubjects']=[admin['id'],native['id']];fixture.write_text(json.dumps(state))
     before_credentials=request('GET',np+'/credentials',bearer=master)
     before_required=request('GET',np,bearer=master)['requiredActions']
     endpoint='/realms/gator/gator-identity-admin'
@@ -111,6 +132,14 @@ try:
     request('PUT','/admin/realms/gator',realm,master)
     admin_token=token('gator','installation-client','synthetic-admin',password)
     request('POST',endpoint,{'action':'get','targetSubject':native['id']},expected=401)
+    request('POST',endpoint,{'action':'status','targetSubject':native['id'],'operationId':'unknown-operation'},admin_token,404)
+    queried=request('POST',endpoint,{'action':'get','targetSubject':native['id']},admin_token)
+    assert queried['user']['targetSubject']==native['id'] and queried['status']=='complete'
+    state=json.loads(fixture.read_text());state['listOnlySubject']=native['id'];fixture.write_text(json.dumps(state))
+    listed=request('POST',endpoint,{'action':'list','first':0,'max':1},admin_token)
+    assert [u['targetSubject'] for u in listed['users']]==[native['id']], 'Denied early identities must not hide later authorized user'
+    assert request('POST',endpoint,{'action':'list','first':1,'max':1},admin_token)['users']==[]
+    state=json.loads(fixture.read_text());state.pop('listOnlySubject');fixture.write_text(json.dumps(state))
     baseline_hash=json.loads(fixture.read_text())['source']['CaseUser']['hash']
     before_fed=request('GET',fedpath,bearer=master)
     assert before_fed['id']==federated and 'UPDATE_PASSWORD' in before_fed['requiredActions']
@@ -123,6 +152,12 @@ try:
     assert any(u['id']==federated for u in users) and any(u['id']==native['id'] for u in users)
     result=request('POST',endpoint,{'action':'update','targetSubject':native['id'],'name':'Changed Native','email':'changed-native@example.invalid'},admin_token)
     assert result['status']=='pending'
+    state=json.loads(fixture.read_text());state['hiddenStatusOperation']=result['operationId'];fixture.write_text(json.dumps(state))
+    assert request('POST',endpoint,{'action':'status','targetSubject':native['id'],'operationId':result['operationId']},admin_token)['status']=='pending'
+    request('POST',endpoint,{'action':'status','targetSubject':federated,'operationId':result['operationId']},admin_token,404)
+    state=json.loads(fixture.read_text());state.pop('hiddenStatusOperation');state['failedStatusOperation']=result['operationId'];fixture.write_text(json.dumps(state))
+    assert request('POST',endpoint,{'action':'status','targetSubject':native['id'],'operationId':result['operationId']},admin_token)['status']=='failed'
+    state=json.loads(fixture.read_text());state.pop('failedStatusOperation');fixture.write_text(json.dumps(state))
     wait_projection(native['id'],'name','Changed Native')
     assert request('GET',np+'/credentials',bearer=master)==before_credentials
     assert request('GET',np,bearer=master)['requiredActions']==before_required
@@ -137,11 +172,28 @@ try:
     assert request('POST',endpoint,{'action':'grant','targetSubject':federated},admin_token)['granted'] is True
     assert safe_group['id'] in [g['id'] for g in request('GET',fedpath+'/groups',bearer=master)]
     assert 'UPDATE_PASSWORD' in request('GET',fedpath,bearer=master)['requiredActions']
-    result=request('POST',endpoint,{'action':'create','username':'synthetic-created','localUsuario':'local-created','accountId':1,'bodegaId':1,'name':'Created','email':'created@example.invalid'},admin_token)
+    create_request={'action':'create','requestId':'11111111-2222-3333-4444-555555555555','username':'synthetic-created','localUsuario':'local-created','accountId':1,'bodegaId':1,'name':'Created','email':'created@example.invalid'}
+    result=request('POST',endpoint,create_request,admin_token)
     created=result['user']['targetSubject']
     assert result['status']=='pending' and result['user']['enabled'] is False
     assert request('GET','/admin/realms/gator/users/'+created+'/groups',bearer=master)==[]
     wait_projection(created,'operation','create')
+    # Treat the first successful response as lost: same UUID returns the same committed operation.
+    created_credentials=request('GET','/admin/realms/gator/users/'+created+'/credentials',bearer=master)
+    retried=request('POST',endpoint,create_request,admin_token)
+    assert retried['user']['targetSubject']==created and retried['operationId']==result['operationId']
+    assert len(request('GET','/admin/realms/gator/users?username=synthetic-created&exact=true',bearer=master))==1
+    assert request('GET','/admin/realms/gator/users/'+created+'/credentials',bearer=master)==created_credentials
+    request('POST',endpoint,dict(create_request,name='Changed retry'),admin_token,409)
+    request('POST','/admin/realms/gator/users',{'username':'synthetic-other-admin','firstName':'Other','lastName':'Administrator',
+        'email':'other-admin@example.invalid','emailVerified':True,'enabled':True,'credentials':[{'type':'password','value':password,'temporary':False}]},master)
+    other_admin=request('GET','/admin/realms/gator/users?username=synthetic-other-admin&exact=true',bearer=master)[0]
+    request('POST','/admin/realms/gator/users/'+other_admin['id']+'/role-mappings/clients/'+client['id'],[role],master)
+    other_token=token('gator','installation-client','synthetic-other-admin',password)
+    request('POST',endpoint,create_request,other_token,403)
+    client['attributes']['gator.identityAdmin.destinationDbId']='2';request('PUT',cp,client,master)
+    request('POST',endpoint,create_request,admin_token,403)
+    client['attributes']['gator.identityAdmin.destinationDbId']='1';request('PUT',cp,client,master)
     state=json.loads(fixture.read_text());state['pendingGrantSubject']=created;fixture.write_text(json.dumps(state))
     request('POST',endpoint,{'action':'grant','targetSubject':created},admin_token,409)
     assert request('GET','/admin/realms/gator/users/'+created+'/groups',bearer=master)==[]

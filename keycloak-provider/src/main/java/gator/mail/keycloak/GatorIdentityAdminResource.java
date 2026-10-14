@@ -51,7 +51,7 @@ public final class GatorIdentityAdminResource {
         Set<String> allowed = new HashSet<>(Set.of("action"));
         switch (action) {
             case "list" -> allowed.addAll(Set.of("first","max"));
-            case "create" -> allowed.addAll(Set.of("username","localUsuario","accountId","bodegaId","name","email"));
+            case "create" -> allowed.addAll(Set.of("username","localUsuario","accountId","bodegaId","name","email","requestId"));
             case "update" -> allowed.addAll(Set.of("targetSubject","name","email","enabled"));
             case "status" -> allowed.addAll(Set.of("targetSubject","operationId"));
             case "reset" -> allowed.addAll(Set.of("targetSubject","password","temporary"));
@@ -62,6 +62,7 @@ public final class GatorIdentityAdminResource {
         command.put("actorIssuer", auth.token().getIssuer()); command.put("actorSubject", auth.user().getId());
         command.put("issuer", GatorIdentityAdmin.issuer(session, realm));
         command.put("destinationDbId", destination); command.put("operation", action.equals("grant") ? "update" : action);
+        String createId = null; String createFingerprint = null; UserModel replay = null;
         if (action.equals("create")) {
             command.put("localUsuario",text(request,"localUsuario"));
             boolean mail = "mail".equals(client.getAttribute("gator.identityAdmin.system"));
@@ -72,27 +73,59 @@ public final class GatorIdentityAdminResource {
                     throw new BadRequestException("Invalid local scope");
                 command.put(field,value);
             }
+            if (request.containsKey("requestId")) {
+                String requestId=text(request,"requestId");
+                if (!requestId.matches("[a-fA-F0-9]{8}(-[a-fA-F0-9]{4}){3}-[a-fA-F0-9]{12}")) throw new BadRequestException("Invalid create request ID");
+                requestId=UUID.fromString(requestId).toString();
+                createId=createSubject(text(command,"issuer"),client.getClientId(),requestId);
+                createFingerprint=createFingerprint(request);
+                replay=session.users().getUserById(realm,createId);
+                if (replay!=null) {
+                    if (!Objects.equals(replay.getFirstAttribute("gator.identityAdmin.createActorSubject"),auth.user().getId())
+                            || !Objects.equals(replay.getFirstAttribute("gator.identityAdmin.createDestinationDbId"),destination)
+                            || !Objects.equals(replay.getFirstAttribute("gator.identityAdmin.createClientId"),client.getClientId())) throw new ForbiddenException();
+                    if (!Objects.equals(replay.getFirstAttribute("gator.identityAdmin.createRequestFingerprint"),createFingerprint))
+                        throw new ClientErrorException("Create request ID reused",409);
+                    command.put("targetSubject",replay.getId());
+                    command.put("operationId",replay.getFirstAttribute("gator.identityAdmin.createOperationId"));
+                }
+            }
         } else if (!action.equals("list")) command.put("targetSubject", GatorIdentityAdmin.subject(text(request, "targetSubject")));
         if (action.equals("status")) command.put("operationId",GatorIdentityAdmin.subject(text(request,"operationId")));
         Map<String,Object> authorization = sql.call("app_fn_identity_admin", command);
         if (!Boolean.TRUE.equals(authorization.get("authorized"))) throw new ForbiddenException();
+        if (replay!=null) {
+            Map<String,Object> statusCommand=new LinkedHashMap<>(command);statusCommand.put("action","status");
+            Map<String,Object> state=sql.call("app_fn_identity_admin",statusCommand);
+            String status=Objects.toString(state.get("status"),"");
+            if (status.equals("notFound")) {
+                if (!hasRetainedOperation(realm,text(command,"operationId"),replay.getId(),destination))
+                    throw new ServiceUnavailableException("Create operation unavailable");
+                status="pending";
+            }
+            if (!Set.of("pending","complete","failed","applied").contains(status)) throw new ServiceUnavailableException("Create operation unavailable");
+            return Map.of("operationId",text(command,"operationId"),"status",status.equals("applied")?"complete":status,"user",view(replay));
+        }
         if (action.equals("status")) {
             command.put("action", "status"); command.put("operationId", GatorIdentityAdmin.subject(text(request,"operationId")));
             Map<String,Object> result = new LinkedHashMap<>(sql.call("app_fn_identity_admin", command));
             if ("applied".equals(result.get("status"))) result.put("status","complete");
-            if ("notFound".equals(result.get("status"))) result.put("status","pending");
+            if ("notFound".equals(result.get("status"))) {
+                if (!hasRetainedOperation(realm, text(command,"operationId"), text(command,"targetSubject"), destination))
+                    throw new NotFoundException("Identity operation not found");
+                result.put("status","pending");
+            }
             return result;
         }
         if (action.equals("list")) {
             int first = integer(request.get("first"), 0); int max = Math.min(100, integer(request.get("max"), 20));
-            List<Map<String,Object>> users = new ArrayList<>();
-            try (var stream = session.users().searchForUserStream(realm, Map.of(), first, max)) {
-                stream.forEach(user -> {
-                    Map<String,Object> scope = new LinkedHashMap<>(command); scope.put("operation", "get");
-                    scope.put("targetSubject", user.getId());
-                    if (Boolean.TRUE.equals(sql.call("app_fn_identity_admin", scope).get("authorized"))) users.add(view(user));
-                });
-            }
+            Set<String> subjects = authorizedSubjects(authorization);
+            List<UserModel> eligible = authorizedPage(offset -> {
+                try (var stream = session.users().searchForUserStream(realm, Map.of(), offset, 100)) {
+                    return stream.toList();
+                }
+            }, user -> subjects.contains(user.getId()), first, max);
+            List<Map<String,Object>> users = eligible.stream().map(this::view).toList();
             return Map.of("users", users);
         }
         Map<String,Object> fields = new LinkedHashMap<>();
@@ -112,13 +145,13 @@ public final class GatorIdentityAdminResource {
             if (session.users().getUserByUsername(realm, username) != null) throw new ClientErrorException("Identity exists", 409);
             validateProfile(null, username, fields);
             // Explicitly suppress realm default roles/groups when creating an identity.
-            user = session.users().addUser(realm, UUID.randomUUID().toString(), username, false, false);
+            user = session.users().addUser(realm, createId==null?UUID.randomUUID().toString():createId, username, false, false);
             user.setEnabled(false);
         } else {
             user = session.users().getUserById(realm, text(command, "targetSubject"));
             if (user == null) throw new NotFoundException();
         }
-        if (action.equals("get")) return view(user);
+        if (action.equals("get")) return Map.of("user", view(user), "status", "complete");
         if (action.equals("grant")) return grant(realm, client, auth, user, command);
         if (!action.equals("create") && (fields.containsKey("name") || fields.containsKey("email")))
             validateProfile(user,user.getUsername(),fields);
@@ -137,7 +170,16 @@ public final class GatorIdentityAdminResource {
         }
         if (!user.isEnabled() || action.equals("reset")) session.sessions().removeUserSessions(realm,user);
         String operation = UUID.randomUUID().toString();
-        if (action.equals("create")) user.setSingleAttribute("gator.identityAdmin.createOperationId", operation);
+        if (action.equals("create")) {
+            if (createId!=null) {
+                operation=UUID.nameUUIDFromBytes(("create-operation:"+createId+":"+auth.user().getId()+":"+destination).getBytes(java.nio.charset.StandardCharsets.UTF_8)).toString();
+                user.setSingleAttribute("gator.identityAdmin.createActorSubject",auth.user().getId());
+                user.setSingleAttribute("gator.identityAdmin.createClientId",client.getClientId());
+                user.setSingleAttribute("gator.identityAdmin.createDestinationDbId",destination);
+                user.setSingleAttribute("gator.identityAdmin.createRequestFingerprint",createFingerprint);
+            }
+            user.setSingleAttribute("gator.identityAdmin.createOperationId", operation);
+        }
         AdminEventBuilder event = new AdminEventBuilder(realm, new AdminAuth(realm,auth.token(),auth.user(),client),
                 session, session.getContext().getConnection()).resource(ResourceType.USER)
                 .operation(action.equals("create") ? OperationType.CREATE : OperationType.UPDATE)
@@ -149,6 +191,68 @@ public final class GatorIdentityAdminResource {
         event.success();
         // The durable event commits with Keycloak; SQL projection happens only after that commit.
         return Map.of("operationId", operation, "status", "pending", "user", view(user));
+    }
+
+    static String createSubject(String issuer,String client,String requestId) {
+        return UUID.nameUUIDFromBytes(("closed-create:"+issuer+":"+client+":"+requestId).getBytes(java.nio.charset.StandardCharsets.UTF_8)).toString();
+    }
+
+    static String createFingerprint(Map<String,?> request) {
+        try {
+            TreeMap<String,Object> fields=new TreeMap<>(request);fields.remove("requestId");
+            byte[] canonical=org.keycloak.util.JsonSerialization.writeValueAsBytes(fields);
+            return HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(canonical));
+        } catch (java.io.IOException|java.security.NoSuchAlgorithmException failure) {throw new IllegalStateException("Create request unavailable");}
+    }
+
+    static boolean retainedOperation(AdminEvent event, String operation, String subject, String destination) {
+        return subject.equals(GatorIdentityAdmin.eventSubject(event)) && event.getDetails() != null
+                && operation.equals(event.getDetails().get("gator.operationId"))
+                && destination.equals(event.getDetails().get("gator.destinationDbId"));
+    }
+
+    private boolean hasRetainedOperation(RealmModel realm, String operation, String subject, String destination) {
+        org.keycloak.events.EventStoreProvider store = session.getProvider(org.keycloak.events.EventStoreProvider.class);
+        if (store == null) throw new IllegalStateException("Durable identity operation history unavailable");
+        for (int offset=0; offset<10_000; offset+=100) {
+            List<AdminEvent> events;
+            try (var stream=store.createAdminQuery().realm(realm.getId()).resourceType(ResourceType.USER)
+                    .orderByDescTime().firstResult(offset).maxResults(100).getResultStream()) { events=stream.toList(); }
+            if (events.stream().anyMatch(event -> retainedOperation(event,operation,subject,destination))) return true;
+            if (events.size()<100) return false;
+        }
+        throw new IllegalStateException("Durable identity operation query limit exceeded");
+    }
+
+    static Set<String> authorizedSubjects(Map<String,Object> authorization) {
+        if (!(authorization.get("authorizedSubjects") instanceof Collection<?> values) || values.size()>10000)
+            throw new IllegalStateException("Identity scope unavailable");
+        Set<String> subjects = new HashSet<>();
+        for (Object value : values) {
+            if (!(value instanceof String subject) || subject.isBlank() || subject.length()>1024
+                    || subject.chars().anyMatch(c -> c<32) || !subjects.add(subject))
+                throw new IllegalStateException("Identity scope unavailable");
+        }
+        return subjects;
+    }
+
+    static <T> List<T> authorizedPage(java.util.function.IntFunction<List<T>> pages,
+            java.util.function.Predicate<T> allowed, int first, int max) {
+        if (first < 0 || max < 0 || max > 100) throw new IllegalArgumentException("Invalid identity pagination");
+        List<T> result = new ArrayList<>();
+        if (max == 0) return result;
+        int skipped = 0;
+        for (int offset = 0; offset < 10_000; offset += 100) {
+            List<T> page = pages.apply(offset);
+            for (T candidate : page) {
+                if (!allowed.test(candidate)) continue;
+                if (skipped < first) { skipped++; continue; }
+                result.add(candidate);
+                if (result.size() == max) return result;
+            }
+            if (page.size() < 100) return result;
+        }
+        throw new IllegalStateException("Identity query limit exceeded");
     }
 
     private Map<String,Object> grant(RealmModel realm, ClientModel client, AuthResult auth,
