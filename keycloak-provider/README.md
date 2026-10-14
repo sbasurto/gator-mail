@@ -143,6 +143,12 @@ La fuente central excluye de lookup/byID/consulta/conteo cualquier fila cuya
 vinculación issuer/subject pertenezca a otra identidad que `f:componente:usuario`.
 Esto evita inventar una segunda identidad federada para una proyección Mail nativa;
 las fuentes legacy mantienen su comportamiento previo.
+Tras validar la tabla de vínculos, conservar en el componente central
+`nativeIdentityBindings=["true"]` permanentemente, incluso si se desactiva
+`identityAdministrationEnabled` o el gate del realm. Este filtro no habilita
+mutaciones administrativas. La recuperación CREATE exige política de atributos
+no gestionados DISABLED/ADMIN_VIEW/ADMIN_EDIT o los cinco marcadores declarados
+con permisos de lectura y edición únicamente para administradores.
 
 Las mutaciones devuelven `operationId` y `status: pending`. No afirman éxito de
 réplica antes de confirmar los destinos. `status` devuelve pending/complete/
