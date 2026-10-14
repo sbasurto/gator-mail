@@ -17,6 +17,7 @@ public final class GatorStorageSelfCheck {
     static String email;
     static int rowCount = 1;
     static Map<String, String> fixtureAccounts;
+    static Set<String> nativeBindings = Set.of();
     static String syncResponse = "{\"responses\":[{\"resNum\":\"0\"}]}";
     static Map<Integer, String> passwordBindings;
     static int commits, rollbacks, passwordUpdates;
@@ -42,20 +43,23 @@ public final class GatorStorageSelfCheck {
                         lastQuery = preparedSql;
                         Map<Integer, String> bindings = new HashMap<>();
                         return proxy(PreparedStatement.class, (statement, operation, parameters) -> {
+                            if (operation.getName().equals("setInt")) return null;
                             if (operation.getName().equals("setString")) { lastUser = (String) parameters[1]; bindings.put((Integer) parameters[0], lastUser); return null; }
                             if (operation.getName().equals("executeQuery")) {
                                 if (preparedSql.contains("json_build_object")) lastSyncQuery = preparedSql;
                                 List<String> names = preparedSql.contains("json_build_object") ? List.of(syncResponse)
-                                        : fixtureAccounts == null ? Collections.nCopies(rowCount, lastUser)
+                                        : preparedSql.startsWith("select count(*)") ? List.of("count") : fixtureAccounts == null ? Collections.nCopies(rowCount, lastUser)
                                         : fixtureAccounts.keySet().stream().filter(name -> {
-                                            if (lastQuery.contains("lower(e.usuario_email_email)")) return fixtureAccounts.get(name).equalsIgnoreCase(lastUser) && (!lastQuery.contains("position") || !name.contains("@"));
-                                            if (lastQuery.contains("lower(u.usuario_id)")) return name.equalsIgnoreCase(lastUser);
-                                            return name.equals(lastUser);
+                                            if (lastQuery.contains("subject <> concat('f:'") && nativeBindings.contains(name)) return false;
+                                            if (lastQuery.contains("order by u.usuario_id")) return true;
+                                            if (lastQuery.contains("lower(e.usuario_email_email)")) return fixtureAccounts.get(name).equalsIgnoreCase(bindings.get(1)) && (!lastQuery.contains("position") || !name.contains("@"));
+                                            if (lastQuery.contains("lower(u.usuario_id)")) return name.equalsIgnoreCase(bindings.get(1));
+                                            return name.equals(bindings.get(1));
                                         }).toList();
                                 int[] index = {-1};
                                 return proxy(ResultSet.class, (row, getter, column) -> {
                                     if (getter.getName().equals("next")) { return ++index[0] < names.size(); }
-                                    if (getter.getName().equals("getInt")) return 3;
+                                    if (getter.getName().equals("getInt")) return preparedSql.startsWith("select count(*)") ? fixtureAccounts.size() - (preparedSql.contains("subject <> concat('f:'") ? nativeBindings.size() : 0) : 3;
                                     if (getter.getName().equals("getString")) return switch ((int) column[0]) {
                                         case 1 -> names.get(index[0]);
                                         case 5 -> "1";
@@ -280,7 +284,56 @@ public final class GatorStorageSelfCheck {
         isolated.put("connectionEnvironmentPrefix", "invalid-prefix");
         try { erm.getUserByUsername(null, "admin"); throw new AssertionError("Invalid prefix accepted"); }
         catch (IllegalArgumentException expected) { }
-        System.out.println("Storage isolation and legacy compatibility OK");
+        ComponentModel central = new ComponentModel(); central.setId("central");
+        central.put("identityAdministrationEnabled", "true"); central.put("literalUsernames", "true");
+        RealmModel centralRealm = proxy(RealmModel.class, (o,m,v) -> switch(m.getName()) {
+            case "getName" -> "gator";case "getId" -> "gator-id";
+            case "getAttribute" -> "gator.identityAdmin.enabled".equals(v[0])?"true":"https://identity.example/realms/gator";
+            default -> null;
+        });
+        List<Map<String,Object>> updates = new ArrayList<>();
+        UserFederatedStorageProvider centralStorage = proxy(UserFederatedStorageProvider.class, (o,m,v) -> switch(m.getName()) {
+            case "getAttributes" -> attributes;
+            case "removeAttribute" -> {attributes.remove(v[2]);yield null;}
+            default -> throw new UnsupportedOperationException(m.getName());
+        });
+        KeycloakSession centralSession = proxy(KeycloakSession.class, (o,m,v) -> m.getName().equals("getProvider")?centralStorage:null);
+        GatorUserStorageProvider adminSource = new GatorUserStorageProvider(centralSession, central, (fn,input) -> {
+            assert fn.equals("app_fn_identity_admin"); updates.add(Map.copyOf(input)); return Map.of("status","pending");
+        });
+        fixtureAccounts = new LinkedHashMap<>(Map.of("ExactUser","old@example.invalid","NativeSqlUser","native@example.invalid"));
+        nativeBindings = Set.of("NativeSqlUser");
+        assert adminSource.getUserById(centralRealm,"f:central:NativeSqlUser") == null : "Native SQL projection must not become a federated shadow";
+        UserModel editable = adminSource.getUserById(centralRealm,"f:central:ExactUser");
+        int passwordBefore=passwordUpdates;
+        editable.setFirstName("Given"); editable.setLastName("Family"); editable.setEmail("new@example.invalid"); editable.setEnabled(false);
+        assert editable.getId().equals("f:central:ExactUser") && editable.getUsername().equals("ExactUser");
+        assert editable.getFirstName().equals("Given") && editable.getLastName().equals("Family");
+        assert editable.getEmail().equals("new@example.invalid") && !editable.isEnabled() && !editable.isEmailVerified();
+        assert passwordUpdates==passwordBefore && updates.size()==4;
+        assert updates.stream().allMatch(u->u.get("action").equals("sourceUpdate") && u.get("targetSubject").equals("f:central:ExactUser") && !u.containsKey("password"));
+        assert adminSource.getUsersCount(centralRealm)==1;
+        assert adminSource.searchForUserStream(centralRealm,Map.of(),0,10).count()==1;
+        assert lastQuery.contains("order by u.usuario_id collate") && lastQuery.contains("limit ? offset ?");
+        assert new GatorUserStorageProvider(null,legacy).searchForUserStream(centralRealm,Map.of(),0,10).count()==0;
+        central.put("nativeIdentityBindings","true");central.put("identityAdministrationEnabled","false");
+        RealmModel disabledRealm=proxy(RealmModel.class,(o,m,v)->switch(m.getName()) {
+            case "getName" -> "gator";case "getId" -> "gator-id";
+            case "getAttribute" -> "gator.identityAdmin.enabled".equals(v[0])?"false":"https://identity.example/realms/gator";
+            default -> null;
+        });
+        assert adminSource.getUserByUsername(disabledRealm,"NativeSqlUser")==null : "Disabling administration exposed native SQL shadow";
+        assert adminSource.getUserById(disabledRealm,"f:central:NativeSqlUser")==null;
+        assert adminSource.getUserById(disabledRealm,"f:central:ExactUser")!=null;
+        assert adminSource.getUsersCount(disabledRealm)==1;
+        assert adminSource.searchForUserStream(disabledRealm,Map.of(),0,10).count()==1;
+        try {editable.setEnabled(true);throw new AssertionError("Disabled administration allowed source write");}
+        catch(org.keycloak.storage.ReadOnlyException expected) { }
+        central.put("identityAdministrationEnabled","true");
+        central.put("connectionEnvironmentPrefix","GATOR_LOMALINDA_ERM");
+        try {editable.setEnabled(true);throw new AssertionError("Noncentral source mutated");}
+        catch(org.keycloak.storage.ReadOnlyException expected) { }
+        System.out.println("Storage isolation, central administration and legacy compatibility OK");
     }
 
     private static <T> T proxy(Class<T> type, java.lang.reflect.InvocationHandler handler) {

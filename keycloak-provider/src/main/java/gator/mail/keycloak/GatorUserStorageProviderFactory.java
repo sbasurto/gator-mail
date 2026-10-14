@@ -11,6 +11,12 @@ public final class GatorUserStorageProviderFactory
     @Override public String getId() { return "gator-users"; }
     @Override public List<ProviderConfigProperty> getConfigProperties() {
         return List.of(
+                new ProviderConfigProperty("nativeIdentityBindings", "Preserve native identity bindings",
+                        "Permanent central source protection after projection schema activation; retain when administration is disabled.",
+                        ProviderConfigProperty.BOOLEAN_TYPE, false),
+                new ProviderConfigProperty("identityAdministrationEnabled", "Central identity administration",
+                        "Writable and searchable only in the opt-in central gator realm and GATOR_IDP source.",
+                        ProviderConfigProperty.BOOLEAN_TYPE, false),
                 new ProviderConfigProperty("connectionEnvironmentPrefix", "Connection environment prefix",
                         "Prefix of JDBC_URL, JDBC_USER and JDBC_PASSWORD environment variables.",
                         ProviderConfigProperty.STRING_TYPE, "GATOR_IDP"),

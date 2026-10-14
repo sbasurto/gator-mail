@@ -121,10 +121,20 @@ public final class MailServlet extends HttpServlet {
         Map<String, Object> model = baseModel(request, "");
         String user = "";
         try {
-            JsonObject identity = OAuthServlet.identityRequest(request, new JsonObject());
+            JsonObject authenticatedUser = OAuthServlet.authenticatedUserInfo(request);
+            JsonObject identity = OAuthServlet.identityRequest(new JsonObject(), authenticatedUser);
             String configuration = getServletContext().getInitParameter("gappConfigFile");
             user = operationalUser(session, identity,
                     (issuer, subject) -> gator.lib.sec.GatorOidcIdentity.resolve(configuration, issuer, subject));
+            if (mailLoginPolicyAvailable()) {
+                JsonObject policy = identity.deepCopy(); policy.addProperty("usuario", user);
+                boolean requiresGrant = mailIdentityDbCall("mail_fn_identity_login_policy", policy)
+                        .get("requiresAccessGrant").getAsBoolean();
+                if (!centralMailAccess(requiresGrant, authenticatedUser)) {
+                    response.sendError(HttpServletResponse.SC_FORBIDDEN);
+                    return;
+                }
+            }
             JsonObject access = call("app_fn_has_mail_access", json("usuario", user));
             if (!"0".equals(access.get("codigo").getAsString())) {
                 response.sendError(HttpServletResponse.SC_FORBIDDEN);
@@ -1869,6 +1879,115 @@ public final class MailServlet extends HttpServlet {
         }
     }
 
+    static boolean centralIdentityAdministration(String configured, String environment) {
+        return "true".equals(configured == null ? environment : configured);
+    }
+
+    static boolean centralMailAccess(boolean requiresGrant, JsonObject authenticatedUser) {
+        if (!requiresGrant) return true;
+        try {
+            var roles = authenticatedUser.getAsJsonObject("resource_access")
+                    .getAsJsonObject("gator-mail").getAsJsonArray("roles");
+            for (var role : roles) {
+                if (role.isJsonPrimitive() && role.getAsJsonPrimitive().isString()
+                        && "access".equals(role.getAsString())) return true;
+            }
+        } catch (RuntimeException invalidClaim) { return false; }
+        return false;
+    }
+
+    static boolean needsMailLoginPolicy(boolean feature,boolean helper,boolean projectionSchema) {
+        if(helper) return true;
+        if(feature || projectionSchema) throw new IllegalStateException("Mail login policy unavailable");
+        return false;
+    }
+
+    private boolean mailLoginPolicyAvailable() throws Exception {
+        GappSQLStatement statement=new GappSQLStatement();
+        statement.setQuery("SELECT to_regprocedure('public.mail_fn_identity_login_policy(text)') IS NOT NULL AS helper, "
+                + "to_regclass('public.app_identity_admin_operation') IS NOT NULL AS projection_schema");
+        ADO database=new ADO(getServletContext().getInitParameter("gappContactsDbFile"),true);
+        try(java.sql.ResultSet rows=database.executePreparedStmtRset(statement);
+                java.sql.Statement query=rows==null?null:rows.getStatement()) {
+            if(rows==null || !rows.next()) throw new IllegalStateException("Mail login policy unavailable");
+            return needsMailLoginPolicy(centralIdentityAdministration(),rows.getBoolean("helper"),rows.getBoolean("projection_schema"));
+        } finally {database.close();}
+    }
+
+    private boolean centralIdentityAdministration() {
+        return centralIdentityAdministration(getServletContext().getInitParameter("gator.identityAdmin.enabled"),
+                System.getenv("GATOR_IDENTITY_ADMIN_ENABLED"));
+    }
+
+    private void legacyUserAdministration(HttpServletRequest request, HttpSession session, String mailbox) throws Exception {
+        String action = request.getParameter("action");
+        JsonObject value = new JsonObject(); value.addProperty("actor", mailbox);
+        value.addProperty("user", request.getParameter("user"));
+        if ("userCreate".equals(action)) {
+            String password = temporaryPassword();
+            value.addProperty("name", request.getParameter("name"));
+            value.addProperty("email", request.getParameter("email"));
+            value.addProperty("password", password);
+            value.addProperty("sessionTimeoutMinutes", request.getParameter("sessionTimeoutMinutes"));
+            LinuxMailbox linux = provisionLinuxUser(request.getParameter("user"), request.getParameter("email"));
+            value.addProperty("mailDomain", linux.domain());
+            value.addProperty("mailOsUid", linux.uid());
+            value.addProperty("mailOsGid", linux.gid());
+            value.addProperty("mailHome", linux.home());
+            checked(mailDbCall("mail_fn_admin_usuario_crear", gson.toJson(value)));
+            session.setAttribute("mail.password.reset", password);
+            session.setAttribute("mail.user.admin.notice", "Usuario y cuenta Linux creados correctamente");
+        } else if ("userDelete".equals(action)) {
+            value.addProperty("destination", request.getParameter("destination"));
+            JsonObject pending = checked(mailDbCall("mail_fn_admin_usuario_eliminar", gson.toJson(value)));
+            retireLinuxUser(request.getParameter("user"), request.getParameter("destination"),
+                    pending.get("token").getAsString());
+            value.addProperty("token", pending.get("token").getAsString());
+            value.addProperty("confirmed", true);
+            checked(mailDbCall("mail_fn_admin_usuario_eliminar", gson.toJson(value)));
+            session.setAttribute("mail.user.admin.notice",
+                    "Usuario eliminado; su correo quedó en Revisión/" + request.getParameter("user"));
+        } else if ("userReset".equals(action)) {
+            String password = temporaryPassword();
+            value.addProperty("password", password);
+            checked(mailDbCall("mail_fn_admin_usuario_reset", gson.toJson(value)));
+            session.setAttribute("mail.password.reset", password);
+        } else {
+            value.addProperty("name", request.getParameter("name"));
+            boolean enabled = Boolean.parseBoolean(request.getParameter("enabled"));
+            value.addProperty("enabled", "userToggle".equals(action) ? !enabled : enabled);
+            value.addProperty("sessionTimeoutMinutes", request.getParameter("sessionTimeoutMinutes"));
+            String number = null;
+            if (!"userToggle".equals(action) && smsConfigured()) {
+                String requestedPhone = request.getParameter("phone");
+                if (requestedPhone != null && !requestedPhone.isBlank()) {
+                    number = phone(requestedPhone);
+                    value.addProperty("phone", number);
+                }
+            }
+            if ("userSafeList".equals(action) && (number == null || !smsConfigured()))
+                throw new IllegalArgumentException("Configura un teléfono y el endpoint SMS");
+            checked(mailDbCall("mail_fn_admin_usuario_guardar", gson.toJson(value)));
+            if (number != null) {
+                JsonObject sync = json("action", "sync");
+                sync.addProperty("usuario", request.getParameter("user"));
+                sync.addProperty("email", request.getParameter("email"));
+                sync.addProperty("name", request.getParameter("name"));
+                sync.addProperty("telefono", number);
+                checked(sms(OAuthServlet.identityRequest(request,sync)));
+            }
+            if ("userSafeList".equals(action)) {
+                JsonObject safeList = json("action", "safeList");
+                safeList.addProperty("usuario", request.getParameter("user"));
+                safeList.addProperty("telefono", number);
+                checked(sms(OAuthServlet.identityRequest(request,safeList)));
+                checked(mailDbCall("mail_fn_admin_usuario_safe_list", gson.toJson(value)));
+                session.setAttribute("mail.user.admin.notice",
+                        "El teléfono quedó registrado en Global Safe List");
+            }
+        }
+    }
+
     private boolean configuration(HttpServletRequest request, HttpServletResponse response, HttpSession session,
             Map<String, Object> model, String mailbox, String accessToken) throws Exception {
         boolean admin = mailDbCall("mail_fn_admin_access", mailbox).get("admin").getAsBoolean();
@@ -1882,6 +2001,7 @@ public final class MailServlet extends HttpServlet {
         boolean requested = "settings".equals(action) || "optionsSave".equals(action)
                 || "userCreate".equals(action) || "userSave".equals(action) || "userToggle".equals(action)
                 || "userReset".equals(action) || "userSafeList".equals(action) || "userDelete".equals(action)
+                || "userGrant".equals(action) || "userStatus".equals(action)
                 || "contactSave".equals(action) || "contactDelete".equals(action)
                 || "spamGlobalSave".equals(action) || "spamGlobalDelete".equals(action)
                 || "filterSave".equals(action) || "filterDelete".equals(action)
@@ -1971,70 +2091,60 @@ public final class MailServlet extends HttpServlet {
                 }
                 response.sendRedirect(returnHref);
             } else if (action.startsWith("user")) {
-                value.addProperty("user", request.getParameter("user"));
-                if ("userCreate".equals(action)) {
-                    String password = temporaryPassword();
-                    value.addProperty("name", request.getParameter("name"));
-                    value.addProperty("email", request.getParameter("email"));
-                    value.addProperty("password", password);
-                    value.addProperty("sessionTimeoutMinutes", request.getParameter("sessionTimeoutMinutes"));
-                    LinuxMailbox linux = provisionLinuxUser(request.getParameter("user"), request.getParameter("email"));
-                    value.addProperty("mailDomain", linux.domain());
-                    value.addProperty("mailOsUid", linux.uid());
-                    value.addProperty("mailOsGid", linux.gid());
-                    value.addProperty("mailHome", linux.home());
-                    checked(mailDbCall("mail_fn_admin_usuario_crear", gson.toJson(value)));
-                    session.setAttribute("mail.password.reset", password);
-                    session.setAttribute("mail.user.admin.notice", "Usuario y cuenta Linux creados correctamente");
-                } else if ("userDelete".equals(action)) {
-                    value.addProperty("destination", request.getParameter("destination"));
-                    JsonObject pending = checked(mailDbCall("mail_fn_admin_usuario_eliminar", gson.toJson(value)));
-                    retireLinuxUser(request.getParameter("user"), request.getParameter("destination"),
-                            pending.get("token").getAsString());
-                    value.addProperty("token", pending.get("token").getAsString());
-                    value.addProperty("confirmed", true);
-                    checked(mailDbCall("mail_fn_admin_usuario_eliminar", gson.toJson(value)));
-                    session.setAttribute("mail.user.admin.notice",
-                            "Usuario eliminado; su correo quedó en Revisión/" + request.getParameter("user"));
-                } else if ("userReset".equals(action)) {
-                    String password = temporaryPassword();
-                    value.addProperty("password", password);
-                    checked(mailDbCall("mail_fn_admin_usuario_reset", gson.toJson(value)));
-                    session.setAttribute("mail.password.reset", password);
-                } else {
-                    value.addProperty("name", request.getParameter("name"));
-                    boolean enabled = Boolean.parseBoolean(request.getParameter("enabled"));
-                    value.addProperty("enabled", "userToggle".equals(action) ? !enabled : enabled);
-                    value.addProperty("sessionTimeoutMinutes", request.getParameter("sessionTimeoutMinutes"));
-                    String number = null;
-                    if (!"userToggle".equals(action) && smsConfigured()) {
-                        String requestedPhone = request.getParameter("phone");
-                        if (requestedPhone != null && !requestedPhone.isBlank()) {
-                            number = phone(requestedPhone);
-                            value.addProperty("phone", number);
-                        }
+                if (!centralIdentityAdministration()) {
+                    if ("userGrant".equals(action) || "userStatus".equals(action)) {
+                        response.sendError(HttpServletResponse.SC_NOT_FOUND); return true;
                     }
-                    if ("userSafeList".equals(action) && (number == null || !smsConfigured()))
-                        throw new IllegalArgumentException("Configura un teléfono y el endpoint SMS");
-                    checked(mailDbCall("mail_fn_admin_usuario_guardar", gson.toJson(value)));
-                    if (number != null) {
-                        JsonObject sync = json("action", "sync");
-                        sync.addProperty("usuario", request.getParameter("user"));
-                        sync.addProperty("email", request.getParameter("email"));
-                        sync.addProperty("name", request.getParameter("name"));
-                        sync.addProperty("telefono", number);
-                        checked(sms(OAuthServlet.identityRequest(request,sync)));
-                    }
-                    if ("userSafeList".equals(action)) {
-                        JsonObject safeList = json("action", "safeList");
-                        safeList.addProperty("usuario", request.getParameter("user"));
-                        safeList.addProperty("telefono", number);
-                        checked(sms(OAuthServlet.identityRequest(request,safeList)));
+                    legacyUserAdministration(request, session, mailbox);
+                    response.sendRedirect("mail?action=settings&section=users"); return true;
+                }
+                JsonObject parameters = new JsonObject();
+                for (String field : new String[] {"user", "name", "email", "sessionTimeoutMinutes", "destination"}) {
+                    String parameter = request.getParameter(field);
+                    if (parameter != null) parameters.addProperty(field, parameter);
+                }
+                String number = null;
+                if (smsConfigured() && request.getParameter("phone") != null && !request.getParameter("phone").isBlank()) {
+                    number = phone(request.getParameter("phone")); parameters.addProperty("phone", number);
+                }
+                if ("userSafeList".equals(action) && number == null)
+                    throw new IllegalArgumentException("Configura un teléfono y el endpoint SMS");
+                MailIdentityAdmin administration = new MailIdentityAdmin(OAuthServlet.issuer(),
+                        payload -> new gator.lib.sec.GatorIdentityAdminClient(URI.create(OAuthServlet.issuer()))
+                                .send(OAuthServlet.accessToken(request), payload),
+                        this::mailIdentityDbCall, MailServlet::provisionLinuxUser, MailServlet::retireLinuxUser);
+                MailIdentityAdmin.Pending previous = session.getAttribute("mail.identity.admin.pending") instanceof MailIdentityAdmin.Pending operation
+                        ? operation : null;
+                if ("userStatus".equals(action) && previous != null) {
+                    parameters = previous.parameters(); number = parameters.has("phone") ? parameters.get("phone").getAsString() : null;
+                }
+                JsonObject result;
+                try {
+                    result = administration.execute(action, parameters, String.valueOf(session.getAttribute("mail.local.user")),
+                            String.valueOf(session.getAttribute("oidc.subject")), previous);
+                } finally {
+                    if (administration.pending() == null) session.removeAttribute("mail.identity.admin.pending");
+                    else session.setAttribute("mail.identity.admin.pending", administration.pending());
+                }
+                boolean completed = "complete".equals(result.get("status").getAsString());
+                if (result.has("temporaryPassword")) session.setAttribute("mail.password.reset", result.get("temporaryPassword").getAsString());
+                String completedAction = "userStatus".equals(action) && previous != null ? previous.action() : action;
+                if (completed && number != null && ("userSave".equals(completedAction) || "userSafeList".equals(completedAction))) {
+                    JsonObject sync = json("action", "sync"); sync.addProperty("usuario", parameters.get("user").getAsString());
+                    sync.addProperty("email", parameters.get("email").getAsString()); sync.addProperty("name", parameters.get("name").getAsString());
+                    sync.addProperty("telefono", number); checked(sms(OAuthServlet.identityRequest(request, sync)));
+                    if ("userSafeList".equals(completedAction)) {
+                        JsonObject safeList = json("action", "safeList"); safeList.addProperty("usuario", parameters.get("user").getAsString());
+                        safeList.addProperty("telefono", number); checked(sms(OAuthServlet.identityRequest(request, safeList)));
+                        value.addProperty("user", parameters.get("user").getAsString()); value.addProperty("phone", number);
                         checked(mailDbCall("mail_fn_admin_usuario_safe_list", gson.toJson(value)));
-                        session.setAttribute("mail.user.admin.notice",
-                                "El teléfono quedó registrado en Global Safe List");
                     }
                 }
+                session.setAttribute("mail.user.admin.notice", "failed".equals(result.get("status").getAsString())
+                        ? "La actualización falló. Conservamos la solicitud para volver a comprobarla."
+                        : completed ? ("userCreate".equals(completedAction) ? "Usuario creado sin acceso. Concede acceso y restablece su contraseña antes de activarlo."
+                            : "userDelete".equals(completedAction) ? "Acceso bloqueado y buzón retirado; la identidad y su historial se conservan." : "Usuario actualizado")
+                        : "Actualización pendiente. Comprueba su estado antes de repetirla.");
                 response.sendRedirect("mail?action=settings&section=users");
             } else {
                 value.addProperty("id", request.getParameter("id"));
@@ -2084,6 +2194,10 @@ public final class MailServlet extends HttpServlet {
         model.put("configurationFoldersClass", "folders".equals(section) ? "active" : "");
         model.put("configurationOptionsClass", "options".equals(section) ? "active" : "");
         model.put("smsAdminAvailable", smsConfigured());
+        model.put("identityOperationPending", centralIdentityAdministration() && session.getAttribute("mail.identity.admin.pending") != null);
+        model.put("configurationUserCreateDescription", centralIdentityAdministration()
+                ? "Crea la cuenta sin acceso y su buzón. La concesión y el restablecimiento se solicitan por separado."
+                : "Crea el acceso y su cuenta Linux en el directorio del dominio.");
         Object password = session.getAttribute("mail.password.reset");
         model.put("passwordReset", password != null);
         model.put("temporaryPassword", password == null ? "" : password);
@@ -2109,12 +2223,36 @@ public final class MailServlet extends HttpServlet {
         } else if ("filters".equals(section)) {
             filtersModel(model, request, session, mailbox, mailFolders);
         } else if ("users".equals(section)) {
-            JsonObject result = checked(mailDbCall("mail_fn_admin_usuarios", String.valueOf(model.get("mailbox"))));
+            JsonObject directoryRequest = json("actor", String.valueOf(session.getAttribute("mail.local.user")));
+            boolean centralMode = centralIdentityAdministration();
+            JsonObject result = centralMode ? mailIdentityDbCall("mail_fn_admin_identity_directory", directoryRequest)
+                    : checked(mailDbCall("mail_fn_admin_usuarios", String.valueOf(model.get("mailbox"))));
+            Map<String, JsonObject> identities = new HashMap<>();
+            gator.lib.sec.GatorIdentityAdminClient central = new gator.lib.sec.GatorIdentityAdminClient(URI.create(OAuthServlet.issuer()));
+            for (int first = 0; centralMode && first < 10_000; first += 100) {
+                JsonObject page = json("action", "list"); page.addProperty("first", first); page.addProperty("max", 100);
+                JsonObject listing = central.send(OAuthServlet.accessToken(request), page);
+                var entries = listing.getAsJsonArray("users");
+                if (entries == null) throw new IllegalStateException("El directorio central no está disponible");
+                for (JsonElement entry : entries) {
+                    JsonObject identity = entry.getAsJsonObject();
+                    if (OAuthServlet.issuer().equals(identity.get("issuer").getAsString())) {
+                        String subject = identity.get("targetSubject").getAsString();
+                        if (identities.putIfAbsent(subject, identity) != null) throw new IllegalStateException("El directorio central es ambiguo");
+                    }
+                }
+                if (entries.size() < 100) break;
+                if (first == 9_900) throw new IllegalStateException("El directorio central supera el límite de consulta");
+            }
             List<Map<String, Object>> users = new ArrayList<>();
             List<JsonObject> directory = new ArrayList<>();
             result.getAsJsonArray("usuarios").forEach(element -> directory.add(element.getAsJsonObject()));
             for (JsonObject user : directory) {
-                boolean enabled = user.get("enabled").getAsBoolean();
+                String subject = centralMode ? user.get("targetSubject").getAsString() : "";
+                JsonObject identity = identities.get(subject);
+                boolean centralLinked = identity != null && OAuthServlet.issuer().equals(user.get("issuer").getAsString());
+                boolean linked = !centralMode || centralLinked;
+                boolean enabled = centralLinked ? identity.get("enabled").getAsBoolean() : user.get("enabled").getAsBoolean();
                 boolean safeListed = user.get("safeListed").getAsBoolean();
                 String id = user.get("id").getAsString();
                 List<Map<String, String>> destinations = directory.stream()
@@ -2127,16 +2265,18 @@ public final class MailServlet extends HttpServlet {
                         .toList();
                 Map<String, Object> item = new LinkedHashMap<>();
                 item.put("id", id);
-                item.put("name", user.get("name").getAsString());
-                item.put("email", user.get("email").getAsString());
+                item.put("name", centralLinked ? identity.get("name").getAsString() : user.get("name").getAsString());
+                item.put("email", centralLinked ? identity.get("email").getAsString() : user.get("email").getAsString());
+                item.put("identityLinked", linked);
+                item.put("centralIdentity", centralMode && linked);
                 item.put("enabled", enabled);
                 item.put("phone", user.get("phone").getAsString());
                 item.put("safeListed", safeListed);
                 item.put("sessionTimeoutMinutes", user.get("sessionTimeoutMinutes").getAsInt());
-                item.put("status", enabled ? "Activo" : "Inactivo");
+                item.put("status", linked ? enabled ? "Activo" : "Inactivo" : "Sin vínculo central");
                 item.put("toggleLabel", enabled ? "Desactivar" : "Activar");
                 item.put("deleteTargets", destinations);
-                item.put("deleteAvailable", !destinations.isEmpty());
+                item.put("deleteAvailable", linked && (!centralMode || !user.get("mailboxRetired").getAsBoolean()) && !destinations.isEmpty());
                 users.add(item);
             }
             model.put("configurationUsers", users);
@@ -2418,6 +2558,14 @@ public final class MailServlet extends HttpServlet {
         return values.stream().map(value -> Map.<String, Object>of(
                 "value", value.get("value"), "label", value.get("label"),
                 "selected", value.get("value").equals(selected))).toList();
+    }
+
+    private JsonObject mailIdentityDbCall(String procedure, JsonObject payload) {
+        JsonObject raw = mailDbCall(procedure, gson.toJson(payload));
+        JsonObject response = raw.getAsJsonArray("responses").get(0).getAsJsonObject();
+        if (!"0".equals(response.get("resNum").getAsString()))
+            throw new IllegalStateException("No fue posible completar la operación administrativa de correo");
+        return response.getAsJsonObject("response");
     }
 
     private JsonObject mailDbCall(String procedure, String value) {

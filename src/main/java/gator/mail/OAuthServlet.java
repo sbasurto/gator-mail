@@ -146,6 +146,10 @@ public final class OAuthServlet extends HttpServlet {
     }
 
     static JsonObject identityRequest(HttpServletRequest request, JsonObject body) {
+        return identityRequest(body, authenticatedUserInfo(request));
+    }
+
+    static JsonObject authenticatedUserInfo(HttpServletRequest request) {
         try {
             HttpRequest info = HttpRequest.newBuilder(URI.create(issuer()+"/protocol/openid-connect/userinfo"))
                     .timeout(java.time.Duration.ofSeconds(10))
@@ -159,7 +163,7 @@ public final class OAuthServlet extends HttpServlet {
             if (session.getAttribute("oidc.subject") instanceof String previous && !previous.equals(subject))
                 throw new ReauthenticationRequired();
             session.setAttribute("oidc.subject",subject);
-            return identityRequest(body,identity);
+            return identity;
         } catch (Exception failure) { throw new IllegalStateException("No fue posible verificar la identidad",failure); }
     }
 

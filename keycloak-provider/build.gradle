@@ -51,3 +51,20 @@ tasks.register('exactLoginSelfTest', JavaExec) {
     enableAssertions = true
 }
 tasks.named('check') { dependsOn exactLoginSelfTest }
+
+tasks.register('identityAdminSelfTest', JavaExec) {
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'gator.mail.keycloak.GatorIdentityAdminSelfCheck'
+    enableAssertions = true
+}
+tasks.named('check') { dependsOn identityAdminSelfTest }
+
+// Disposable runtime transport: never included in the published provider.
+tasks.register('identityAdminFixtureJar', Jar) {
+    dependsOn testClasses
+    archiveFileName = 'gator-identity-admin-test-fixture.jar'
+    destinationDirectory = layout.buildDirectory.dir('identity-admin-fixture')
+    from(sourceSets.test.output) { include 'gator/mail/keycloak/GatorIdentityAdminFixtureDriver*.class' }
+    from('src/test/identity-admin-fixture')
+}

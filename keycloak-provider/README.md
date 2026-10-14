@@ -69,3 +69,126 @@ federadas. El inventario debe distinguir usuarios nativos, importados y externos
 la transición de estos últimos necesita equivalencias y continuidad de sesiones
 antes de cambiar su subject. Si una persona tiene contraseñas distintas, no se
 elige una fuente silenciosamente ni se cambia el acceso a todas las bases.
+
+## Administración central de identidad (implementada, deshabilitada por defecto)
+
+La extensión comparte la fuente JDBC existente y añade consulta paginada y
+escritura de nombre, correo y estado para federados, el recurso autenticado
+`/realms/gator/gator-identity-admin` y la proyección duradera de eventos nativos.
+No añade servicios, WARs ni dependencias. Los realms históricos siguen con el
+adaptador de sólo lectura y sus credenciales/concesiones existentes.
+
+La activación exige **todas** estas configuraciones de operador, después de
+instalar y comprobar el contrato SQL canónico:
+
+- Realm `gator`: `gator.identityAdmin.enabled=true` y
+  `gator.identityAdmin.issuer` con su issuer HTTPS exacto.
+- Fuente `gator-users`: `identityAdministrationEnabled=true` y el prefijo
+  `GATOR_IDP`; otro prefijo nunca admite escritura ni consulta administrativa.
+- Eventos administrativos persistidos habilitados, **representaciones
+  deshabilitadas**, listener `gator-identity-admin`. Conservar los eventos hasta
+  confirmar su proyección; no purgarlos durante fallos o una recuperación.
+- Cliente: atributo privado de operador `gator.identityAdmin.destinationDbId`
+  con el identificador numérico `broker_db` permitido y rol `identity-admin`.
+  El token y los roles efectivos actuales deben conceder ese rol en el mismo
+  cliente `azp`; SQL comprueba además el actor por issuer/subject y su
+  `sys_admon` y alcance local (Mail usa su autorización canónica por binding
+  exacto y `mail_fn_identity_authorize`). No habilitarlo para proveedores por defecto.
+- JDBC de la fuente usa el rol restringido `gator_idp`. Sólo ese rol ejecuta
+  `app_fn_identity_admin(text)`; `PUBLIC` no recibe privilegios. El texto
+  `usuario: gator_idp` de una petición no constituye una autorización.
+
+POST JSON: acciones `list`, `get`, `create`, `update`, `disable`, `enable`,
+`reset`, `status`, `grant`. Las identidades existentes se seleccionan sólo mediante
+`targetSubject`; no se renombran subjects/usuarios. `update` acepta nombre,
+correo y estado. `reset` acepta contraseña y `temporary` opcional (true por
+omisión), exclusivamente a petición expresa; no persiste la contraseña en
+cola ni eventos. `create` exige usuario nuevo, destino local, cuenta y bodega
+explícitos; el cliente privado `gator.identityAdmin.system=mail` exige sólo
+`localUsuario` y rechaza cuenta/bodega ficticias. Crea una identidad nativa
+deshabilitada, sin roles/grupos por
+omisión. La habilitación y las concesiones de instalación siguen siendo pasos
+explícitos posteriores a la proyección confirmada; los permisos de negocio no
+se conceden como efecto de actualizar una identidad.
+
+CREATE admite un `requestId` UUID opcional. El cliente debe conservarlo antes
+del primer envío y reutilizarlo ante una respuesta perdida. El servidor deriva
+un subject nativo inmutable de issuer/cliente/UUID y registra actor, destino,
+huella de parámetros y operación en atributos protegidos. Reintentar exige
+autorización vigente y la misma procedencia SQL; devuelve el mismo subject y
+operación, sin volver a crear, actualizar contraseñas, habilitar o conceder
+roles. Un actor/destino diferente recibe 403; reutilizar la clave con otros
+parámetros recibe 409. No se buscan identidades por nombre para recuperarlas.
+
+`get` devuelve `{user, status:"complete"}`. `list` acepta `first` y `max` (hasta
+100); los desplazamientos cuentan usuarios autorizados después de aplicar el
+alcance SQL. `authorize/list` debe devolver `authorizedSubjects`, el conjunto
+exacto permitido; no se hacen consultas SQL individuales para filtrar cada
+usuario. Una respuesta de alcance ausente o malformada falla cerrada. La
+exploración se limita a 10.000 usuarios de realm y falla
+explícitamente si supera el límite. Una operación desconocida devuelve 404;
+un evento durable todavía no proyectado puede devolver pending, sólo para el
+subject y destino exactos retenidos. Un estado SQL failed permanece failed.
+
+`grant` acepta solamente `targetSubject`. El atributo privado del cliente
+`gator.identityAdmin.accessGroupId` identifica un grupo existente que concede
+únicamente el rol no compuesto `access` de ese cliente. Se rechazan grupos o
+ancestros con otros roles; no se sustituyen grupos existentes. Para nuevas
+identidades creadas por el recurso, exige primero la operación CREATE completa
+registrada por el servidor. Las identidades migradas existentes siguen sujetas
+al alcance SQL exacto. Devuelve `granted: true` sólo tras verificar el rol efectivo.
+No hay concesiones automáticas al crear, habilitar o editar.
+
+La fuente central excluye de lookup/byID/consulta/conteo cualquier fila cuya
+vinculación issuer/subject pertenezca a otra identidad que `f:componente:usuario`.
+Esto evita inventar una segunda identidad federada para una proyección Mail nativa;
+las fuentes legacy mantienen su comportamiento previo.
+Tras validar la tabla de vínculos, conservar en el componente central
+`nativeIdentityBindings=["true"]` permanentemente, incluso si se desactiva
+`identityAdministrationEnabled` o el gate del realm. Este filtro no habilita
+mutaciones administrativas. La recuperación CREATE exige política de atributos
+no gestionados DISABLED/ADMIN_VIEW/ADMIN_EDIT o los cinco marcadores declarados
+con permisos de lectura y edición únicamente para administradores.
+
+Las mutaciones devuelven `operationId` y `status: pending`. No afirman éxito de
+réplica antes de confirmar los destinos. `status` devuelve pending/complete/
+failed; consulta exige autorización del mismo target y destino. La interfaz Gator no
+expone credenciales administrativas, conexiones ni tokens del servidor.
+
+El listener vuelve a leer el estado vigente después del commit de Keycloak.
+La tarea periódica repite los eventos USER retenidos, con identificadores
+idempotentes, y drena los destinos SQL pendientes. No usa un corte por fecha:
+una transacción larga puede confirmar un evento con fecha anterior. SQL conserva
+la operación original y sus versiones y no reabre destinos ya aplicados; `complete`
+resuelve la conexión permitida, aplica y confirma el destino. El proveedor nunca
+acepta una afirmación de éxito del cliente ni conoce contraseñas remotas de las
+bases de negocio. Una eliminación física desde una consola con privilegios
+globales bloquea las proyecciones locales sin borrar su historial; la acción de
+baja ofrecida por el recurso es deshabilitar.
+
+Pruebas sintéticas:
+
+```bash
+./gradlew :keycloak-provider:check :keycloak-provider:jar \
+  :keycloak-provider:identityAdminFixtureJar --offline --no-watch-fs
+python3 keycloak-provider/src/test/python/verify_identity_admin_isolated.py \
+  /ruta/local/keycloak-26.7.0.tar.gz
+```
+
+La segunda prueba posee una instancia desechable en `127.0.0.1:18881`, genera
+identidades y credenciales sintéticas y utiliza un transporte JDBC de pruebas
+separado que **no se incluye en el JAR publicado**. Comprueba SPI/REST/eventos
+reales de Keycloak y recuperación tras reinicio. No acredita por sí sola el SQL
+canónico, destinos reales, los 129 usuarios nativos ni los 465 federados:
+la integración SQL Local/Hera y la comparación privada de inventarios siguen
+siendo verificaciones necesarias antes de activar.
+
+Registro de recursos según la [guía oficial de extensiones Keycloak](https://www.keycloak.org/docs/latest/server_development/#_extensions):
+SPI RealmResourceProvider, `META-INF/beans.xml` y anotación JAX-RS Provider.
+
+Aceptación aislada verificada el 13 de octubre de 2026: edición y consulta
+nativa/federada, reset explícito en identidades sintéticas, conservación de
+credenciales y acciones requeridas de las demás, revocación efectiva del
+administrador aun con JWT vigente, bloqueo que elimina sesiones y repetición
+durable de un cambio confirmado antes de una caída del contrato SQL/reinicio.
+Los tests de transporte no sustituyen las pruebas canónicas SQL Local/Hera.
