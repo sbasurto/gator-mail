@@ -82,6 +82,32 @@ La administración de usuarios y contactos se instala con `db/mail_admin.sql`;
 las cuentas asociadas a `sbasurto@soft-gator.com` y la cuenta local `admin`
 quedan autorizadas inicialmente y pueden ampliarse desde la tabla
 `mail_administradores`.
+
+La administración central permanece desactivada por defecto. El parámetro de
+contexto confiable `gator.identityAdmin.enabled=true` la habilita; si el parámetro
+no existe se consulta `GATOR_IDENTITY_ADMIN_ENABLED`. Un parámetro de contexto
+`false` prevalece sobre el entorno. Desactivada, conserva las rutas anteriores;
+los guards SQL impiden usarlas para eludir una activación central en la base.
+Activarla requiere el proveedor y contrato SQL canónicos, un destino Mail
+explícito y el mapper UserInfo `resource_access.gator-mail.roles`.
+
+En modo central, las altas crean identidades deshabilitadas sin contraseña ni
+roles. Tras confirmar la proyección SQL se prepara el buzón Linux. **Conceder
+acceso**, **Restablecer contraseña** y **Activar** son acciones separadas. Sólo
+las identidades creadas expresamente para Mail requieren el rol `access` de
+`gator-mail`, comprobado mediante UserInfo autenticado y procedencia SQL exacta;
+los usuarios anteriores conservan su contrato de acceso. Nombre/correo/estado
+se administran por subject exacto; teléfono y tiempo de sesión siguen siendo
+preferencias locales. Retirar un buzón bloquea primero la identidad y conserva
+sus perfiles e historial. Las operaciones pendientes o fallidas se muestran
+sin afirmar que el destino confirmó una actualización; comprobar estado no
+reenvía contraseñas ni repite un retiro Linux ya confirmado.
+
+Los helpers se publican desde el archivo canónico interno
+`app/postgresql/mail/mail_pg_fn_identity_admin.sql`, mediante el deployer y el
+contrato de esquema obligatorio. El WAR no instala SQL. IMAP usa XOAUTH2; SMTP
+de esta aplicación no autentica por contraseña de usuario. No se copian hashes
+al habilitar una identidad nativa.
 El calendario autónomo se instala con `db/mail_calendar.sql` y administra sus
 eventos, grupos y participantes directamente en `db_gatormail`.
 Cuando `GATOR_MAIL_EVENT_ENDPOINT` y `GATOR_MAIL_EVENT_SECRET` están definidos,

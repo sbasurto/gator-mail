@@ -87,12 +87,12 @@
         if (!valid) return;
         const user = button.form.elements.user.value;
         const result = await Swal.fire({
-            title: `¿Eliminar a ${user}?`,
-            text: "Primero se copiará todo su buzón a la cuenta genérica seleccionada. Después se eliminarán su acceso y cuenta Linux.",
+            title: `¿Retirar el buzón de ${user}?`,
+            text: "Se bloqueará el acceso central y se trasladará el buzón a la cuenta de revisión. Se retirará la cuenta Linux; la identidad y su historial se conservan.",
             icon: "warning",
             showCancelButton: true,
             confirmButtonColor: "#b52f3a",
-            confirmButtonText: "Trasladar y eliminar",
+            confirmButtonText: "Bloquear y retirar buzón",
             cancelButtonText: "Cancelar"
         });
         if (result.isConfirmed) button.form.requestSubmit(button);

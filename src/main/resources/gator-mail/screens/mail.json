@@ -1657,11 +1657,15 @@
                       { "tag": "div", "attrs": { "class": "mail-admin-list" }, "children": [
                         { "tag": "span", "if": "passwordReset", "attrs": { "class": "d-none mail-swal mail-swal-success", "title": "Contraseña restablecida" }, "text": "Contraseña temporal: ${temporaryPassword}. El usuario deberá cambiarla al ingresar." },
                         { "tag": "span", "if": "userAdminNotice", "attrs": { "class": "d-none mail-swal mail-swal-success", "title": "Usuario actualizado" }, "text": "${userAdminMessage}" },
+                        { "tag": "form", "if": "identityOperationPending", "attrs": { "method": "post", "action": "${contextPath}/mail" }, "children": [
+                          { "tag": "input", "attrs": { "type": "hidden", "name": "csrf", "value": "${csrf}" } },
+                          { "tag": "button", "attrs": { "class": "btn btn-outline-secondary btn-sm", "type": "submit", "name": "action", "value": "userStatus" }, "text": "Comprobar actualización pendiente" }
+                        ] },
                         { "tag": "form", "attrs": { "class": "mail-admin-row mail-admin-user mail-admin-new mail-user-create", "method": "post", "action": "${contextPath}/mail" }, "children": [
                           { "tag": "input", "attrs": { "type": "hidden", "name": "csrf", "value": "${csrf}" } },
                           { "tag": "div", "attrs": { "class": "mail-user-create-heading" }, "children": [
                             { "tag": "span", "attrs": { "class": "fas fa-user-plus", "aria-hidden": "true" } },
-                            { "tag": "div", "children": [{ "tag": "strong", "text": "Agregar usuario" }, { "tag": "small", "text": "Crea el acceso y su cuenta Linux en el directorio del dominio." }] }
+                            { "tag": "div", "children": [{ "tag": "strong", "text": "Agregar usuario" }, { "tag": "small", "text": "${configurationUserCreateDescription}" }] }
                           ] },
                           { "tag": "label", "children": [{ "tag": "small", "text": "Usuario Linux" }, { "tag": "input", "attrs": { "class": "form-control", "name": "user", "required": "true", "maxlength": "32", "pattern": "[a-z_][a-z0-9_.-]{0,31}", "placeholder": "jperez", "autocomplete": "off" } }] },
                           { "tag": "label", "children": [{ "tag": "small", "text": "Nombre completo" }, { "tag": "input", "attrs": { "class": "form-control", "name": "name", "required": "true", "maxlength": "200", "placeholder": "Juan Pérez" } }] },
@@ -1676,18 +1680,18 @@
                         { "tag": "form", "each": "configurationUsers", "as": "user", "attrs": { "class": "mail-admin-row mail-admin-user", "method": "post", "action": "${contextPath}/mail" }, "children": [
                           { "tag": "input", "attrs": { "type": "hidden", "name": "csrf", "value": "${csrf}" } },
                           { "tag": "input", "attrs": { "type": "hidden", "name": "user", "value": "${user.id}" } },
-                          { "tag": "input", "attrs": { "type": "hidden", "name": "email", "value": "${user.email}" } },
                           { "tag": "input", "attrs": { "type": "hidden", "name": "enabled", "value": "${user.enabled}" } },
                           { "tag": "label", "children": [{ "tag": "small", "text": "Usuario" }, { "tag": "strong", "text": "${user.id}" }] },
                           { "tag": "label", "children": [{ "tag": "small", "text": "Nombre" }, { "tag": "input", "attrs": { "class": "form-control", "name": "name", "value": "${user.name}", "maxlength": "200" } }] },
-                          { "tag": "label", "children": [{ "tag": "small", "text": "Correo" }, { "tag": "strong", "text": "${user.email}" }] },
+                          { "tag": "label", "children": [{ "tag": "small", "text": "Correo" }, { "tag": "input", "attrs": { "class": "form-control", "name": "email", "type": "email", "value": "${user.email}", "maxlength": "320" } }] },
                           { "tag": "label", "children": [{ "tag": "small", "text": "Sesión (minutos)" }, { "tag": "input", "attrs": { "class": "form-control", "name": "sessionTimeoutMinutes", "type": "number", "value": "${user.sessionTimeoutMinutes}", "required": "true" } }] },
                           { "tag": "label", "if": "smsAdminAvailable", "children": [{ "tag": "small", "text": "Teléfono" }, { "tag": "input", "attrs": { "class": "form-control", "name": "phone", "type": "tel", "inputmode": "tel", "autocomplete": "tel", "value": "${user.phone}", "placeholder": "+525512345678", "pattern": "\\+[1-9][0-9]{7,14}", "maxlength": "16" } }] },
                           { "tag": "span", "attrs": { "class": "mail-admin-status" }, "text": "${user.status}" },
                           { "tag": "div", "attrs": { "class": "mail-admin-actions" }, "children": [
-                            { "tag": "button", "attrs": { "class": "btn btn-primary btn-sm", "type": "submit", "name": "action", "value": "userSave" }, "text": "Guardar" },
-                            { "tag": "button", "attrs": { "class": "btn btn-outline-secondary btn-sm", "type": "submit", "name": "action", "value": "userToggle" }, "text": "${user.toggleLabel}" },
-                            { "tag": "button", "attrs": { "class": "btn btn-outline-warning btn-sm mail-password-reset", "type": "submit", "name": "action", "value": "userReset" }, "text": "Restablecer contraseña" },
+                            { "tag": "button", "if": "user.identityLinked", "attrs": { "class": "btn btn-primary btn-sm", "type": "submit", "name": "action", "value": "userSave" }, "text": "Guardar" },
+                            { "tag": "button", "if": "user.identityLinked", "attrs": { "class": "btn btn-outline-secondary btn-sm", "type": "submit", "name": "action", "value": "userToggle" }, "text": "${user.toggleLabel}" },
+                            { "tag": "button", "if": "user.identityLinked", "attrs": { "class": "btn btn-outline-warning btn-sm mail-password-reset", "type": "submit", "name": "action", "value": "userReset" }, "text": "Restablecer contraseña" },
+                            { "tag": "button", "if": "user.centralIdentity", "attrs": { "class": "btn btn-outline-secondary btn-sm", "type": "submit", "name": "action", "value": "userGrant" }, "text": "Conceder acceso a esta aplicación" },
                             { "tag": "button", "if": "smsAdminAvailable", "attrs": { "class": "btn btn-outline-success btn-sm", "type": "submit", "name": "action", "value": "userSafeList" }, "text": "Agregar a Global Safe List" },
                             { "tag": "span", "if": "user.safeListed", "attrs": { "class": "mail-admin-status mail-safe-list-status" }, "text": "En Global Safe List" },
                             { "tag": "label", "if": "user.deleteAvailable", "attrs": { "class": "mail-user-delete-target" }, "children": [
@@ -1698,7 +1702,7 @@
                               ] }
                             ] },
                             { "tag": "button", "if": "user.deleteAvailable", "attrs": { "class": "btn btn-outline-danger btn-sm mail-user-delete", "type": "submit", "name": "action", "value": "userDelete" }, "children": [
-                              { "tag": "span", "attrs": { "class": "fas fa-user-xmark", "aria-hidden": "true" } }, { "tag": "span", "text": "Eliminar usuario" }
+                              { "tag": "span", "attrs": { "class": "fas fa-user-xmark", "aria-hidden": "true" } }, { "tag": "span", "text": "Retirar buzón" }
                             ] }
                           ] }
                         ] }

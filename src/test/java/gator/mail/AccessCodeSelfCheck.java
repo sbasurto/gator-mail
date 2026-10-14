@@ -93,6 +93,7 @@ public final class AccessCodeSelfCheck {
         catch (SecurityException expected) { }
         assert MailServlet.operationalUser(oauthSession, principal, (issuer, subject) -> "DifferentCase").equals("DifferentCase");
         assert !oauthAttributes.containsKey("mail.challenge.verified") : "Changed local mapping must clear account state";
+        IdentityAdminSelfCheck.run();
         LogoutSelfCheck.run();
         MailImagesSelfCheck.run();
         MailHtmlSelfCheck.run();
@@ -537,11 +538,12 @@ public final class AccessCodeSelfCheck {
                 "status", "A tiempo", "statusClass", "is-on-time")));
         model.put("configurationUsers", List.of(Map.ofEntries(
                 Map.entry("id", "usuario"), Map.entry("name", "Usuario Uno"),
-                Map.entry("email", "usuario@example.com"), Map.entry("enabled", true),
+                Map.entry("email", "usuario@example.com"), Map.entry("enabled", true), Map.entry("identityLinked", true), Map.entry("centralIdentity", true),
                 Map.entry("phone", "+525512345678"), Map.entry("safeListed", true),
                 Map.entry("sessionTimeoutMinutes", 180), Map.entry("status", "Activo"),
                 Map.entry("toggleLabel", "Desactivar"), Map.entry("deleteAvailable", true),
                 Map.entry("deleteTargets", List.of(Map.of("value", "revision", "label", "Revisión"))))));
+        model.put("identityOperationPending", true);
         model.put("configurationUserCount", 1);
         model.put("configurationActiveUserCount", 1);
         model.put("configurationContacts", List.of(Map.of("id", "contacto", "name", "Contacto Uno",
@@ -747,6 +749,10 @@ public final class AccessCodeSelfCheck {
             assert html.contains("1 activos de 1 usuarios");
             assert html.contains("mail-recipient-input");
             assert html.contains("value=\"userReset\"");
+            assert html.contains("value=\"userGrant\"");
+            assert html.contains("value=\"userStatus\"");
+            assert html.contains("Conceder acceso a esta aplicación");
+            assert html.contains("Retirar buzón");
             assert html.contains("name=\"phone\"");
             assert html.contains("name=\"sessionTimeoutMinutes\"");
             assert html.contains("value=\"+525512345678\"");
