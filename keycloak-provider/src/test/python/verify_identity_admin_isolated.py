@@ -44,8 +44,10 @@ def stop():
         except subprocess.TimeoutExpired:process.kill();process.wait()
         process=None
 
-def token(realm,client,user,secret):
-    data=urllib.parse.urlencode(dict(grant_type='password',client_id=client,username=user,password=secret)).encode()
+def token(realm,client,user,secret,client_secret=None):
+    values=dict(grant_type='password',client_id=client,username=user,password=secret,scope='openid profile email')
+    if client_secret:values['client_secret']=client_secret
+    data=urllib.parse.urlencode(values).encode()
     with urllib.request.urlopen(BASE+'/realms/'+realm+'/protocol/openid-connect/token',data,timeout=15) as r:return json.load(r)['access_token']
 def request(method,path,data=None,bearer=None,expected=None):
     headers={'Content-Type':'application/json'}
@@ -140,6 +142,51 @@ try:
     assert [u['targetSubject'] for u in listed['users']]==[native['id']], 'Denied early identities must not hide later authorized user'
     assert request('POST',endpoint,{'action':'list','first':1,'max':1},admin_token)['users']==[]
     state=json.loads(fixture.read_text());state.pop('listOnlySubject');fixture.write_text(json.dumps(state))
+    if len(sys.argv)==3:
+        # Direct grants are enabled only in this disposable fixture to exercise actual UserInfo claims.
+        mail_client=transport('clients?clientId=gator-mail')[0];mail_path='clients/'+mail_client['id']
+        mail_client=transport(mail_path);mail_client['directAccessGrantsEnabled']=True;transport(mail_path,mail_client,'PUT')
+        mail_secret=transport(mail_path+'/client-secret')['value']
+        mail_admin_token=token('gator','gator-mail','synthetic-admin',password,mail_secret)
+        mail_created=request('POST',endpoint,{'action':'create','requestId':'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
+            'username':'synthetic-mail-created','localUsuario':'mail-created','name':'Mail Created','email':'mail-created@example.invalid'},mail_admin_token)
+        mail_subject=mail_created['user']['targetSubject'];mail_user='/admin/realms/gator/users/'+mail_subject
+        wait_projection(mail_subject,'operation','create')
+        assert request('GET',mail_user+'/groups',bearer=master)==[]
+        mail_password=secrets.token_urlsafe(24)
+        request('POST',endpoint,{'action':'reset','targetSubject':mail_subject,'password':mail_password,'temporary':False},mail_admin_token)
+        request('POST',endpoint,{'action':'enable','targetSubject':mail_subject},mail_admin_token)
+        mail_token=token('gator','gator-mail','synthetic-mail-created',mail_password,mail_secret)
+        info=request('GET','/realms/gator/protocol/openid-connect/userinfo',bearer=mail_token)
+        assert 'access' not in info.get('resource_access',{}).get('gator-mail',{}).get('roles',[])
+        credentials_before_grant=request('GET',mail_user+'/credentials',bearer=master)
+        assert request('POST',endpoint,{'action':'grant','targetSubject':mail_subject},mail_admin_token)['granted'] is True
+        mail_token=token('gator','gator-mail','synthetic-mail-created',mail_password,mail_secret)
+        info=request('GET','/realms/gator/protocol/openid-connect/userinfo',bearer=mail_token)
+        assert info['sub']==mail_subject and 'access' in info['resource_access']['gator-mail']['roles']
+        assert request('GET',mail_user+'/credentials',bearer=master)==credentials_before_grant
+        # Account access is explicit in this fixture so denial cannot be explained by missing account roles.
+        account_client=transport('clients?clientId=account')[0]
+        manage_account=transport('clients/'+account_client['id']+'/roles/manage-account')
+        transport('users/'+mail_subject+'/role-mappings/clients/'+account_client['id'],[manage_account],'POST')
+        mail_token=token('gator','gator-mail','synthetic-mail-created',mail_password,mail_secret)
+        account_before=request('GET','/realms/gator/account',bearer=mail_token)
+        attempted=dict(account_before)
+        attempted['attributes']={ 'gator.identityAdmin.create'+field:['tampered-by-account']
+            for field in ('OperationId','ActorSubject','ClientId','DestinationDbId','RequestFingerprint') }
+        req=urllib.request.Request(BASE+'/realms/gator/account',data=json.dumps(attempted).encode(),
+            headers={'Content-Type':'application/json','Authorization':'Bearer '+mail_token},method='POST')
+        try:
+            with urllib.request.urlopen(req,timeout=15) as response:assert response.status in (200,204)
+        except urllib.error.HTTPError as error:assert error.code in (400,403)
+        original_mail_create={'action':'create','requestId':'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
+            'username':'synthetic-mail-created','localUsuario':'mail-created','name':'Mail Created','email':'mail-created@example.invalid'}
+        marker_replay=request('POST',endpoint,original_mail_create,mail_admin_token)
+        assert marker_replay['operationId']==mail_created['operationId'] and marker_replay['user']['targetSubject']==mail_subject
+        request('POST',endpoint,{'action':'update','targetSubject':mail_subject,'name':'Mail Edited'},mail_admin_token)
+        assert request('GET',mail_user,bearer=master)['firstName']=='Mail'
+        assert request('GET',mail_user,bearer=master)['lastName']=='Edited'
+        assert request('POST',endpoint,original_mail_create,mail_admin_token)['operationId']==mail_created['operationId']
     baseline_hash=json.loads(fixture.read_text())['source']['CaseUser']['hash']
     before_fed=request('GET',fedpath,bearer=master)
     assert before_fed['id']==federated and 'UPDATE_PASSWORD' in before_fed['requiredActions']
@@ -172,7 +219,7 @@ try:
     assert request('POST',endpoint,{'action':'grant','targetSubject':federated},admin_token)['granted'] is True
     assert safe_group['id'] in [g['id'] for g in request('GET',fedpath+'/groups',bearer=master)]
     assert 'UPDATE_PASSWORD' in request('GET',fedpath,bearer=master)['requiredActions']
-    create_request={'action':'create','requestId':'11111111-2222-3333-4444-555555555555','username':'synthetic-created','localUsuario':'local-created','accountId':1,'bodegaId':1,'name':'Created','email':'created@example.invalid'}
+    create_request={'action':'create','requestId':'11111111-2222-3333-4444-555555555555','username':'synthetic-created','localUsuario':'local-created','accountId':1,'bodegaId':1,'name':'Created Fixture','email':'created@example.invalid'}
     result=request('POST',endpoint,create_request,admin_token)
     created=result['user']['targetSubject']
     assert result['status']=='pending' and result['user']['enabled'] is False
@@ -213,7 +260,10 @@ try:
     assert [u['id'] for u in matches]==[created]
     client['attributes']['gator.identityAdmin.system']='mail';request('PUT',cp,client,master)
     request('POST',endpoint,{'action':'create','username':'bad-mail-scope','localUsuario':'bad-mail','accountId':1,'bodegaId':1},admin_token,400)
-    mail=request('POST',endpoint,{'action':'create','username':'synthetic-mail','localUsuario':'local-mail','name':'Mail','email':'mail@example.invalid'},admin_token)
+    request('POST',endpoint,{'action':'create','requestId':'bbbbbbbb-cccc-dddd-eeee-ffffffffffff','username':'synthetic-single-name',
+        'localUsuario':'local-single-name','name':'Nickname','email':'single-name@example.invalid'},admin_token,400)
+    assert request('GET','/admin/realms/gator/users?username=synthetic-single-name&exact=true',bearer=master)==[]
+    mail=request('POST',endpoint,{'action':'create','username':'synthetic-mail','localUsuario':'local-mail','name':'Mail Fixture','email':'mail@example.invalid'},admin_token)
     assert mail['user']['enabled'] is False
     wait_projection(mail['user']['targetSubject'],'operation','create')
     client['attributes'].pop('gator.identityAdmin.system');request('PUT',cp,client,master)
@@ -230,7 +280,6 @@ try:
     assert not reset_after['source']['ResetUser'].get('required')
     request('POST',endpoint,{'action':'enable','targetSubject':created},admin_token)
     wait_projection(created,'enabled',True)
-    request('PUT','/admin/realms/gator/users/'+created,{'firstName':'Created','lastName':'Synthetic','email':'created@example.invalid','enabled':True},master)
     token('gator','installation-client','synthetic-created',created_password)
     assert request('GET','/admin/realms/gator/users/'+created+'/sessions',bearer=master)
     request('POST',endpoint,{'action':'disable','targetSubject':created},admin_token)
@@ -244,13 +293,25 @@ try:
     request('PUT',np,{'firstName':'After Restart','email':'restart@example.invalid','enabled':True},master)
     assert request('GET',np,bearer=master)['firstName']=='After Restart'
     stop();state=json.loads(fixture.read_text());state['offline']=False;fixture.write_text(json.dumps(state));start()
-    wait_projection(native['id'],'name','After Restart')
+    wait_projection(native['id'],'name','After Restart Native')
     master=token('master','admin-cli','isolated-admin',password)
     assert request('GET',np+'/credentials',bearer=master)==before_credentials
     assert request('GET',np,bearer=master)['requiredActions']==before_required
     state=json.loads(fixture.read_text())
     assert state['source']['CaseUser']['hash']==baseline_hash
     assert not any('password' in operation for operation in state['operations'].values())
+    # API rollback retains the permanent native-binding filter and existing source identities.
+    component=request('GET','/admin/realms/gator/components/'+component['id'],bearer=master)
+    component['config']['nativeIdentityBindings']=['true']
+    component['config']['identityAdministrationEnabled']=['false']
+    request('PUT','/admin/realms/gator/components/'+component['id'],component,master)
+    realm=request('GET','/admin/realms/gator',bearer=master)
+    realm['attributes']['gator.identityAdmin.enabled']='false'
+    request('PUT','/admin/realms/gator',realm,master)
+    request('POST',endpoint,{'action':'get','targetSubject':created},admin_token,404)
+    request('GET','/admin/realms/gator/users/'+fake_id,bearer=master,expected=404)
+    assert [u['id'] for u in request('GET','/admin/realms/gator/users?username=synthetic-created&exact=true',bearer=master)]==[created]
+    assert request('GET',fedpath,bearer=master)['id']==federated
     (root/'result.json').write_text(json.dumps({'passed':True,'nativeSubject':native['id'],'federatedSubject':federated,'operationCount':len(state['operations']),'scope':'Keycloak integration with synthetic JDBC contract; business SQL integration remains separate'},indent=2))
     print('PASS: native/federated edits and query, exact subjects, auth/input boundaries, creation grants none, explicit safe grant, Mail scope, native SQL shadow rejected, credentials/required actions preserved, durable native restart replay. Evidence '+str(root))
 finally:

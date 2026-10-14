@@ -10,6 +10,28 @@ import java.lang.reflect.Proxy;
 /** Security and retry checks use synthetic identities and no network/database. */
 public final class GatorIdentityAdminSelfCheck {
     public static void main(String[] args) {
+        assert GatorIdentityAdmin.nameParts("Given Family").equals(new GatorIdentityAdmin.NameParts("Given","Family"));
+        assert GatorIdentityAdmin.nameParts("Given  Family").equals(new GatorIdentityAdmin.NameParts("Given ","Family"));
+        assert GatorIdentityAdmin.nameParts("Nickname").lastName().isEmpty();
+        var profile=new org.keycloak.representations.userprofile.config.UPConfig();
+        assert GatorIdentityAdminResource.protectedCreateMarkers(profile);
+        profile.setUnmanagedAttributePolicy(org.keycloak.representations.userprofile.config.UPConfig.UnmanagedAttributePolicy.ENABLED);
+        assert !GatorIdentityAdminResource.protectedCreateMarkers(profile);
+        for(String marker:GatorIdentityAdminResource.CREATE_MARKERS) profile.addOrReplaceAttribute(
+                new org.keycloak.representations.userprofile.config.UPAttribute(marker,
+                    new org.keycloak.representations.userprofile.config.UPAttributePermissions(Set.of("admin"),Set.of("admin"))));
+        assert GatorIdentityAdminResource.protectedCreateMarkers(profile);
+        profile.getAttributes().getFirst().getPermissions().setEdit(Set.of("admin","user"));
+        assert !GatorIdentityAdminResource.protectedCreateMarkers(profile);
+        try {
+            GatorIdentityAdminSql.response("{\"responses\":[{\"resNum\":\"42501\",\"response\":{\"message\":\"private actor data\"}}]}");
+            throw new AssertionError("Revoked SQL actor accepted");
+        } catch(GatorIdentityAdminSql.Rejected denied) {
+            assert GatorIdentityAdminResource.sqlFailureStatus(denied.code)==403;
+            assert !denied.getMessage().contains("private actor data");
+        }
+        assert GatorIdentityAdminResource.sqlFailureStatus("503")==503;
+        assert GatorIdentityAdminResource.sqlFailureStatus("22023")==400;
         String requestId="11111111-2222-3333-4444-555555555555";
         assert GatorIdentityAdminResource.createSubject("https://id/realms/gator","client",requestId)
                 .equals(GatorIdentityAdminResource.createSubject("https://id/realms/gator","client",requestId));

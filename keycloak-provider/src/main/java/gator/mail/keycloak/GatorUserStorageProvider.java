@@ -101,8 +101,8 @@ final class GatorUserStorageProvider implements UserStorageProvider, UserLookupP
                 edited.put(key, value);
                 loaded.remove(account.username());
             }
-            @Override public String getFirstName() { return administration(realm) ? (String) edited.getOrDefault("firstName", account.name()) : super.getFirstName(); }
-            @Override public String getLastName() { return administration(realm) ? (String) edited.getOrDefault("lastName", "") : super.getLastName(); }
+            @Override public String getFirstName() { return administration(realm) ? (String) edited.getOrDefault("firstName", GatorIdentityAdmin.nameParts(account.name()).firstName()) : super.getFirstName(); }
+            @Override public String getLastName() { return administration(realm) ? (String) edited.getOrDefault("lastName", GatorIdentityAdmin.nameParts(account.name()).lastName()) : super.getLastName(); }
             @Override public void setFirstName(String name) {
                 write("name", String.join(" ", name == null ? "" : name, getLastName()).trim());
                 edited.put("firstName", name == null ? "" : name);
@@ -225,7 +225,7 @@ final class GatorUserStorageProvider implements UserStorageProvider, UserLookupP
                 required("GATOR_IDP_JDBC_USER"), required("GATOR_IDP_JDBC_PASSWORD"));
              PreparedStatement statement = connection.prepareStatement(SELECT + " where " + condition + nativeGuard(realm) + (unique ? " limit 2" : " limit 1"))) {
             statement.setString(1, value);
-            if (administration(realm)) bindGuard(statement, realm, 2);
+            if (queryEnabled(realm)) bindGuard(statement, realm, 2);
             try (ResultSet rs = statement.executeQuery()) {
                 if (!rs.next()) return null;
                 Account account = new Account(rs.getString(1), rs.getString(2), rs.getString(3), rs.getInt(4),
@@ -239,7 +239,7 @@ final class GatorUserStorageProvider implements UserStorageProvider, UserLookupP
 
 
     private String nativeGuard(RealmModel realm) {
-        return administration(realm) ? " and not exists(select 1 from app_oidc_identity i where i.usuario_id=u.usuario_id and i.issuer=? and i.subject <> concat('f:',?,':',u.usuario_id))" : "";
+        return queryEnabled(realm) ? " and not exists(select 1 from app_oidc_identity i where i.usuario_id=u.usuario_id and i.issuer=? and i.subject <> concat('f:',?,':',u.usuario_id))" : "";
     }
     private void bindGuard(PreparedStatement statement, RealmModel realm, int index) throws SQLException {
         statement.setString(index, GatorIdentityAdmin.issuer(session, realm));
@@ -252,9 +252,15 @@ final class GatorUserStorageProvider implements UserStorageProvider, UserLookupP
                 && GatorIdentityAdmin.enabled(realm);
     }
 
+    private boolean queryEnabled(RealmModel realm) {
+        return administration(realm) || model.get("nativeIdentityBindings",false)
+                && realm!=null && "gator".equals(realm.getName())
+                && "GATOR_IDP".equals(model.get("connectionEnvironmentPrefix","GATOR_IDP"));
+    }
+
     @Override public Stream<UserModel> searchForUserStream(RealmModel realm, Map<String, String> params,
             Integer firstResult, Integer maxResults) {
-        if (!administration(realm)) return Stream.empty();
+        if (!queryEnabled(realm)) return Stream.empty();
         List<String> values = new ArrayList<>();
         List<String> conditions = new ArrayList<>();
         Map<String, String> columns = Map.of(UserModel.USERNAME, "u.usuario_id", UserModel.EMAIL,
@@ -293,7 +299,7 @@ final class GatorUserStorageProvider implements UserStorageProvider, UserLookupP
     }
 
     @Override public int getUsersCount(RealmModel realm, boolean includeServiceAccount) {
-        if (!administration(realm)) return 0;
+        if (!queryEnabled(realm)) return 0;
         try (Connection connection = DriverManager.getConnection(required("GATOR_IDP_JDBC_URL"),
                 required("GATOR_IDP_JDBC_USER"), required("GATOR_IDP_JDBC_PASSWORD"));
              PreparedStatement statement = connection.prepareStatement("select count(*) from app_usuarios u where true" + nativeGuard(realm))) {
@@ -314,7 +320,7 @@ final class GatorUserStorageProvider implements UserStorageProvider, UserLookupP
 
     @Override public Stream<UserModel> getGroupMembersStream(RealmModel realm, GroupModel group,
             Integer first, Integer max) {
-        if (!administration(realm)) return Stream.empty();
+        if (!queryEnabled(realm)) return Stream.empty();
         return UserStorageUtil.userFederatedStorage(session).getMembershipStream(realm, group, first, max)
                 .map(id -> getUserById(realm, id)).filter(java.util.Objects::nonNull);
     }

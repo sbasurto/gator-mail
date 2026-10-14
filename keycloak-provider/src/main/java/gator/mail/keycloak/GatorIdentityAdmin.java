@@ -53,6 +53,12 @@ final class GatorIdentityAdmin {
         return String.join(" ", List.of(user.getFirstName() == null ? "" : user.getFirstName(),
                 user.getLastName() == null ? "" : user.getLastName())).trim();
     }
+    record NameParts(String firstName,String lastName) { }
+    static NameParts nameParts(String name) {
+        if(name==null) return new NameParts("","");
+        int split=name.lastIndexOf(' ');
+        return split<0?new NameParts(name,""):new NameParts(name.substring(0,split),name.substring(split+1));
+    }
     static Map<String,Object> command(String action) {
         Map<String,Object> input = new LinkedHashMap<>(); input.put("action", action);
         input.put("usuario", "gator_idp"); input.put("idctrl", UUID.randomUUID().toString()); return input;

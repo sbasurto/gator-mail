@@ -13,6 +13,8 @@ import org.keycloak.services.resources.admin.AdminEventBuilder;
 /** Realm-local administrative entrypoint; the browser never receives administrative credentials. */
 @jakarta.ws.rs.ext.Provider
 public final class GatorIdentityAdminResource {
+    static final Set<String> CREATE_MARKERS=Set.of("gator.identityAdmin.createOperationId","gator.identityAdmin.createActorSubject",
+            "gator.identityAdmin.createClientId","gator.identityAdmin.createDestinationDbId","gator.identityAdmin.createRequestFingerprint");
     private final KeycloakSession session;
     private final GatorIdentityAdminSql.Transport sql;
     GatorIdentityAdminResource(KeycloakSession session) { this(session, GatorIdentityAdminSql::call); }
@@ -24,11 +26,19 @@ public final class GatorIdentityAdminResource {
     public Map<String,Object> administer(Map<String,Object> request) {
         try { return execute(request); }
         catch (GatorIdentityAdminSql.Rejected rejected) {
-            if ("403".equals(rejected.code)) throw new ForbiddenException();
-            if ("400".equals(rejected.code) || "22023".equals(rejected.code)) throw new BadRequestException();
+            session.getTransactionManager().setRollbackOnly();
+            if (sqlFailureStatus(rejected.code)==403) throw new ForbiddenException();
+            if (sqlFailureStatus(rejected.code)==400) throw new BadRequestException();
             throw new ServiceUnavailableException("Identity administration pending");
-        } catch (IllegalArgumentException invalid) { throw new BadRequestException("Invalid identity request");
-        } catch (IllegalStateException unavailable) { throw new ServiceUnavailableException("Identity administration unavailable"); }
+        } catch (IllegalArgumentException invalid) { session.getTransactionManager().setRollbackOnly();throw new BadRequestException("Invalid identity request");
+        } catch (IllegalStateException unavailable) { session.getTransactionManager().setRollbackOnly();throw new ServiceUnavailableException("Identity administration unavailable");
+        } catch(WebApplicationException rejected) {session.getTransactionManager().setRollbackOnly();throw rejected;}
+    }
+
+    static int sqlFailureStatus(String code) {
+        if (Set.of("403","42501").contains(code)) return 403;
+        if (Set.of("400","22023").contains(code)) return 400;
+        return 503;
     }
 
     private Map<String,Object> execute(Map<String,Object> request) {
@@ -74,6 +84,8 @@ public final class GatorIdentityAdminResource {
                 command.put(field,value);
             }
             if (request.containsKey("requestId")) {
+                if (!protectedCreateMarkers(session.getProvider(org.keycloak.userprofile.UserProfileProvider.class).getConfiguration()))
+                    throw new ServiceUnavailableException("Create retry metadata is not protected");
                 String requestId=text(request,"requestId");
                 if (!requestId.matches("[a-fA-F0-9]{8}(-[a-fA-F0-9]{4}){3}-[a-fA-F0-9]{12}")) throw new BadRequestException("Invalid create request ID");
                 requestId=UUID.fromString(requestId).toString();
@@ -155,7 +167,10 @@ public final class GatorIdentityAdminResource {
         if (action.equals("grant")) return grant(realm, client, auth, user, command);
         if (!action.equals("create") && (fields.containsKey("name") || fields.containsKey("email")))
             validateProfile(user,user.getUsername(),fields);
-        if (fields.containsKey("name")) { user.setFirstName((String) fields.get("name")); user.setLastName(""); }
+        if (fields.containsKey("name")) {
+            var name=GatorIdentityAdmin.nameParts((String)fields.get("name"));
+            user.setFirstName(name.firstName());user.setLastName(name.lastName());
+        }
         if (fields.containsKey("email") && !Objects.equals(user.getEmail(),fields.get("email"))) {
             user.setEmail((String) fields.get("email")); user.setEmailVerified(false);
         }
@@ -195,6 +210,20 @@ public final class GatorIdentityAdminResource {
 
     static String createSubject(String issuer,String client,String requestId) {
         return UUID.nameUUIDFromBytes(("closed-create:"+issuer+":"+client+":"+requestId).getBytes(java.nio.charset.StandardCharsets.UTF_8)).toString();
+    }
+
+    static boolean protectedCreateMarkers(org.keycloak.representations.userprofile.config.UPConfig profile) {
+        if (profile==null) return false;
+        var attributes=profile.getAttributes()==null?List.<org.keycloak.representations.userprofile.config.UPAttribute>of():profile.getAttributes();
+        for(String marker:CREATE_MARKERS) {
+            var definitions=attributes.stream().filter(a->marker.equals(a.getName())).toList();
+            if(definitions.isEmpty()) {
+                if(profile.getUnmanagedAttributePolicy()==org.keycloak.representations.userprofile.config.UPConfig.UnmanagedAttributePolicy.ENABLED) return false;
+            } else if(definitions.size()!=1 || definitions.getFirst().getPermissions()==null
+                    || !Set.of("admin").equals(definitions.getFirst().getPermissions().getEdit())
+                    || !Set.of("admin").equals(definitions.getFirst().getPermissions().getView())) return false;
+        }
+        return true;
     }
 
     static String createFingerprint(Map<String,?> request) {
@@ -306,7 +335,18 @@ public final class GatorIdentityAdminResource {
         Map<String,Object> attributes=new LinkedHashMap<>();
         if(user!=null)attributes.putAll(user.getAttributes());
         attributes.put(UserModel.USERNAME,username);
-        if(fields.containsKey("name")) {attributes.put(UserModel.FIRST_NAME,fields.get("name"));attributes.put(UserModel.LAST_NAME,"");}
+        if(fields.containsKey("name")) {
+            var name=GatorIdentityAdmin.nameParts((String)fields.get("name"));
+            attributes.put(UserModel.FIRST_NAME,name.firstName());attributes.put(UserModel.LAST_NAME,name.lastName());
+            if(user==null && name.lastName().isBlank()) {
+                var profile=session.getProvider(org.keycloak.userprofile.UserProfileProvider.class).getConfiguration();
+                var surname=profile.getAttribute(UserModel.LAST_NAME);
+                var required=surname==null?null:surname.getRequired();
+                if(required!=null && (required.isAlways() || required.getRoles()!=null && required.getRoles().contains("user")
+                        || required.getScopes()!=null && required.getScopes().contains("profile")))
+                    throw new BadRequestException("Full name requires a surname");
+            }
+        }
         if(fields.containsKey("email"))attributes.put(UserModel.EMAIL,fields.get("email"));
         try {
             var profiles=session.getProvider(org.keycloak.userprofile.UserProfileProvider.class);

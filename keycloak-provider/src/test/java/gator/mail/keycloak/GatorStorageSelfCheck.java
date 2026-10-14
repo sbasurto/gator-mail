@@ -316,6 +316,20 @@ public final class GatorStorageSelfCheck {
         assert adminSource.searchForUserStream(centralRealm,Map.of(),0,10).count()==1;
         assert lastQuery.contains("order by u.usuario_id collate") && lastQuery.contains("limit ? offset ?");
         assert new GatorUserStorageProvider(null,legacy).searchForUserStream(centralRealm,Map.of(),0,10).count()==0;
+        central.put("nativeIdentityBindings","true");central.put("identityAdministrationEnabled","false");
+        RealmModel disabledRealm=proxy(RealmModel.class,(o,m,v)->switch(m.getName()) {
+            case "getName" -> "gator";case "getId" -> "gator-id";
+            case "getAttribute" -> "gator.identityAdmin.enabled".equals(v[0])?"false":"https://identity.example/realms/gator";
+            default -> null;
+        });
+        assert adminSource.getUserByUsername(disabledRealm,"NativeSqlUser")==null : "Disabling administration exposed native SQL shadow";
+        assert adminSource.getUserById(disabledRealm,"f:central:NativeSqlUser")==null;
+        assert adminSource.getUserById(disabledRealm,"f:central:ExactUser")!=null;
+        assert adminSource.getUsersCount(disabledRealm)==1;
+        assert adminSource.searchForUserStream(disabledRealm,Map.of(),0,10).count()==1;
+        try {editable.setEnabled(true);throw new AssertionError("Disabled administration allowed source write");}
+        catch(org.keycloak.storage.ReadOnlyException expected) { }
+        central.put("identityAdministrationEnabled","true");
         central.put("connectionEnvironmentPrefix","GATOR_LOMALINDA_ERM");
         try {editable.setEnabled(true);throw new AssertionError("Noncentral source mutated");}
         catch(org.keycloak.storage.ReadOnlyException expected) { }
