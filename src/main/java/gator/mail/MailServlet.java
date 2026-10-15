@@ -126,20 +126,7 @@ public final class MailServlet extends HttpServlet {
             String configuration = getServletContext().getInitParameter("gappConfigFile");
             user = operationalUser(session, identity,
                     (issuer, subject) -> gator.lib.sec.GatorOidcIdentity.resolve(configuration, issuer, subject));
-            if (mailLoginPolicyAvailable()) {
-                JsonObject policy = identity.deepCopy(); policy.addProperty("usuario", user);
-                boolean requiresGrant = mailIdentityDbCall("mail_fn_identity_login_policy", policy)
-                        .get("requiresAccessGrant").getAsBoolean();
-                if (!centralMailAccess(requiresGrant, authenticatedUser)) {
-                    response.sendError(HttpServletResponse.SC_FORBIDDEN);
-                    return;
-                }
-            }
-            JsonObject access = call("app_fn_has_mail_access", json("usuario", user));
-            if (!"0".equals(access.get("codigo").getAsString())) {
-                response.sendError(HttpServletResponse.SC_FORBIDDEN);
-                return;
-            }
+            JsonObject access = MailAccess.load(getServletContext(), identity, user, authenticatedUser);
             session.setMaxInactiveInterval(sessionTimeoutSeconds(access));
             String mailbox = access.get("email").getAsString();
             model.put("mailbox", mailbox);
@@ -1900,18 +1887,6 @@ public final class MailServlet extends HttpServlet {
         if(helper) return true;
         if(feature || projectionSchema) throw new IllegalStateException("Mail login policy unavailable");
         return false;
-    }
-
-    private boolean mailLoginPolicyAvailable() throws Exception {
-        GappSQLStatement statement=new GappSQLStatement();
-        statement.setQuery("SELECT to_regprocedure('public.mail_fn_identity_login_policy(text)') IS NOT NULL AS helper, "
-                + "to_regclass('public.app_identity_admin_operation') IS NOT NULL AS projection_schema");
-        ADO database=new ADO(getServletContext().getInitParameter("gappContactsDbFile"),true);
-        try(java.sql.ResultSet rows=database.executePreparedStmtRset(statement);
-                java.sql.Statement query=rows==null?null:rows.getStatement()) {
-            if(rows==null || !rows.next()) throw new IllegalStateException("Mail login policy unavailable");
-            return needsMailLoginPolicy(centralIdentityAdministration(),rows.getBoolean("helper"),rows.getBoolean("projection_schema"));
-        } finally {database.close();}
     }
 
     private boolean centralIdentityAdministration() {

@@ -24,6 +24,12 @@
         <servlet-name>OAuth</servlet-name>
         <url-pattern>/oauth/*</url-pattern>
     </servlet-mapping>
+    <servlet>
+        <servlet-name>Scanner</servlet-name>
+        <servlet-class>gator.mail.MailScannerServlet</servlet-class>
+    </servlet>
+    <servlet-mapping><servlet-name>Scanner</servlet-name><url-pattern>/api/scanner/*</url-pattern></servlet-mapping>
+    <listener><listener-class>gator.lib.web.mobile.GatorScannerSessionListener</listener-class></listener>
     <error-page>
         <error-code>403</error-code>
         <location>/errors/403.jsp</location>

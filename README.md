@@ -349,3 +349,11 @@ La función compartida `mail_fn_usuario_opciones(text)` conserva su firma y ahor
 se publica desde el repositorio SQL, `app/postgresql/mail/mail_pg_fn_usuario_opciones.sql`,
 mediante `deploy/toUpload/allGatorMailService`. Publicar ese manifiesto antes de
 instalar `db/mail_admin.sql`; el archivo de administración ya no mantiene otra copia.
+
+## Scanner de navegador
+
+Mail comparte `/api/scanner/*` y los dos assets de captura con las demás GatorApps.
+Exige la identidad actual, acceso local al buzón, la política de permiso central
+y el desafío verificado; los POST web usan `mail.csrf` en `X-CSRF-TOKEN`.
+La tabla App se instala en la base de `gappConfigFile`, no en la caché IMAP.
+El WAR copia únicamente los assets del scanner; no incorpora los JSP ajenos.

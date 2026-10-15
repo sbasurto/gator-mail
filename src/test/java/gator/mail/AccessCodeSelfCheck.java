@@ -12,6 +12,7 @@ import java.util.Map;
 
 public final class AccessCodeSelfCheck {
     public static void main(String[] args) throws Exception {
+        MailScannerSelfCheck.main(args);
         var identityBody = com.google.gson.JsonParser.parseString("{\"issuer\":\"forged\",\"subject\":\"forged\",\"usuario\":\"Admin\"}").getAsJsonObject();
         var authenticatedUser = com.google.gson.JsonParser.parseString("{\"sub\":\"Exact-Subject\",\"preferred_username\":\"renamed\"}").getAsJsonObject();
         var identityRequest = OAuthServlet.identityRequest(identityBody,authenticatedUser);

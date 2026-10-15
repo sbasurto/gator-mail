@@ -18,6 +18,7 @@ configurations { sharedErrorPages }
 
 dependencies {
     implementation 'gator.lib:gator-lib:1.0.0-SNAPSHOT'
+    implementation 'gator.lib:gator-lib-web:1.0.0-SNAPSHOT'
     implementation 'gator.lib:gator-lib-web-gui:1.0.0-SNAPSHOT'
     sharedErrorPages('gator.lib:gator-lib-web-resources:1.0.0-SNAPSHOT') { transitive = false }
     implementation 'org.eclipse.angus:angus-mail:2.0.4'
@@ -41,6 +42,11 @@ tasks.named('war') {
     from({ zipTree(configurations.sharedErrorPages.singleFile) }) {
         include 'META-INF/resources/errors/access-error.jspf'
         eachFile { path = 'errors/access-error.jspf' }
+        includeEmptyDirs = false
+    }
+    from({ zipTree(configurations.sharedErrorPages.singleFile) }) {
+        include 'META-INF/resources/assets/gator-scanner-v01.js', 'META-INF/resources/assets/gator-scanner-v01.css'
+        eachFile { path = 'assets/' + name }
         includeEmptyDirs = false
     }
     archiveFileName = 'gator-mail.war'
