@@ -827,6 +827,29 @@
         list.after(empty);
     }
     const locationQuery = new URLSearchParams(window.location.search);
+    if (document.getElementById('mail-reader-panel') && locationQuery.get('reader') === 'full') {
+        main?.classList.add('mail-reader-full');
+    }
+    let previewTimer;
+    document.querySelectorAll('.mail-message-link').forEach(link => {
+        const target = new URL(link.href);
+        if (target.searchParams.get('action')) return;
+        link.addEventListener('click', event => {
+            if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+            window.clearTimeout(previewTimer);
+            if (event.detail === 0) return;
+            // Wait for the second click before navigating away from the list.
+            event.preventDefault();
+            previewTimer = window.setTimeout(() => window.location.assign(link.href), 400);
+        });
+        link.addEventListener('dblclick', event => {
+            if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+            event.preventDefault();
+            window.clearTimeout(previewTimer);
+            target.searchParams.set('reader', 'full');
+            window.location.assign(target.href);
+        });
+    });
     document.querySelectorAll('.mail-sidebar a[href]').forEach(link => {
         const target = new URL(link.href);
         const action = locationQuery.get('action') || '';

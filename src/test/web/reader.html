@@ -1,0 +1,48 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Lector: prueba de regresión</title>
+<link rel="stylesheet" href="../../../web/css/gator-mail.css">
+<main class="mail-content" id="mail-content-area">
+  <section id="mail-list-panel">
+    <a class="mail-message-link" href="?uid=1" id="open-message">Abrir correo</a>
+    <a class="mail-message-link" href="?action=editDraft&amp;uid=2" id="open-draft">Editar borrador</a>
+  </section>
+  <div class="mail-action-bar">Acciones de selección</div>
+</main>
+<template id="message">
+  <section id="mail-reader-panel">
+    <header><a href="reader.html" id="back">Entrada</a></header>
+    <div class="mail-message"><h1>Correo de prueba</h1><p>Contenido del mensaje</p></div>
+  </section>
+</template>
+<script>
+  if (new URLSearchParams(location.search).get('uid') === '1') {
+    document.querySelector('main').append(document.getElementById('message').content.cloneNode(true));
+  }
+</script>
+<script src="../../../web/js/gator-mail.js"></script>
+<pre id="result">FAIL: prueba incompleta</pre>
+<script>
+  const assert = (condition, message) => { if (!condition) throw new Error(message); };
+  try {
+    const reader = document.getElementById('mail-reader-panel');
+    const list = document.getElementById('mail-list-panel');
+    const full = new URLSearchParams(location.search).get('reader') === 'full';
+    const visible = element => getComputedStyle(element).display !== 'none';
+    if (reader && full) {
+      assert(!visible(list), 'El doble clic debe ocultar el listado');
+      assert(!visible(document.querySelector('.mail-action-bar')), 'Las acciones de selección siguen visibles');
+      const main = reader.parentElement;
+      const style = getComputedStyle(main);
+      const width = main.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+      assert(Math.abs(reader.getBoundingClientRect().width - width) < 2, 'El lector no ocupa todo el ancho');
+    } else if (reader && innerWidth > 820) {
+      assert(visible(list), 'Un clic debe conservar el listado junto al lector');
+    } else if (!reader) {
+      assert(visible(list), 'Debe poder regresar al listado');
+    }
+    document.getElementById('result').textContent = 'PASS: clic para vista previa, doble clic para ampliar';
+  } catch (error) {
+    document.getElementById('result').textContent = 'FAIL: ' + error.message;
+  }
+</script>
