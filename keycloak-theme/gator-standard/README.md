@@ -2,8 +2,11 @@
 
 Tema basado en `keycloak.v2` de Keycloak 26.7.0. `login.ftl` conserva el
 formulario original y cambia su encabezado; CSS y JavaScript adaptan la
-presentación de `gator-lib-web-resources/index_tpl.jsp`. Las demás pantallas
-heredan las plantillas de Keycloak. La activación se realiza por cliente, conservando las políticas existentes.
+presentación de `gator-lib-web-resources/index_tpl.jsp`. La pantalla de error
+comparte la marca estándar y explica el acceso directo con un método no admitido
+(HTTP 405); conserva el estado HTTP y los mensajes de los demás errores.
+Las demás pantallas heredan las plantillas de Keycloak. La activación se realiza
+por cliente, conservando las políticas existentes.
 
 ## Nombre y logo por instalación
 
@@ -59,11 +62,21 @@ asociaciones ni políticas de contraseña. Reversión: deshabilitar
 
 ```bash
 python3 test_prepare_branding.py
+# Contra una instancia con el tema instalado y seleccionado como predeterminado:
+python3 test_error_page.py https://security.soft-gator.com/auth/realms/gator
 ```
 
 La vista previa estática no valida el flujo OIDC ni el envío de correo. La recuperación requiere una prueba integrada posterior a configurar SMTP.
 
 ## Publicación
+
+Las peticiones sin cliente, como abrir el endpoint de tokens en el navegador,
+usan el `loginTheme` del realm. Para la pantalla estándar solicitada en el realm
+central `gator`, respaldar ese campo y seleccionar `gator-standard`, conservando
+los overrides por cliente y el resto de la configuración. La API de tokens
+mantiene sus respuestas JSON; este tema sólo cambia su representación HTML.
+Con la caché de producción, actualizar mensajes requiere recargar el runtime
+mediante la publicación gradual existente; comprobar el HTML servido después.
 
 Copiar `login/` y los logos preparados al directorio `themes/gator-standard/`
 de la instalación de Keycloak. Guardar previamente los atributos completos
