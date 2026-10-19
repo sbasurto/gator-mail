@@ -146,6 +146,30 @@ public final class GatorExactLoginSelfCheck {
         assert !authenticator.validateUserAndPassword(context,input) : "Fallback cannot use a cached federated identity";
         nativeCandidate[0] = null;
         assert !authenticator.validateUserAndPassword(context,input) : "Unknown identity must be rejected";
+        emailCandidate[0] = proxy(UserModel.class, (p,m,a) -> switch (m.getName()) {
+            case "getId" -> "f:source:MailUser";
+            case "getUsername" -> "MailUser";
+            case "isEnabled" -> enabled[0];
+            case "credentialManager" -> credentials;
+            default -> fallback(m);
+        });
+        emailAllowed[0] = true;
+        input.putSingle("username", "unique@example.com");
+        assert authenticator.validateUserAndPassword(context,input) : "Unique email login must select the existing identity";
+        assert selected[0] == emailCandidate[0];
+        correct[0] = false;
+        assert !authenticator.validateUserAndPassword(context,input) : "Email login must verify the password";
+        assert selected[0] == emailCandidate[0] : "Email failure accounting must retain the resolved subject";
+        correct[0] = true; enabled[0] = false;
+        assert !authenticator.validateUserAndPassword(context,input) : "Disabled email identity cannot log in";
+        enabled[0] = true; ambiguousEmail[0] = true;
+        assert !authenticator.validateUserAndPassword(context,input) : "Ambiguous email cannot select a login identity";
+        ambiguousEmail[0] = false; emailAllowed[0] = false;
+        assert !authenticator.validateUserAndPassword(context,input) : "Realm must explicitly allow email login";
+        emailAllowed[0] = true; missingFederated[0] = false;
+        assert authenticator.validateUserAndPassword(context,input);
+        assert selected[0].getId().equals("f:source:unique@example.com") : "An exact email-shaped username takes precedence over an email alias";
+        emailAllowed[0] = false; emailCandidate[0] = null;
         var reset = new GatorExactResetCredentialChooseUser();
         missingFederated[0] = false;
         for (String name : List.of("Ecruz", "ecruz", "user@example.com")) {

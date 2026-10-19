@@ -20,6 +20,12 @@ Gator literal por realm. Deshabilitar login por correo, registro, recuperación 
 direct grants: esos otros flujos no preservan nombres sensibles a mayúsculas.
 El realm existente conserva su componente y flujo.
 
+En el acceso central por cliente (`gator.exactIdentity=true`, sin activar
+`literalUsernames` global), login y recuperación comparten la resolución:
+primero el nombre exacto; si no existe y el realm permite login por correo,
+el correo único asociado. Las direcciones ambiguas se rechazan. Se conserva
+el subject de la cuenta y se verifican su contraseña y estado activo.
+
 Loma Linda conserva sus bases de ERM, Store y WMS; RF comparte la identidad de WMS.
 Las asociaciones de subject a usuario local se configuran explícitamente en cada
 aplicación Spring. Los permisos siguen en su base original. Las altas posteriores

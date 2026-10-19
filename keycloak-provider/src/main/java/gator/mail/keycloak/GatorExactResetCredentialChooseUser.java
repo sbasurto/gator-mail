@@ -6,7 +6,6 @@ import org.keycloak.authentication.authenticators.resetcred.ResetCredentialChoos
 import org.keycloak.events.Details;
 import org.keycloak.events.Errors;
 import org.keycloak.models.KeycloakSession;
-import org.keycloak.models.ModelDuplicateException;
 import org.keycloak.models.UserModel;
 
 /** Recovery uses the same case-sensitive identity selection as login. */
@@ -28,13 +27,6 @@ public final class GatorExactResetCredentialChooseUser extends ResetCredentialCh
         }
         username = username.trim();
         UserModel user = GatorExactUsernamePasswordForm.findExactUser(context.getSession(), context.getRealm(), username);
-        if (user == null && context.getRealm().isLoginWithEmailAllowed() && username.contains("@")) {
-            try {
-                user = context.getSession().users().getUserByEmail(context.getRealm(), username);
-            } catch (ModelDuplicateException ambiguousEmail) {
-                // Ambiguous addresses cannot identify a recovery account.
-            }
-        }
         context.getAuthenticationSession().setAuthNote("ATTEMPTED_USERNAME", username);
         context.getAuthenticationSession().removeAuthNote("RESET_CREDENTIAL_USER_CHOSEN");
         if (user == null) {

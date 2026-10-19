@@ -8,6 +8,7 @@ import org.keycloak.events.Details;
 import org.keycloak.models.UserModel;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.RealmModel;
+import org.keycloak.models.ModelDuplicateException;
 import org.keycloak.storage.UserStorageProvider;
 import org.keycloak.storage.StorageId;
 
@@ -52,6 +53,13 @@ public final class GatorExactUsernamePasswordForm extends UsernamePasswordForm {
             if (nativeUser != null && StorageId.isLocalStorage(nativeUser)
                     && nativeUser.getFederationLink() == null && username.equals(nativeUser.getUsername()))
                 user = nativeUser;
+        }
+        if (user == null && realm.isLoginWithEmailAllowed() && username.contains("@")) {
+            try {
+                user = session.users().getUserByEmail(realm, username);
+            } catch (ModelDuplicateException ambiguousEmail) {
+                // A shared address cannot identify a login or recovery account.
+            }
         }
         return user;
     }
