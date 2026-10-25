@@ -97,8 +97,9 @@ acceso**, **Restablecer contraseña** y **Activar** son acciones separadas. Sól
 las identidades creadas expresamente para Mail requieren el rol `access` de
 `gator-mail`, comprobado mediante UserInfo autenticado y procedencia SQL exacta;
 los usuarios anteriores conservan su contrato de acceso. Nombre/correo/estado
-se administran por subject exacto; teléfono y tiempo de sesión siguen siendo
-preferencias locales. Retirar un buzón bloquea primero la identidad y conserva
+se administran por subject exacto; el teléfono sigue siendo una preferencia
+local y la duración de sesión sigue la política homologada de la aplicación.
+Retirar un buzón bloquea primero la identidad y conserva
 sus perfiles e historial. Las operaciones pendientes o fallidas se muestran
 sin afirmar que el destino confirmó una actualización; comprobar estado no
 reenvía contraseñas ni repite un retiro Linux ya confirmado.

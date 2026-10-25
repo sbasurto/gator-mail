@@ -1,5 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <web-app version="6.1" xmlns="https://jakarta.ee/xml/ns/jakartaee">
+    <filter>
+        <filter-name>GatorSessionTimeoutPolicy</filter-name>
+        <filter-class>gator.lib.web.sec.GatorSessionTimeoutFilter</filter-class>
+        <async-supported>true</async-supported>
+    </filter>
+    <filter-mapping>
+        <filter-name>GatorSessionTimeoutPolicy</filter-name>
+        <url-pattern>/*</url-pattern>
+    </filter-mapping>
     <servlet>
         <servlet-name>Mail</servlet-name>
         <servlet-class>gator.mail.MailServlet</servlet-class>
