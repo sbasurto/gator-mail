@@ -212,6 +212,15 @@ La guía completa de construcción, instalación, actualización y reversa está
 La sesión HTTP se conserva durante reinicios controlados de Gator Mail para no
 repetir el segundo factor mientras la misma sesión continúe activa. Cerrar
 sesión o dejarla expirar elimina esa verificación.
+
+La política homologada es de tres horas de inactividad (180 minutos en el
+descriptor, 10800000 ms en los usuarios y 10800 segundos en Keycloak). Los
+tokens de acceso conservan su vida corta y se renuevan automáticamente.
+La recuperación de un error IMAP también renueva el token cuando corresponde;
+un fallo temporal del proveedor de identidad conserva la sesión y permite
+reintentar. Sólo una identidad o un refresh token definitivamente inválidos
+requieren autenticarse otra vez. `oauthRefreshSelfTest` comprueba estos casos
+con un proveedor HTTPS aislado, incluida la rotación y las peticiones simultáneas.
 Si el primer SMS no puede entregarse, el proveedor puede habilitar una única
 corrección del teléfono mediante `phoneCorrectionAllowed`.
 

@@ -30,6 +30,9 @@
     </servlet>
     <servlet-mapping><servlet-name>Scanner</servlet-name><url-pattern>/api/scanner/*</url-pattern></servlet-mapping>
     <listener><listener-class>gator.lib.web.mobile.GatorScannerSessionListener</listener-class></listener>
+    <session-config>
+        <session-timeout>180</session-timeout>
+    </session-config>
     <error-page>
         <error-code>403</error-code>
         <location>/errors/403.jsp</location>

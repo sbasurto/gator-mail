@@ -100,3 +100,18 @@ tasks.register('verifyNoShiro') {
 }
 tasks.named('check') { dependsOn 'verifyNoShiro' }
 tasks.named('war') { dependsOn 'verifyNoShiro' }
+
+// Exercise token rotation and recovery against an isolated local HTTPS provider.
+tasks.register('oauthRefreshSelfTest', JavaExec) {
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'gator.mail.OAuthRefreshSelfCheck'
+    enableAssertions = true
+    doFirst {
+        def socket = new java.net.ServerSocket(0)
+        def testPort = socket.localPort
+        socket.close()
+        environment 'GATOR_MAIL_OAUTH_ISSUER', "https://localhost:${testPort}/realms/test"
+    }
+}
+tasks.named('check') { dependsOn oauthRefreshSelfTest }

@@ -120,10 +120,12 @@ public final class AccessCodeSelfCheck {
                 new java.io.ByteArrayInputStream((rawHeaders + "\r\n\r\nPrivate body")
                         .getBytes(java.nio.charset.StandardCharsets.UTF_8)));
         assert ImapMailbox.headers(headerMessage).equals(rawHeaders);
-        try {
-            OAuthServlet.tokenResponse(400, "{\"error\":\"invalid_grant\"}");
-            throw new AssertionError("Se aceptó un refresh token vencido");
-        } catch (OAuthServlet.ReauthenticationRequired expected) { }
+        for (String error : List.of("invalid_grant", "invalid_token")) {
+            try {
+                OAuthServlet.tokenResponse(400, "{\"error\":\"" + error + "\"}");
+                throw new AssertionError("Se aceptó un refresh token vencido: " + error);
+            } catch (OAuthServlet.ReauthenticationRequired expected) { }
+        }
         try {
             OAuthServlet.tokenResponse(503, "unavailable");
             throw new AssertionError("Se aceptó un fallo temporal");

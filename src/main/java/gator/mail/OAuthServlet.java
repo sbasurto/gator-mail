@@ -187,15 +187,18 @@ public final class OAuthServlet extends HttpServlet {
         HttpSession session = req.getSession(false);
         if (session == null || session.getAttribute("oidc.access") == null) return false;
         try {
-            HttpRequest info = HttpRequest.newBuilder(URI.create(issuer() + "/protocol/openid-connect/userinfo"))
-                    .header("Authorization", "Bearer " + session.getAttribute("oidc.access")).GET().build();
-            return HTTP.send(info, HttpResponse.BodyHandlers.discarding()).statusCode() == 200;
+            authenticatedUserInfo(req);
+            return true;
         } catch (Exception error) {
-            return false;
+            for (Throwable cause = error; cause != null; cause = cause.getCause())
+                if (cause instanceof ReauthenticationRequired) return false;
+            // An identity outage cannot prove that a renewable session has expired.
+            return true;
         }
     }
     private static JsonObject token(String body) throws Exception {
         HttpRequest req = HttpRequest.newBuilder(URI.create(issuer() + "/protocol/openid-connect/token"))
+                .timeout(java.time.Duration.ofSeconds(10))
                 .header("Content-Type", "application/x-www-form-urlencoded").POST(HttpRequest.BodyPublishers.ofString(body)).build();
         HttpResponse<String> res = HTTP.send(req, HttpResponse.BodyHandlers.ofString());
         return tokenResponse(res.statusCode(), res.body());
@@ -203,7 +206,7 @@ public final class OAuthServlet extends HttpServlet {
     static JsonObject tokenResponse(int status, String body) throws Exception {
         if (status == 400) {
             JsonObject error = JsonParser.parseString(body).getAsJsonObject();
-            if (error.has("error") && "invalid_grant".equals(error.get("error").getAsString()))
+            if (error.has("error") && java.util.Set.of("invalid_grant", "invalid_token").contains(error.get("error").getAsString()))
                 throw new ReauthenticationRequired();
         }
         if (status != 200) throw new IOException("No fue posible renovar OAuth: HTTP " + status);
