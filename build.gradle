@@ -49,7 +49,7 @@ tasks.named('war') {
         eachFile { path = 'assets/' + name }
         includeEmptyDirs = false
     }
-    archiveFileName = 'gator-mail.war'
+    archiveFileName = providers.gradleProperty('warName').getOrElse('gator-mail.war')
     destinationDirectory = file('dist')
 }
 
