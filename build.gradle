@@ -18,7 +18,10 @@ configurations { sharedErrorPages }
 
 dependencies {
     implementation 'gator.lib:gator-lib:1.0.0-SNAPSHOT'
-    implementation 'gator.lib:gator-lib-web:1.0.0-SNAPSHOT'
+    implementation('gator.lib:gator-lib-web:1.0.0-SNAPSHOT') {
+        // Mail does not use DHL; its SOAP runtime registers incompatible javax.mail handlers.
+        exclude group: 'gator.lib', module: 'gator-lib-mydhl'
+    }
     implementation 'gator.lib:gator-lib-web-gui:1.0.0-SNAPSHOT'
     sharedErrorPages('gator.lib:gator-lib-web-resources:1.0.0-SNAPSHOT') { transitive = false }
     implementation 'org.eclipse.angus:angus-mail:2.0.4'

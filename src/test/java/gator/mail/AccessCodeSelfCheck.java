@@ -98,6 +98,7 @@ public final class AccessCodeSelfCheck {
         LogoutSelfCheck.run();
         MailImagesSelfCheck.run();
         MailHtmlSelfCheck.run();
+        MailMimeSelfCheck.run();
         Map<String, Object> listing = new HashMap<>();
         var records = java.util.stream.IntStream.rangeClosed(1, 26)
                 .mapToObj(i -> Map.<String, Object>of("value", "Dominio " + i)).toList();
