@@ -104,7 +104,9 @@ as $function$
         'parent', coalesce(p.carpeta_imap, ''), 'root', c.carpeta_raiz,
         'depth', c.carpeta_nivel, 'unread', c.carpeta_no_leidos, 'total', c.carpeta_total,
         'uidValidity', c.carpeta_uidvalidity, 'uidNext', c.carpeta_uidnext,
-        'modSeq', c.carpeta_modseq, 'cached', (
+        'modSeq', c.carpeta_modseq, 'recipientsCached', not exists (
+            select 1 from public.mail_mensajes_resumen r where r.carpeta_id = c.carpeta_id
+                and (r.mensaje_para is null or r.mensaje_cc is null or r.mensaje_cco is null)), 'cached', (
             select count(*) from public.mail_mensajes_resumen r where r.carpeta_id = c.carpeta_id)
     ) order by c.carpeta_orden, c.carpeta_nombre), '[]'::json))::text
       from public.mail_carpetas c
@@ -142,17 +144,23 @@ begin
 
     insert into public.mail_mensajes_resumen (
         usuario_id, mail_domain, carpeta_id, mensaje_uidvalidity, mensaje_uid,
-        mensaje_remitente, mensaje_asunto, mensaje_fecha, mensaje_leido
+        mensaje_remitente, mensaje_para, mensaje_cc, mensaje_cco, mensaje_asunto, mensaje_fecha, mensaje_leido
     )
     select c.usuario_id, c.mail_domain, c.carpeta_id, v_uidvalidity, m.uid,
-           left(coalesce(m.sender, ''), 1000), left(coalesce(m.subject, '(Sin asunto)'), 2000),
+           left(coalesce(m.sender, ''), 1000), left(m.recipient_to, 20000),
+           left(m.recipient_cc, 20000), left(m.recipient_bcc, 20000),
+           left(coalesce(m.subject, '(Sin asunto)'), 2000),
            to_timestamp(m.sent_epoch), coalesce(m.seen, false)
       from public.mail_carpetas c
       cross join jsonb_to_recordset(payload -> 'messages') as m(
-          uid bigint, sender text, subject text, sent_epoch double precision, seen boolean)
+          uid bigint, sender text, recipient_to text, recipient_cc text, recipient_bcc text,
+          subject text, sent_epoch double precision, seen boolean)
      where c.carpeta_id = v_folder_id and m.uid > 0
     on conflict (carpeta_id, mensaje_uidvalidity, mensaje_uid) do update set
         mensaje_remitente = excluded.mensaje_remitente,
+        mensaje_para = excluded.mensaje_para,
+        mensaje_cc = excluded.mensaje_cc,
+        mensaje_cco = excluded.mensaje_cco,
         mensaje_asunto = excluded.mensaje_asunto,
         mensaje_fecha = excluded.mensaje_fecha,
         mensaje_leido = excluded.mensaje_leido,
@@ -199,21 +207,31 @@ begin
     select count(*) into v_total from public.mail_mensajes_resumen r
      where r.carpeta_id = v_folder_id
        and (v_query = '' or r.mensaje_remitente ilike concat('%', v_query, '%')
-            or r.mensaje_asunto ilike concat('%', v_query, '%'));
+            or r.mensaje_asunto ilike concat('%', v_query, '%')
+            or r.mensaje_para ilike concat('%', v_query, '%')
+            or r.mensaje_cc ilike concat('%', v_query, '%')
+            or r.mensaje_cco ilike concat('%', v_query, '%'));
     v_page := least(v_page, greatest(1, (v_total + v_size - 1) / v_size));
     select coalesce(json_agg(json_build_object(
-        'uid', q.mensaje_uid, 'from', q.mensaje_remitente, 'subject', q.mensaje_asunto,
+        'uid', q.mensaje_uid, 'from', q.mensaje_remitente,
+        'to', coalesce(q.mensaje_para, ''), 'cc', coalesce(q.mensaje_cc, ''),
+        'bcc', coalesce(q.mensaje_cco, ''), 'subject', q.mensaje_asunto,
         'sentEpoch', extract(epoch from q.mensaje_fecha), 'seen', q.mensaje_leido)
         order by q.mensaje_fecha desc, q.mensaje_uid desc), '[]'::json)
       into v_messages
       from (select r.* from public.mail_mensajes_resumen r
              where r.carpeta_id = v_folder_id
                and (v_query = '' or r.mensaje_remitente ilike concat('%', v_query, '%')
-                    or r.mensaje_asunto ilike concat('%', v_query, '%'))
+                    or r.mensaje_asunto ilike concat('%', v_query, '%')
+                    or r.mensaje_para ilike concat('%', v_query, '%')
+                    or r.mensaje_cc ilike concat('%', v_query, '%')
+                    or r.mensaje_cco ilike concat('%', v_query, '%'))
              order by r.mensaje_fecha desc, r.mensaje_uid desc
              limit v_size offset (v_page - 1) * v_size) q;
     return json_build_object('codigo', '0', 'total', v_total, 'page', v_page,
-            'size', v_size, 'mensajes', v_messages)::text;
+            'size', v_size, 'mensajes', v_messages, 'recipientsCached', not exists (
+                select 1 from public.mail_mensajes_resumen r where r.carpeta_id = v_folder_id
+                  and (r.mensaje_para is null or r.mensaje_cc is null or r.mensaje_cco is null)))::text;
 end;
 $function$;
 

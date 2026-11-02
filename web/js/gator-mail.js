@@ -588,6 +588,14 @@
         composeNotice.setAttribute("role", "alert");
         composeNotice.textContent = draftReady ? "El borrador se guardará automáticamente." : "Cargando borrador…";
         composeForm.prepend(composeNotice);
+        composeForm.addEventListener("invalid", event => {
+            event.preventDefault();
+            const field = event.target;
+            const name = field.name === "body" ? "Contenido" : field.labels?.[0]?.textContent || "Para";
+            composeError(new Error(`${name}: ${field.validationMessage}`));
+            field.focus();
+            composeNotice.scrollIntoView({block: "nearest"});
+        }, true);
         let saveTimer;
         const changed = () => {
             if (!draftReady) return;
@@ -617,12 +625,17 @@
             if (!draftReady || submitting) return;
             submitting = true;
             const controls = Array.from(composeForm.querySelectorAll("input, textarea, button, select"));
+            const button = event.submitter || composeForm.querySelector('button[value="sendMessage"]');
+            const label = button?.innerHTML;
             try {
-                if (savingDraft) { try { await savingDraft; } catch (_) { /* Retry with the current content. */ } }
                 const action = event.submitter?.value || "sendMessage";
                 const data = composeData(action);
                 controls.forEach(control => { control.disabled = true; });
                 visualEditor?.setAttribute("contenteditable", "false");
+                composeForm.setAttribute("aria-busy", "true");
+                if (button) button.innerHTML = '<span class="spinner-border spinner-border-sm" aria-hidden="true"></span> '
+                    + (action === "sendMessage" ? "Enviando…" : "Guardando…");
+                if (savingDraft) { try { await savingDraft; } catch (_) { /* Retry with the current content. */ } }
                 if (action === "sendMessage") {
                     const validation = await fetch(composeForm.getAttribute("action"), {method: "POST",
                         body: new URLSearchParams({action: "validateRecipients", csrf: data.get("csrf"),
@@ -639,8 +652,11 @@
                 window.location.assign(result.redirect);
             } catch (error) {
                 composeError(error);
+                composeNotice.scrollIntoView({block: "nearest"});
                 controls.forEach(control => { control.disabled = false; });
                 visualEditor?.setAttribute("contenteditable", "true");
+                composeForm.removeAttribute("aria-busy");
+                if (button) button.innerHTML = label;
             } finally { submitting = false; }
         });
     }
@@ -663,6 +679,7 @@
     const setFormat = () => {
         if (!editor || !visualEditor || !format) return;
         const html = format.value === "html";
+        editor.required = !html;
         markdownFormat?.classList.toggle("btn-primary", !html);
         markdownFormat?.classList.toggle("btn-light", html);
         htmlFormat?.classList.toggle("btn-primary", html);

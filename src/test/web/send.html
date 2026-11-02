@@ -1,0 +1,77 @@
+<!doctype html>
+<meta charset="utf-8">
+<form class="mail-compose-form" action="mail">
+  <input name="csrf" value="test" type="hidden">
+  <input name="draftId" value="b92e72cc-7aeb-4328-a06f-7723f6f9697b" type="hidden">
+  <input name="to" value="ana@example.com" required>
+  <input name="cc" value="incorrecto">
+  <input name="bcc"><input name="subject" value="Pendiente">
+  <input id="mail-compose-format" name="format" value="html" type="hidden">
+  <div id="mail-html-editor" contenteditable="true"></div>
+  <textarea id="mail-compose-body" name="body" required></textarea>
+  <input id="mail-compose-attachments" name="attachments" type="file" multiple>
+  <div id="mail-compose-attachment-list"></div>
+  <input id="mail-compose-images" name="images" type="file" multiple>
+  <button name="action" value="sendMessage">Enviar</button>
+  <button name="action" value="saveDraft" formnovalidate>Guardar</button>
+</form>
+<pre id="result">FAIL: incompleto</pre>
+<script>
+const requests = [];
+let releaseRequest;
+window.setInterval = () => {};
+window.fetch = async (url, options) => {
+  requests.push(options.body);
+  return new Promise(resolve => {releaseRequest = resolve;});
+};
+</script>
+<script src="../../../web/js/gator-mail.js"></script>
+<script>
+(async () => {
+  const form = document.querySelector('form');
+  const button = form.querySelector('[value="sendMessage"]');
+  const assert = (value, message) => {if (!value) throw Error(message);};
+  const pause = () => new Promise(resolve => setTimeout(resolve, 20));
+  const response = (ok, result) => ({ok, status: ok ? 200 : 503, redirected: false,
+    headers: new Headers({'Content-Type': 'application/json'}), json: async () => result});
+  const notice = () => form.querySelector('[role="alert"]');
+  try {
+    form.elements.cc.value = '';
+    const transfer = new DataTransfer();
+    transfer.items.add(new File(['contenido'], 'archivo.txt'));
+    form.elements.attachments.files = transfer.files;
+    const originalLabel = button.innerHTML;
+    // Native validation runs before submit, so HTML must not depend on a hidden textarea.
+    document.querySelector('#mail-html-editor').innerHTML = '<p>Texto que debe conservarse</p>';
+    form.elements.to.value = '';
+    form.requestSubmit(button);
+    assert(requests.length === 0 && notice().textContent.includes('Para'), 'La validación bloqueó Enviar sin anunciar el campo faltante');
+    form.elements.to.value = 'ana@example.com';
+    form.requestSubmit(button);
+    assert(button.disabled && form.getAttribute('aria-busy') === 'true', 'Falta bloqueo inmediato');
+    assert(button.querySelector('.spinner-border') && button.textContent.includes('Enviando'), 'Falta spinner de envío');
+    form.requestSubmit(button);
+    assert(requests.length === 1, 'El doble clic duplicó la validación');
+    releaseRequest(response(true, {}));
+    await pause();
+    assert(requests.length === 2 && requests[1].get('action') === 'sendMessage', 'No se envió tras validar');
+    form.requestSubmit(button);
+    assert(requests.length === 2, 'El doble clic duplicó el envío');
+    releaseRequest(response(false, {error: 'No fue posible enviar. Revisa Enviados antes de repetir.'}));
+    await pause();
+    assert(notice().textContent.includes('No fue posible enviar'), 'Falta aviso del error');
+    assert(!button.disabled && button.innerHTML === originalLabel && form.getAttribute('aria-busy') !== 'true', 'El error dejó el editor bloqueado');
+    assert(form.elements.body.value.includes('Texto que debe conservarse') && form.elements.attachments.files[0].size === 9, 'El error perdió contenido o adjuntos');
+    form.requestSubmit(button);
+    releaseRequest(response(true, {}));
+    await pause();
+    releaseRequest(response(true, {redirect: '#sent'}));
+    await pause();
+    assert(location.hash === '#sent' && button.disabled, 'El éxito debe navegar conservando el bloqueo');
+    const leaving = new Event('beforeunload', {cancelable: true});
+    window.dispatchEvent(leaving);
+    assert(!leaving.defaultPrevented, 'El éxito sigue marcado como pendiente');
+    document.querySelector('#result').textContent = 'PASS: spinner, doble clic, error visible, contenido conservado y reintento';
+  } catch (error) {document.querySelector('#result').textContent = 'FAIL: ' + error.message;}
+})();
+</script>

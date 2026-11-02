@@ -99,6 +99,49 @@ public final class AccessCodeSelfCheck {
         MailImagesSelfCheck.run();
         MailHtmlSelfCheck.run();
         MailMimeSelfCheck.run();
+        MailSentSelfCheck.run();
+        var failedSession = (jakarta.servlet.http.HttpSession) java.lang.reflect.Proxy.newProxyInstance(
+                AccessCodeSelfCheck.class.getClassLoader(), new Class<?>[]{jakarta.servlet.http.HttpSession.class},
+                (proxy, method, values) -> {
+                    if (method.getName().equals("getAttribute")) {
+                        if (values[0].equals("oidc.user")) return "test";
+                        throw new IllegalStateException("private backend failure");
+                    }
+                    return null;
+                });
+        var failedRequest = (jakarta.servlet.http.HttpServletRequest) java.lang.reflect.Proxy.newProxyInstance(
+                AccessCodeSelfCheck.class.getClassLoader(), new Class<?>[]{jakarta.servlet.http.HttpServletRequest.class},
+                (proxy, method, values) -> switch (method.getName()) {
+                    case "getSession" -> failedSession;
+                    case "getHeader" -> "application/json";
+                    case "getParameter" -> values[0].equals("action") ? "sendMessage" : null;
+                    case "getContextPath" -> "/gator-mail";
+                    default -> null;
+                });
+        var errorBody = new java.io.StringWriter();
+        Map<String, Object> errorResponse = new HashMap<>();
+        var failedResponse = (jakarta.servlet.http.HttpServletResponse) java.lang.reflect.Proxy.newProxyInstance(
+                AccessCodeSelfCheck.class.getClassLoader(), new Class<?>[]{jakarta.servlet.http.HttpServletResponse.class},
+                (proxy, method, values) -> {
+                    if (method.getName().equals("getWriter")) return new java.io.PrintWriter(errorBody);
+                    if (method.getName().equals("setStatus") || method.getName().equals("setContentType"))
+                        errorResponse.put(method.getName(), values[0]);
+                    return null;
+                });
+        var context = (jakarta.servlet.ServletContext) java.lang.reflect.Proxy.newProxyInstance(
+                AccessCodeSelfCheck.class.getClassLoader(), new Class<?>[]{jakarta.servlet.ServletContext.class},
+                (proxy, method, values) -> null);
+        var config = (jakarta.servlet.ServletConfig) java.lang.reflect.Proxy.newProxyInstance(
+                AccessCodeSelfCheck.class.getClassLoader(), new Class<?>[]{jakarta.servlet.ServletConfig.class},
+                (proxy, method, values) -> method.getName().equals("getServletContext") ? context : null);
+        var servlet = new MailServlet();
+        servlet.init(config);
+        try { servlet.doPost(failedRequest, failedResponse); }
+        finally { servlet.destroy(); }
+        assert errorResponse.get("setStatus").equals(503);
+        assert errorResponse.get("setContentType").equals("application/json;charset=UTF-8");
+        assert JsonParser.parseString(errorBody.toString()).getAsJsonObject().get("error").getAsString().contains("Enviados");
+        assert !errorBody.toString().contains("private backend failure");
         Map<String, Object> listing = new HashMap<>();
         var records = java.util.stream.IntStream.rangeClosed(1, 26)
                 .mapToObj(i -> Map.<String, Object>of("value", "Dominio " + i)).toList();
@@ -627,7 +670,7 @@ public final class AccessCodeSelfCheck {
             assert html.contains("Sesión cerrada");
             assert html.contains("/gator-mail/css/gator-mail.css?v=57");
             assert html.contains("/elib/js/sweetalert2.all.min.js");
-            assert html.contains("/gator-mail/js/gator-mail.js?v=37");
+            assert html.contains("/gator-mail/js/gator-mail.js?v=38");
             assert html.contains("spinner-border");
             assert html.contains("mail-mobile-status");
             assert html.contains("name=\"format\" value=\"json\"");
@@ -919,6 +962,7 @@ public final class AccessCodeSelfCheck {
         MailHtmlSelfCheck.writeFixture(directory);
         Map<String, List<String>> screens = Map.ofEntries(
                 Map.entry("inbox", List.of("mailboxView")),
+                Map.entry("sent", List.of("mailboxView")),
                 Map.entry("message", List.of("mailboxView", "messageView")),
                 Map.entry("compose", List.of("composeView")),
                 Map.entry("dashboard", List.of("dashboardView")),
@@ -995,6 +1039,18 @@ public final class AccessCodeSelfCheck {
             sample.put("historicSenders", people);
             sample.put("mailbox", "demo@example.com");
             sample.put("sessionActive", true);
+            if ("sent".equals(screen.getKey())) {
+                sample.put("selectedFolder", "Sent");
+                sample.put("folderLabel", "Enviados");
+                sample.put("messages", List.of(Map.ofEntries(
+                        Map.entry("href", "mail?folder=Sent&uid=7"), Map.entry("uid", 7L),
+                        Map.entry("folder", "Sent"), Map.entry("subject", "Propuesta anual"),
+                        Map.entry("from", "Para: Ana <ana@cliente.test> · CC: equipo@copias.test · CCO: archivo@privado.test"),
+                        Map.entry("addressTitle", "Para: Ana <ana@cliente.test> · CC: equipo@copias.test · CCO: archivo@privado.test · De: demo@example.com"),
+                        Map.entry("sent", "02/11/2026 12:00"), Map.entry("state", "Leído"),
+                        Map.entry("stateClass", "is-read"), Map.entry("icon", "fa-envelope-open"),
+                        Map.entry("contactEmail", "ana@cliente.test"), Map.entry("contactName", "Ana"))));
+            }
             java.nio.file.Files.writeString(directory.resolve(screen.getKey() + ".html"),
                     new GatorJsonView().renderResource("gator-mail/screens/mail.json", sample));
             if ("filters".equals(screen.getKey())) {

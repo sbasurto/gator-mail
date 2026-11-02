@@ -190,6 +190,13 @@ public final class MailServlet extends HttpServlet {
             }
             getServletContext().log("No fue posible abrir el correo de " + user, error);
             response.setStatus(HttpServletResponse.SC_SERVICE_UNAVAILABLE);
+            if (jsonRequest(request)) {
+                response.setContentType("application/json;charset=UTF-8");
+                response.getWriter().print(gson.toJson(Map.of("error",
+                        "No fue posible completar la operación. Tu mensaje y los adjuntos siguen aquí. "
+                        + "Si intentabas enviar, revisa Enviados antes de repetir.")));
+                return;
+            }
             model.put(causedBy(error, AuthenticationFailedException.class) ? "pending" : "error", true);
         }
         response.getWriter().print(view.renderResource("gator-mail/screens/mail.json", model));
@@ -1045,11 +1052,15 @@ public final class MailServlet extends HttpServlet {
         List<Map<String, Object>> messageModels = new ArrayList<>();
         for (ImapMailbox.Summary mail : messages) {
             String state = mail.seen() ? "Leído" : "No leído";
-            String sender = filterSender(mail.from());
+            boolean outgoing = "Enviados".equals(selected.label());
+            String contact = mail.contact(outgoing);
+            String sender = filterSender(contact);
             Map<String, Object> item = new LinkedHashMap<>();
             item.put("href", mailboxHref(folderName, query, result.page(), result.size())
                     + ("Borradores".equals(selected.label()) ? "&action=editDraft" : "") + "&uid=" + mail.uid());
-            item.put("from", mail.from());
+            item.put("from", mail.correspondents(outgoing));
+            item.put("addressTitle", outgoing ? mail.correspondents(true) + " · De: " + mail.from()
+                    : sender + "\nClick derecho para ver acciones");
             item.put("subject", mail.subject());
             item.put("sent", DATE.format(mail.sent()));
             item.put("uid", mail.uid());
@@ -1059,7 +1070,7 @@ public final class MailServlet extends HttpServlet {
                     + (String.valueOf(mail.uid()).equals(uid) ? " is-selected" : ""));
             item.put("icon", mail.seen() ? "fa-envelope-open" : "fa-envelope");
             item.put("contactEmail", sender);
-            item.put("contactName", contactName(mail.from(), sender));
+            item.put("contactName", contactName(contact, sender));
             messageModels.add(item);
         }
         model.put("messages", messageModels);
@@ -1714,9 +1725,10 @@ public final class MailServlet extends HttpServlet {
             session.setAttribute(sessionKey, true);
         } else if (session.getAttribute(sessionKey) == null) {
             session.setAttribute(sessionKey, true);
-            boolean needsHydration = folders.stream()
-                    .anyMatch(item -> item.name().equals(folder) && item.total() > 0)
-                    && cachedMessages(mailbox, folder, "", 1, 20).total() == 0;
+            if (folders.stream().noneMatch(item -> item.name().equals(folder))) return folders;
+            ImapMailbox.MessagePage cached = cachedMessages(mailbox, folder, "", 1, 20);
+            boolean needsHydration = !cached.recipientsCached() || folders.stream()
+                    .anyMatch(item -> item.name().equals(folder) && item.total() > 0) && cached.total() == 0;
             if (needsHydration) {
                 syncFolder(mailbox, folder, accessToken);
                 folders = cachedFolders(mailbox);
@@ -1786,7 +1798,8 @@ public final class MailServlet extends HttpServlet {
             }
         }
         if (cached == null) return;
-        ImapMailbox.CacheState state = cached.get("uidValidity").getAsLong() <= 0 ? null
+        ImapMailbox.CacheState state = cached.get("uidValidity").getAsLong() <= 0
+                || !cached.get("recipientsCached").getAsBoolean() ? null
                 : new ImapMailbox.CacheState(cached.get("uidValidity").getAsLong(),
                         cached.get("uidNext").getAsLong(), cached.get("modSeq").getAsLong(),
                         cached.get("cached").getAsInt());
@@ -1804,6 +1817,9 @@ public final class MailServlet extends HttpServlet {
             JsonObject item = new JsonObject();
             item.addProperty("uid", message.uid());
             item.addProperty("sender", message.from());
+            item.addProperty("recipient_to", message.to());
+            item.addProperty("recipient_cc", message.cc());
+            item.addProperty("recipient_bcc", message.bcc());
             item.addProperty("subject", message.subject());
             item.addProperty("sent_epoch", message.sent().getEpochSecond());
             item.addProperty("seen", message.seen());
@@ -1824,12 +1840,15 @@ public final class MailServlet extends HttpServlet {
         for (JsonElement element : result.getAsJsonArray("mensajes")) {
             JsonObject message = element.getAsJsonObject();
             messages.add(new ImapMailbox.Summary(message.get("uid").getAsLong(),
-                    message.get("from").getAsString(), message.get("subject").getAsString(),
+                    message.get("from").getAsString(), message.get("to").getAsString(),
+                    message.get("cc").getAsString(), message.get("bcc").getAsString(),
+                    message.get("subject").getAsString(),
                     java.time.Instant.ofEpochSecond(message.get("sentEpoch").getAsLong()),
                     message.get("seen").getAsBoolean()));
         }
         return new ImapMailbox.MessagePage(messages, result.get("total").getAsInt(),
-                result.get("page").getAsInt(), result.get("size").getAsInt());
+                result.get("page").getAsInt(), result.get("size").getAsInt(),
+                result.get("recipientsCached").getAsBoolean());
     }
 
     private void markRead(String mailbox, String folder, long uid) {
@@ -2569,7 +2588,7 @@ public final class MailServlet extends HttpServlet {
     }
 
     static String cacheSessionKey(String mailbox, String folder) {
-        return "mail.cache.started." + mailbox.toLowerCase(Locale.ROOT) + '.' + folder;
+        return "mail.cache.recipients.started." + mailbox.toLowerCase(Locale.ROOT) + '.' + folder;
     }
 
     static List<Map<String, Object>> folderGroups(List<ImapMailbox.FolderInfo> folders, String selected, int size) {

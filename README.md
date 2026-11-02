@@ -58,14 +58,24 @@ El login estándar por aplicación está en [`keycloak-theme/gator-standard`](ke
 Las carpetas IMAP se guardan en la tabla jerárquica `mail_carpetas`; el script
 idempotente para crearla está en `db/mail_carpetas.sql`.
 El listado de carpetas y mensajes se sirve desde la caché reconstruible de
-`db_gatormail`, instalada con `db/mail_cache.sql`. Sólo conserva el remitente,
-asunto, fecha, estado leído y la identidad IMAP `(carpeta, UIDVALIDITY, UID)`;
+`db_gatormail`, instalada con `db/mail_cache.sql`. Conserva remitente,
+destinatarios Para/CC/CCO, asunto, fecha, estado leído y la identidad IMAP `(carpeta, UIDVALIDITY, UID)`;
 los cuerpos y adjuntos permanecen exclusivamente en Dovecot. La primera
 hidratación consulta IMAP y las siguientes actualizaciones usan `UIDNEXT` y
 `MODSEQ`. Si cambia `UIDVALIDITY` o se detecta una eliminación, se reconstruye
 únicamente la carpeta afectada. Abrir, responder, mover, eliminar y descargar
 siguen operando primero en IMAP y actualizan PostgreSQL sólo después del éxito.
 La prueba reversible del esquema está en `db/mail_cache_test.sql`.
+En Enviados, el listado muestra los destinatarios y conserva el remitente en el
+detalle y en el título de la fila. La búsqueda incluye nombres y direcciones de
+Para/CC/CCO, remitente y asunto. Antes del WAR, aplicar el cambio canónico
+`deploy/schema/changes/app/mail_mensajes_resumen/20261102_004__cache_recipient_headers.sql`
+y publicar `mail/postgresql/mail_pg_cache.sql` desde `internal`, mediante el
+deployer. En instalaciones nuevas, crear primero `mail_carpetas`, aplicar ese
+cambio y después instalar las funciones de caché. Los encabezados antiguos se
+rehidratan desde IMAP al abrir cada carpeta; los valores NULL identifican esa
+actualización pendiente. `db/mail_sent_test.sql` verifica búsqueda, paginación,
+aislamiento entre buzones e hidratación en una base desechable con dos usuarios.
 El tablero calcula los remitentes de los últimos siete días y los históricos
 con `db/mail_sender_rankings.sql`, exclusivamente a partir de la caché de Entrada.
 El benchmark reversible `db/mail_cache_benchmark.sql` mide listado y rankings

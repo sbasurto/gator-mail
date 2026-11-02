@@ -18,7 +18,7 @@
           { "tag": "link", "attrs": { "rel": "stylesheet", "href": "${contextPath}/assets/gator-scanner-v01.css" } },
           { "tag": "script", "attrs": { "src": "${contextPath}/assets/gator-scanner-v01.js", "defer": "true" } },
           { "tag": "script", "attrs": { "src": "/elib/js/sweetalert2.all.min.js", "defer": "true" } },
-          { "tag": "script", "attrs": { "src": "${contextPath}/js/gator-mail.js?v=37", "defer": "true" } }
+          { "tag": "script", "attrs": { "src": "${contextPath}/js/gator-mail.js?v=38", "defer": "true" } }
         ]
       },
       {
@@ -1923,7 +1923,7 @@
                                 { "tag": "span", "attrs": { "class": "mail-message-icon fas ${message.icon}", "aria-hidden": "true" } },
                                 { "tag": "div", "attrs": { "class": "mail-message-copy" }, "children": [
                                   { "tag": "div", "attrs": { "class": "mail-message-meta" }, "children": [
-                                    { "tag": "strong", "attrs": { "class": "mail-contact-source", "data-contact-email": "${message.contactEmail}", "aria-label": "${message.contactName}", "title": "${message.contactEmail}\nClick derecho para ver acciones" }, "text": "${message.from}" },
+                                    { "tag": "strong", "attrs": { "class": "mail-contact-source", "data-contact-email": "${message.contactEmail}", "aria-label": "${message.contactName}", "title": "${message.addressTitle}" }, "text": "${message.from}" },
                                     { "tag": "time", "attrs": { "class": "text-muted" }, "text": "${message.sent}" },
                                     { "tag": "span", "attrs": { "class": "mail-message-state ${message.stateClass}" }, "text": "${message.state}" }
                                   ] },

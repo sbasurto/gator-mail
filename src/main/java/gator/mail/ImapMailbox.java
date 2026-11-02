@@ -67,10 +67,24 @@ final class ImapMailbox {
     record FolderInfo(String name, String label, String parent, String root, int depth, int unread, int total) {
     }
 
-    record Summary(long uid, String from, String subject, Instant sent, boolean seen) {
+    record Summary(long uid, String from, String to, String cc, String bcc, String subject, Instant sent, boolean seen) {
+        String correspondents(boolean outgoing) {
+            if (!outgoing) return from;
+            List<String> recipients = new ArrayList<>();
+            if (!to.isBlank()) recipients.add("Para: " + to);
+            if (!cc.isBlank()) recipients.add("CC: " + cc);
+            if (!bcc.isBlank()) recipients.add("CCO: " + bcc);
+            return recipients.isEmpty() ? "(Sin destinatarios)" : String.join(" · ", recipients);
+        }
+
+        String contact(boolean outgoing) {
+            if (!outgoing) return from;
+            if (!to.isBlank()) return to;
+            return cc.isBlank() ? bcc : cc;
+        }
     }
 
-    record MessagePage(List<Summary> messages, int total, int page, int size) {
+    record MessagePage(List<Summary> messages, int total, int page, int size, boolean recipientsCached) {
     }
 
     record CacheState(long uidValidity, long uidNext, long modSeq, int cached) { }
@@ -161,23 +175,23 @@ final class ImapMailbox {
                 messages = end < 1 ? new Message[0] : folder.getMessages(Math.max(1, end - size + 1), end);
             } else {
                 SearchTerm search = new OrTerm(new SearchTerm[]{new FromStringTerm(query), new SubjectTerm(query),
-                        new RecipientStringTerm(Message.RecipientType.TO, query), new BodyTerm(query)});
+                        new RecipientStringTerm(Message.RecipientType.TO, query),
+                        new RecipientStringTerm(Message.RecipientType.CC, query),
+                        new RecipientStringTerm(Message.RecipientType.BCC, query), new BodyTerm(query)});
                 Message[] matches = folder.search(search);
                 total = matches.length;
                 page = Math.min(requestedPage, Math.max(1, (total + size - 1) / size));
                 int end = total - (page - 1) * size;
                 messages = Arrays.copyOfRange(matches, Math.max(0, end - size), Math.max(0, end));
             }
-            UIDFolder uidFolder = (UIDFolder) folder;
-            List<Summary> result = new ArrayList<>(messages.length);
-            for (int i = messages.length - 1; i >= 0; i--) {
-                Message message = messages[i];
-                result.add(new Summary(uidFolder.getUID(message), addresses(message.getFrom()),
-                        text(message.getSubject(), "(Sin asunto)"),
-                        message.getSentDate() == null ? Instant.EPOCH : message.getSentDate().toInstant(),
-                        message.isSet(Flags.Flag.SEEN)));
-            }
-            return new MessagePage(result, total, page, size);
+            FetchProfile profile = new FetchProfile();
+            profile.add(FetchProfile.Item.ENVELOPE);
+            profile.add(FetchProfile.Item.FLAGS);
+            profile.add(UIDFolder.FetchProfileItem.UID);
+            folder.fetch(messages, profile);
+            List<Summary> result = summaries((UIDFolder) folder, messages);
+            java.util.Collections.reverse(result);
+            return new MessagePage(result, total, page, size, true);
         }
     }
 
@@ -233,11 +247,19 @@ final class ImapMailbox {
 
     private static List<Summary> summaries(UIDFolder folder, Message[] messages) throws Exception {
         List<Summary> result = new ArrayList<>(messages.length);
-        for (Message message : messages) if (message != null) result.add(new Summary(folder.getUID(message),
-                addresses(message.getFrom()), text(message.getSubject(), "(Sin asunto)"),
-                message.getSentDate() == null ? Instant.EPOCH : message.getSentDate().toInstant(),
-                message.isSet(Flags.Flag.SEEN)));
+        for (Message message : messages) if (message != null)
+            result.add(summary(folder.getUID(message), message));
         return result;
+    }
+
+    static Summary summary(long uid, Message message) throws Exception {
+        return new Summary(uid, addresses(message.getFrom()),
+                addresses(message.getRecipients(Message.RecipientType.TO)),
+                addresses(message.getRecipients(Message.RecipientType.CC)),
+                addresses(message.getRecipients(Message.RecipientType.BCC)),
+                text(message.getSubject(), "(Sin asunto)"),
+                message.getSentDate() == null ? Instant.EPOCH : message.getSentDate().toInstant(),
+                message.isSet(Flags.Flag.SEEN));
     }
 
     private static long modSeq(IMAPFolder folder) {

@@ -50,7 +50,8 @@ window.fetch = async (url, options) => {
     const saved = requests.at(-1);
     assert(saved.get('action') === 'saveDraft' && saved.get('draftId') === draft.draftId, 'Se creó otro borrador');
     assert(new URLSearchParams(location.search).get('draftId') === draft.draftId && !new URLSearchParams(location.search).has('uid'), 'La recarga conserva un UID obsoleto');
-    assert(saved.get('body').includes('cid:inline-1@gator-mail') && !saved.get('body').includes('blob:'), 'Se perdió el CID');
+    const savedBody = await saved.get('body').text();
+    assert(savedBody.includes('cid:inline-1@gator-mail') && !savedBody.includes('blob:'), 'Se perdió el CID');
     assert(saved.get('attachments').size === 1 && saved.get('images').size === 68, 'Se perdieron adjuntos al volver a guardar');
     document.querySelector('#result').textContent = 'PASS: reapertura, destinatarios, adjuntos, imagen y actualización del mismo borrador';
   } catch (error) {document.querySelector('#result').textContent = 'FAIL: ' + error.message;}

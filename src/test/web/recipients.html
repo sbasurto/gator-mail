@@ -78,7 +78,7 @@ window.fetch = async (url, options) => {
     saves = requests.filter(data => data.get('action') === 'saveDraft');
     assert(saves.length === 3 && saves.every(data => data.get('draftId') === 'b92e72cc-7aeb-4328-a06f-7723f6f9697b'), 'El reintento debe actualizar el mismo borrador');
     assert(new URLSearchParams(location.search).get('draftId') === 'b92e72cc-7aeb-4328-a06f-7723f6f9697b', 'La recarga debe usar el ID estable');
-    assert(saves[2].get('body') === '<p>Segunda versión</p>', 'Se guardó una versión vieja');
+    assert(await saves[2].get('body').text() === '<p>Segunda versión</p>', 'Se guardó una versión vieja');
     await tick();
     assert(requests.at(-1).get('action') === 'composeSession', 'Falta renovación durante la actividad');
     const count = requests.length;
@@ -89,7 +89,7 @@ window.fetch = async (url, options) => {
     form.elements.body.value = '**Texto Markdown**';
     form.elements.body.dispatchEvent(new Event('input', {bubbles: true}));
     await tick();
-    assert(requests.at(-1).get('body') === '**Texto Markdown**', 'El editor visual sobrescribió Markdown');
+    assert(await requests.at(-1).get('body').text() === '**Texto Markdown**', 'El editor visual sobrescribió Markdown');
     slowSave = true;
     form.elements.body.value = 'Antes de guardar';
     form.elements.body.dispatchEvent(new Event('input', {bubbles: true}));
@@ -101,7 +101,7 @@ window.fetch = async (url, options) => {
     releaseSave();
     await pending;
     await pause();
-    assert(requests.at(-1).get('body') === 'Escrito durante guardado lento', 'Los cambios durante un guardado lento no se guardaron');
+    assert(await requests.at(-1).get('body').text() === 'Escrito durante guardado lento', 'Los cambios durante un guardado lento no se guardaron');
     form.elements.to.value = 'ana@example.com';
     form.elements.cc.value = '';
     form.requestSubmit(form.querySelector('button[value="sendMessage"]'));
